@@ -109,6 +109,52 @@
       .cursor-blink {
         animation: blink 1s infinite;
       }
+
+      @media (max-width: 430px) {
+        .hero-section {
+          padding-top: calc(5rem + env(safe-area-inset-top));
+        }
+
+        .hero-grid {
+          gap: 2rem;
+        }
+
+        .hero-visual {
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: flex-start;
+          gap: 0.75rem;
+          min-width: 0;
+        }
+
+        .hero-terminal {
+          width: 100%;
+          max-width: 100%;
+        }
+
+        .hero-terminal .space-y-2 {
+          padding: 1rem;
+          font-size: 0.75rem;
+          line-height: 1.45;
+        }
+
+        .hero-terminal p {
+          overflow-wrap: anywhere;
+        }
+
+        .hero-lobster {
+          right: 0.35rem;
+          top: -0.85rem;
+          font-size: 1.35rem;
+          padding: 0.3rem 0.55rem;
+        }
+
+        .hero-support {
+          margin-top: 0;
+          width: 100%;
+          text-align: center;
+        }
+      }
     </style>
   </head>
   <body class="text-zinc-100 antialiased">
@@ -120,8 +166,8 @@
     </header>
 
     <main>
-      <section class="reveal mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
-        <div class="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+      <section class="hero-section reveal mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
+        <div class="hero-grid grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <p class="mb-4 inline-flex items-center rounded-full border border-lobster/35 bg-lobster/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-lobster">OpenClaw Hosting & Deployment</p>
             <h1 class="text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">Your AI assistant. Running in 10 minutes. No PhD required.</h1>
@@ -130,10 +176,10 @@
               <a href="#" data-scroll="#pricing" class="inline-flex items-center rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500">Get Started →</a>
             </div>
           </div>
-          <div class="relative flex items-center justify-center">
+          <div class="hero-visual relative flex items-center justify-center">
             <div class="absolute h-72 w-72 rounded-full bg-lobster/15 blur-3xl"></div>
-            <div class="lobster-bob absolute -right-2 -top-5 z-10 rounded-full border border-lobster/35 bg-zinc-900/95 px-3 py-2 text-2xl shadow-glow" aria-hidden="true">🦞</div>
-            <div class="terminal relative w-full max-w-xl shadow-2xl">
+            <div class="hero-lobster lobster-bob absolute -right-2 -top-5 z-10 rounded-full border border-lobster/35 bg-zinc-900/95 px-3 py-2 text-2xl shadow-glow" aria-hidden="true">🦞</div>
+            <div class="hero-terminal terminal relative w-full max-w-xl shadow-2xl">
               <div class="terminal-bar">
                 <span class="terminal-dot bg-red-500/90"></span>
                 <span class="terminal-dot bg-yellow-500/90"></span>
@@ -153,7 +199,7 @@
                 <p><span class="text-zinc-500">$</span> <span class="cursor-blink text-lobster">_</span></p>
               </div>
             </div>
-            <p class="mt-4 text-xs text-zinc-400">Works on a $5/mo VPS, old Mac, or spare Windows/Linux PC.</p>
+            <p class="hero-support mt-4 text-xs text-zinc-400">Works on a $5/mo VPS, old Mac, or spare Windows/Linux PC.</p>
           </div>
         </div>
       </section>
