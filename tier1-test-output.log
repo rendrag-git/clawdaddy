@@ -1,0 +1,14 @@
+
+  ╔═══════════════════════════════════════════════╗
+  ║                                               ║
+  ║            OpenClaw Installer                 ║
+  ║            v1.0.0                              ║
+  ║                                               ║
+  ╚═══════════════════════════════════════════════╝
+
+
+[1/15] Running pre-flight checks...
+ ✓  Running as root
+ ✓  Ubuntu 24.04 detected
+ ✓  Architecture: x86_64
+ ✗  Insufficient RAM: 914 MB. Minimum 1 GB required.

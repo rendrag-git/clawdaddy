@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClawDaddy | OpenClaw Hosting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              lobster: "#E63946",
+            },
+            boxShadow: {
+              glow: "0 0 0 1px rgba(230,57,70,0.25), 0 12px 34px rgba(230,57,70,0.2)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 10% 0%, rgba(230, 57, 70, 0.2), transparent 34%),
+          radial-gradient(circle at 90% 20%, rgba(230, 57, 70, 0.12), transparent 30%),
+          #090b10;
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+      }
+
+      .reveal.in-view {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .marquee-track {
+        animation: marquee 26s linear infinite;
+      }
+
+      .marquee:hover .marquee-track {
+        animation-play-state: paused;
+      }
+
+      @keyframes marquee {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      .lobster-bob {
+        animation: lobster-bob 3.2s ease-in-out infinite;
+      }
+
+      @keyframes lobster-bob {
+        0%,
+        100% {
+          transform: translateY(0) rotate(-6deg);
+        }
+        50% {
+          transform: translateY(-12px) rotate(5deg);
+        }
+      }
+    </style>
+  </head>
+  <body class="text-zinc-100 antialiased">
+    <header class="sticky top-0 z-40 border-b border-zinc-800/70 bg-[#090b10]/85 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+        <a href="#" class="text-xl font-black tracking-tight sm:text-2xl">ClawDaddy <span aria-hidden="true">🦞</span></a>
+        <p class="hidden text-sm text-zinc-300 sm:block">Your AI assistant. No PhD required.</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="reveal mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
+        <div class="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <p class="mb-4 inline-flex items-center rounded-full border border-lobster/35 bg-lobster/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-lobster">OpenClaw Hosting & Deployment</p>
+            <h1 class="text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">Your AI assistant. Running in 10 minutes. No PhD required.</h1>
+            <p class="mt-5 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">OpenClaw is incredible. Setting it up shouldn't require a weekend and a Stack Overflow addiction. Pick your plan. We handle the rest.</p>
+            <div class="mt-8">
+              <a href="#" data-scroll="#pricing" class="inline-flex items-center rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500">Get Started →</a>
+            </div>
+          </div>
+          <div class="relative flex items-center justify-center">
+            <div class="absolute h-56 w-56 rounded-full bg-lobster/15 blur-3xl"></div>
+            <div class="lobster-bob relative rounded-3xl border border-zinc-800 bg-zinc-900/80 p-8 text-center shadow-2xl">
+              <p class="text-7xl" aria-label="Lobster claw accent">🦞</p>
+              <p class="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-lobster">Zero-Headache Deploys</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-4">
+        <div class="marquee relative overflow-hidden">
+          <div class="marquee-track flex w-max gap-4 whitespace-nowrap px-4 sm:px-6 lg:px-8">
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"It's running my company." — @therno</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"The future is already here." — @jonahships_</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"Personal AI is getting real." — @christinetyip</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"First time I have felt like I am living in the future since the launch of ChatGPT." — @davemorin</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"After years of AI hype, I thought nothing could faze me. Then I installed OpenClaw." — @lycfyi</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"It's running my company." — @therno</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"The future is already here." — @jonahships_</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"Personal AI is getting real." — @christinetyip</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"First time I have felt like I am living in the future since the launch of ChatGPT." — @davemorin</p>
+            <p class="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200">"After years of AI hype, I thought nothing could faze me. Then I installed OpenClaw." — @lycfyi</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-4xl text-center">
+          <h2 class="text-3xl font-black text-white sm:text-4xl">What Is OpenClaw?</h2>
+          <p class="mt-5 text-base leading-relaxed text-zinc-300 sm:text-lg">An open-source AI assistant that lives on a server and connects to your chat apps. Think ChatGPT, but it can actually do things — check your email, manage your calendar, write code, browse the web, and remember everything.</p>
+          <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <span class="rounded-full border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium">Discord</span>
+            <span class="rounded-full border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium">Telegram</span>
+            <span class="rounded-full border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium">Signal</span>
+            <span class="rounded-full border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium">WhatsApp</span>
+            <span class="rounded-full border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium">iMessage</span>
+          </div>
+          <p class="mt-6 text-base text-lobster">OpenClaw is free and open source. We just make it stupid easy to get running.</p>
+        </div>
+      </section>
+
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-16">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 class="text-center text-3xl font-black text-white sm:text-4xl">How It Works</h2>
+          <div class="mt-10 grid gap-4 md:grid-cols-3">
+            <article class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <p class="text-3xl" aria-hidden="true">1️⃣</p>
+              <h3 class="mt-4 text-xl font-bold text-white">Pick a plan</h3>
+              <p class="mt-2 text-zinc-300">DIY, hosted, or fully managed</p>
+            </article>
+            <article class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <p class="text-3xl" aria-hidden="true">2️⃣</p>
+              <h3 class="mt-4 text-xl font-bold text-white">Connect your channels</h3>
+              <p class="mt-2 text-zinc-300">Discord, Telegram, Signal, WhatsApp — whatever you already use</p>
+            </article>
+            <article class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <p class="text-3xl" aria-hidden="true">3️⃣</p>
+              <h3 class="mt-4 text-xl font-bold text-white">Talk to your assistant</h3>
+              <p class="mt-2 text-zinc-300">It checks your email, manages files, writes code, browses the web, and more. Average setup: 4 minutes for managed plans.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" class="reveal mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <h2 class="text-center text-3xl font-black text-white sm:text-4xl">Pricing</h2>
+        <div class="mt-10 grid gap-6 lg:grid-cols-3">
+          <article class="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <h3 class="text-xl font-black text-white">🔧 Self-Install — $49 one-time</h3>
+            <ul class="mt-5 space-y-2 text-sm leading-relaxed text-zinc-300">
+              <li>Works on Mac, Windows (WSL), Linux, or any VPS</li>
+              <li>Polished install script + step-by-step guide</li>
+              <li>Installs OpenClaw + everything it needs</li>
+              <li>Connect Discord, Telegram, Signal, WhatsApp</li>
+              <li>No terminal experience needed</li>
+              <li>Includes troubleshooting FAQ</li>
+              <li>You manage it, you own it</li>
+            </ul>
+            <p class="mt-4 text-sm italic text-zinc-400">Got a spare laptop or old PC? That's all you need.</p>
+            <a href="#" class="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Buy Script — $49</a>
+          </article>
+
+          <article class="relative flex flex-col rounded-2xl border border-lobster bg-zinc-900 p-6 shadow-glow">
+            <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-lobster px-3 py-1 text-xs font-black tracking-wider text-white">MOST POPULAR</span>
+            <h3 class="text-xl font-black text-white">🏠 Managed BYOK — $35/mo</h3>
+            <ul class="mt-5 space-y-2 text-sm leading-relaxed text-zinc-200">
+              <li>We host it. You bring your Anthropic API key.</li>
+              <li>Dedicated cloud instance, auto-provisioned</li>
+              <li>OpenClaw installed and configured for you</li>
+              <li>Connect Discord, Telegram, Signal, WhatsApp</li>
+              <li>Daily backups, monitoring, auto-updates</li>
+              <li>VNC access to your instance</li>
+              <li>Ready in under 5 minutes after checkout</li>
+            </ul>
+            <a href="#" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-lobster px-4 py-3 font-bold text-white transition hover:bg-red-500">Get Started — $35/mo</a>
+          </article>
+
+          <article class="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <h3 class="text-xl font-black text-white">👑 Fully Managed — $75/mo</h3>
+            <ul class="mt-5 space-y-2 text-sm leading-relaxed text-zinc-300">
+              <li>Hands-off. We handle literally everything.</li>
+              <li>Everything in Managed, plus:</li>
+              <li>No API key needed — we provide it</li>
+              <li>Sonnet model included (Opus upgrade +$25/mo)</li>
+              <li>Usage monitoring and fair-use budgeting</li>
+              <li>Priority support</li>
+            </ul>
+            <a href="#" class="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Get Started — $75/mo</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-16">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 class="text-center text-3xl font-black text-white sm:text-4xl">Comparison Table</h2>
+          <div class="mt-8 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60">
+            <table class="min-w-full text-left text-sm">
+              <thead>
+                <tr class="border-b border-zinc-800 bg-zinc-900/90 text-zinc-200">
+                  <th class="px-4 py-3 font-semibold">Feature</th>
+                  <th class="px-4 py-3 font-semibold">Self-Install</th>
+                  <th class="px-4 py-3 font-semibold">Managed BYOK</th>
+                  <th class="px-4 py-3 font-semibold">Fully Managed</th>
+                </tr>
+              </thead>
+              <tbody class="text-zinc-300">
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Setup</td><td class="px-4 py-3">You run the script</td><td class="px-4 py-3">Automatic</td><td class="px-4 py-3">Automatic</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Hosting</td><td class="px-4 py-3">Your machine</td><td class="px-4 py-3">We host</td><td class="px-4 py-3">We host</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">API Key</td><td class="px-4 py-3">Yours</td><td class="px-4 py-3">Yours</td><td class="px-4 py-3">Included</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Channels</td><td class="px-4 py-3">All</td><td class="px-4 py-3">All</td><td class="px-4 py-3">All</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Backups</td><td class="px-4 py-3">DIY</td><td class="px-4 py-3">Daily</td><td class="px-4 py-3">Daily</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Updates</td><td class="px-4 py-3">Manual</td><td class="px-4 py-3">Automatic</td><td class="px-4 py-3">Automatic</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Monitoring</td><td class="px-4 py-3">DIY</td><td class="px-4 py-3">24/7</td><td class="px-4 py-3">24/7</td></tr>
+                <tr class="border-b border-zinc-800/80"><td class="px-4 py-3 text-white">Support</td><td class="px-4 py-3">FAQ/Guide</td><td class="px-4 py-3">Email</td><td class="px-4 py-3">Priority</td></tr>
+                <tr><td class="px-4 py-3 text-white">VNC Access</td><td class="px-4 py-3">N/A</td><td class="px-4 py-3">✅</td><td class="px-4 py-3">✅</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+        <h2 class="text-center text-3xl font-black text-white sm:text-4xl">FAQ</h2>
+        <div class="mt-10 space-y-3">
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">What is OpenClaw?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">An open-source AI assistant that lives on a server and connects to your chat apps. It can check your email, manage your calendar, write code, browse the web, and remember everything across conversations. It's like having a really smart intern who never sleeps.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">What do I need to run this myself?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">Any Mac (Intel or Apple Silicon), Windows PC (10/11 with WSL), or Linux machine. Even that old laptop collecting dust works — OpenClaw is lightweight. Leave it plugged in and connected to WiFi, and you've got a 24/7 AI assistant. A $5/mo VPS works too if you'd rather run it in the cloud.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">Do I need to keep my computer on?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">Yes — your assistant lives on that machine. If it sleeps, your assistant sleeps. That's why we offer managed plans — we keep it running 24/7 so you don't have to.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">Why not just set it up myself for free?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">You absolutely can! OpenClaw is open source. Our $49 script just saves you the afternoon of googling error messages. And if you'd rather skip the terminal entirely, our managed plans exist.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">Is my data safe?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">Your instance is yours alone — dedicated server, not shared. We never access your data, conversations, or API keys. You get full VNC access to your machine.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">What if I want to leave?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">Export your data anytime. Cancel and we keep your instance running for 7 days so you can migrate. No lock-in, no guilt trips.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">Can I use Opus instead of Sonnet?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">On the Fully Managed plan, add Opus for +$25/mo. On BYOK and Self-Install, use whatever model your API key supports.</p>
+          </details>
+          <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <summary class="cursor-pointer list-none font-semibold text-white">What's an API key?</summary>
+            <p class="mt-3 text-sm leading-relaxed text-zinc-300">It's like a password that lets your assistant talk to the AI. You get one from Anthropic (the company behind Claude) at console.anthropic.com. Takes 2 minutes. Our Fully Managed plan skips this — we provide the AI.</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-zinc-800/80 bg-zinc-950/70">
+      <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <p class="text-sm text-zinc-300">Built by a guy who got tired of setting up OpenClaw for friends.</p>
+        <p class="mt-2 text-sm text-zinc-400">ClawDaddy is not affiliated with OpenClaw. OpenClaw is open source and awesome — go star it on GitHub.</p>
+        <div class="mt-5 flex flex-wrap gap-4 text-sm">
+          <a href="#" class="text-lobster hover:text-red-400">GitHub</a>
+          <a href="#" class="text-lobster hover:text-red-400">Discord community</a>
+          <a href="mailto:hello@clawdaddy.com" class="text-lobster hover:text-red-400">Contact (email)</a>
+        </div>
+        <p class="mt-6 text-xs text-zinc-500">© 2026 ClawDaddy</p>
+      </div>
+    </footer>
+
+    <script>
+      document.querySelectorAll("[data-scroll]").forEach((cta) => {
+        cta.addEventListener("click", (event) => {
+          event.preventDefault();
+          const target = document.querySelector(cta.getAttribute("data-scroll"));
+          if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) entry.target.classList.add("in-view");
+          });
+        },
+        { threshold: 0.15 }
+      );
+
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawDaddy Atlas</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; padding: 40px; min-height: 100vh; }
+h1 { text-align: center; font-size: 2.2rem; margin-bottom: 8px; color: #ff4444; }
+.subtitle { text-align: center; color: #888; margin-bottom: 40px; font-size: 0.95rem; }
+.updated { text-align: center; color: #555; font-size: 0.75rem; margin-top: -32px; margin-bottom: 40px; }
+
+.phase-row { display: flex; gap: 24px; margin-bottom: 32px; align-items: stretch; }
+.phase-label { writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg); font-weight: 700; font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; padding: 12px 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-width: 36px; flex-shrink: 0; }
+.phase-label.now { background: #1a3a1a; color: #4ade80; border: 1px solid #2d5a2d; }
+.phase-label.mvp { background: #3a2a1a; color: #fbbf24; border: 1px solid #5a4a2d; }
+.phase-label.grow { background: #1a2a3a; color: #60a5fa; border: 1px solid #2d3a5a; }
+.phase-label.scale { background: #2a1a3a; color: #c084fc; border: 1px solid #3a2d5a; }
+
+.cards { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+.card { background: #141414; border: 1px solid #2a2a2a; border-radius: 12px; padding: 18px; min-width: 200px; flex: 1; position: relative; }
+.card.done { border-color: #2d5a2d; }
+.card.blocked { border-color: #5a2d2d; }
+.card.next { border-color: #5a4a2d; }
+
+.card-icon { font-size: 1.5rem; margin-bottom: 8px; }
+.card h3 { font-size: 1rem; margin-bottom: 6px; }
+.card p { font-size: 0.82rem; color: #999; line-height: 1.4; }
+.card .status { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.status.done { background: #1a3a1a; color: #4ade80; }
+.status.next { background: #3a2a1a; color: #fbbf24; }
+.status.blocked { background: #3a1a1a; color: #f87171; }
+.status.future { background: #1a1a2a; color: #818cf8; }
+.status.testing { background: #2a2a1a; color: #facc15; }
+
+.section-title { font-size: 1.1rem; font-weight: 600; margin: 32px 0 16px; color: #ccc; border-bottom: 1px solid #222; padding-bottom: 8px; }
+
+.tiers { display: flex; gap: 16px; justify-content: center; margin: 32px 0; }
+.tier { background: #141414; border: 1px solid #2a2a2a; border-radius: 12px; padding: 20px; text-align: center; width: 220px; }
+.tier h3 { color: #ff4444; margin-bottom: 4px; }
+.tier .price { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
+.tier p { font-size: 0.8rem; color: #888; }
+
+.pipeline { display: flex; align-items: center; justify-content: center; gap: 0; margin: 24px 0; flex-wrap: wrap; }
+.pipe-step { background: #141414; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px 16px; font-size: 0.82rem; text-align: center; min-width: 120px; }
+.pipe-step.done { border-color: #2d5a2d; color: #4ade80; }
+.pipe-step.next { border-color: #5a4a2d; color: #fbbf24; }
+.pipe-arrow { color: #444; font-size: 1.2rem; padding: 0 4px; }
+
+.hours { text-align: center; margin-top: 24px; padding: 16px; background: #1a1a1a; border-radius: 12px; border: 1px solid #2a2a2a; }
+.hours .big { font-size: 2rem; font-weight: 700; color: #fbbf24; }
+.hours p { color: #888; font-size: 0.85rem; }
+
+.legend { display: flex; gap: 20px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #888; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<h1>🐾 ClawDaddy Atlas</h1>
+<p class="subtitle">Managed OpenClaw Hosting — Project Map</p>
+<p class="updated">Last updated: Feb 13, 2026 3:26 PM ET</p>
+
+<!-- Revenue Model -->
+<div class="section-title">💰 Revenue Tiers</div>
+<div class="tiers">
+  <div class="tier">
+    <h3>Tier 1</h3>
+    <div class="price">$49</div>
+    <p><strong>Self-Install</strong><br>One-time. Docker guide + support. Waitlisted at launch.</p>
+  </div>
+  <div class="tier" style="border-color: #2d5a2d;">
+    <h3>Tier 2</h3>
+    <div class="price">$35/mo</div>
+    <p><strong>Managed BYOK</strong><br>We host, they bring API key. Core offering.<br>✅ Stripe product + checkout link ready</p>
+  </div>
+  <div class="tier" style="border-color: #2d5a2d;">
+    <h3>Tier 3</h3>
+    <div class="price">$75/mo</div>
+    <p><strong>Fully Managed</strong><br>Our API key, budget-capped. Zero friction.<br>✅ Stripe product + checkout link ready</p>
+  </div>
+</div>
+
+<!-- Customer Pipeline -->
+<div class="section-title">🔄 Customer Pipeline (MVP Target)</div>
+<div class="pipeline">
+  <div class="pipe-step done">🌐 Landing Page<br><small>clawdaddy.sh ✅</small></div>
+  <span class="pipe-arrow">→</span>
+  <div class="pipe-step done">💳 Stripe<br><small>Products + Links ✅</small></div>
+  <span class="pipe-arrow">→</span>
+  <div class="pipe-step next">⚡ Webhook<br><small>Deploy server</small></div>
+  <span class="pipe-arrow">→</span>
+  <div class="pipe-step done">🐳 Provision<br><small>Docker + Lightsail ✅</small></div>
+  <span class="pipe-arrow">→</span>
+  <div class="pipe-step next">📧 Deliver<br><small>URL + token email</small></div>
+</div>
+
+<!-- Phase Map -->
+<div class="section-title">🗺️ Phase Map</div>
+
+<!-- DONE -->
+<div class="phase-row">
+  <div class="phase-label now">Done</div>
+  <div class="cards">
+    <div class="card done">
+      <div class="card-icon">🌐</div>
+      <h3>Landing Page</h3>
+      <p>Live at clawdaddy.sh + getclawdaddy.com. SSL, Amplify, CloudFront. CTAs wired to Stripe checkout.</p>
+      <span class="status done">✅ Live</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">🏷️</div>
+      <h3>Domains + Email</h3>
+      <p>clawdaddy.sh (primary) + getclawdaddy.com (redirect). hello@clawdaddy.sh via Zoho.</p>
+      <span class="status done">✅ Done</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">🐳</div>
+      <h3>Docker Image</h3>
+      <p>Builds, runs, gateway starts, webchat serves. dm.policy: "open" set. 1.38GB.</p>
+      <span class="status done">✅ Working</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">💳</div>
+      <h3>Stripe Products</h3>
+      <p>BYOK ($35/mo) + Fully Managed ($75/mo) products, prices, and payment links created.</p>
+      <span class="status done">✅ Test Mode</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">📜</div>
+      <h3>Legal Docs</h3>
+      <p>Operating Agreement, TOS, Privacy Policy, AUP — all drafted. terms.html + privacy.html built.</p>
+      <span class="status done">✅ Drafted</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">🎯</div>
+      <h3>Demo Instance</h3>
+      <p>clawdaddy-demo @ Lightsail. Cloudflared tunnel tested by external user. Sonnet running.</p>
+      <span class="status done">✅ Verified</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">📦</div>
+      <h3>Deploy Scripts</h3>
+      <p>provision.sh (939 lines), manage.sh (1091 lines), webhook server, API proxy, monitoring — all exist.</p>
+      <span class="status done">✅ 54 files</span>
+    </div>
+    <div class="card done">
+      <div class="card-icon">📧</div>
+      <h3>IMAP Email Plugin</h3>
+      <p>MCP server (562 lines). IMAP read + SMTP send. Works with Gmail app passwords. Needs testing.</p>
+      <span class="status testing">Needs Test</span>
+    </div>
+  </div>
+</div>
+
+<!-- MVP -->
+<div class="phase-row">
+  <div class="phase-label mvp">MVP</div>
+  <div class="cards">
+    <div class="card next">
+      <div class="card-icon">⚡</div>
+      <h3>Deploy Webhook Server</h3>
+      <p>Wire .env with real Stripe keys. Deploy on EC2. Register webhook URL with Stripe.</p>
+      <span class="status next">~2 hrs</span>
+    </div>
+    <div class="card next">
+      <div class="card-icon">🔗</div>
+      <h3>E2E Test</h3>
+      <p>Test checkout → webhook → provision → customer gets URL. Verify full pipeline.</p>
+      <span class="status next">~2 hrs</span>
+    </div>
+    <div class="card next">
+      <div class="card-icon">🔧</div>
+      <h3>Docker Fixes</h3>
+      <p>Channel config python3→node. Config merge vs overwrite on restart. VNC fix.</p>
+      <span class="status next">~2 hrs</span>
+    </div>
+    <div class="card blocked">
+      <div class="card-icon">🔒</div>
+      <h3>API Proxy (Tier 3)</h3>
+      <p>Budget enforcement. $40/mo cap per customer. Code exists, needs deploy + test.</p>
+      <span class="status blocked">Tier 3 Blocker</span>
+    </div>
+    <div class="card next">
+      <div class="card-icon">🚀</div>
+      <h3>Push to Amplify</h3>
+      <p>Deploy updated index.html with Stripe checkout links + terms/privacy pages.</p>
+      <span class="status next">~15 min</span>
+    </div>
+  </div>
+</div>
+
+<!-- GROWTH -->
+<div class="phase-row">
+  <div class="phase-label grow">Growth</div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h3>Customer Dashboard</h3>
+      <p>Status, restart, logs, update API key. Simple Express/React app.</p>
+      <span class="status future">Phase 2</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">📱</div>
+      <h3>SMS (Twilio)</h3>
+      <p>Add phone number as a channel option at signup.</p>
+      <span class="status future">Phase 2</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🤖</div>
+      <h3>Discord/Telegram Self-Serve</h3>
+      <p>Customer adds bot tokens via dashboard. Auto-injects into config.</p>
+      <span class="status future">Phase 2</span>
+    </div>
+  </div>
+</div>
+
+<!-- SCALE -->
+<div class="phase-row">
+  <div class="phase-label scale">Scale</div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🖥️</div>
+      <h3>Desktop App (Tauri)</h3>
+      <p>Native Mac/Windows. Drag-to-install, system tray. Tier 1 premium.</p>
+      <span class="status future">Phase 3</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🐾</div>
+      <h3>Shared Discord Bot</h3>
+      <p>Single invite link, message router proxies to correct customer instance.</p>
+      <span class="status future">Phase 3</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">☸️</div>
+      <h3>Multi-Tenant (K8s/ECS)</h3>
+      <p>Shared infra, per-customer containers. Crush per-unit hosting cost.</p>
+      <span class="status future">Phase 3</span>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Stats -->
+<div class="hours">
+  <div class="big">~6–8 hrs</div>
+  <p>Remaining engineering to MVP (Tier 2 first paying customer)</p>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#4ade80;"></div> Done</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#facc15;"></div> Needs Testing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#fbbf24;"></div> Next Up</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f87171;"></div> Blocker</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#818cf8;"></div> Future</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "email": {
+      "command": "node",
+      "args": ["/home/clawd/clawdaddy/plugins/imap-email/index.js"],
+      "env": {
+        "IMAP_HOST": "imap.gmail.com",
+        "IMAP_PORT": "993",
+        "IMAP_USER": "your-email@gmail.com",
+        "IMAP_PASS": "xxxx-xxxx-xxxx-xxxx",
+        "SMTP_HOST": "smtp.gmail.com",
+        "SMTP_PORT": "587",
+        "EMAIL_FROM": "your-email@gmail.com"
+      }
+    }
+  }
+}

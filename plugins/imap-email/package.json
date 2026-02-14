@@ -1,0 +1,29 @@
+{
+  "name": "@clawdaddy/imap-email",
+  "version": "1.0.0",
+  "description": "IMAP/SMTP email plugin for OpenClaw - MCP server for email operations",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "imap-email": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "mcp",
+    "openclaw",
+    "imap",
+    "smtp",
+    "email"
+  ],
+  "author": "ClawDaddy",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "imapflow": "^1.0.164",
+    "nodemailer": "^6.9.16",
+    "mailparser": "^3.7.1"
+  }
+}
