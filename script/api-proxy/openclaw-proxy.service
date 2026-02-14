@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/openclaw-proxy
+ExecStart=/usr/bin/node proxy.js
+Restart=always
+RestartSec=3
+EnvironmentFile=/opt/openclaw-proxy/.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw - Your Own AI Assistant in 10 Minutes</title>
+    <meta name="description" content="Your own AI assistant in 10 minutes. $49 one-time (self-hosted), $35/mo (managed BYOK), or $75/mo (fully managed). Runs on your server or ours.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        claw: {
+                            50: '#ecfeff',
+                            100: '#cffafe',
+                            200: '#a5f3fc',
+                            300: '#67e8f9',
+                            400: '#22d3ee',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            700: '#0e7490',
+                            800: '#155e75',
+                            900: '#164e63',
+                            950: '#083344',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: #0a0a0a; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(12px);
+        }
+
+        .glass:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(6, 182, 212, 0.2);
+        }
+
+        .glow-btn {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.3), 0 0 60px rgba(6, 182, 212, 0.1);
+            transition: all 0.3s ease;
+        }
+        .glow-btn:hover {
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.5), 0 0 80px rgba(6, 182, 212, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .terminal {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .terminal-bar {
+            background: #1a1a1a;
+            padding: 8px 12px;
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid #333;
+        }
+        .terminal-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .cursor-blink {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes typewriter {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+
+        details summary { cursor: pointer; }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::marker { display: none; content: ''; }
+
+        .check-icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+        }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up {
+            animation: fade-up 0.6s ease forwards;
+        }
+
+        .glass-featured {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            backdrop-filter: blur(12px);
+        }
+        .glass-featured:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(6, 182, 212, 0.4);
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="text-gray-300 antialiased">
+
+    <!-- Nav -->
+    <nav class="fixed top-0 w-full z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md">
+        <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+            <a href="#" class="flex items-center gap-2 text-white font-bold text-lg tracking-tight">
+                <svg class="w-7 h-7 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                OpenClaw
+            </a>
+            <a href="#buy" class="bg-claw-500 hover:bg-claw-400 text-black font-semibold text-sm px-5 py-2 rounded-lg transition-colors">
+                Get Started
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="pt-32 pb-20 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold text-white leading-tight tracking-tight">
+                Your own AI assistant<br>
+                <span class="text-claw-400">in 10 minutes</span>
+            </h1>
+            <p class="mt-6 text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto">
+                From <span class="text-white font-semibold">$49 one-time</span> to <span class="text-white font-semibold">$75/mo</span> fully managed
+            </p>
+            <div class="mt-10 flex flex-col items-center gap-4">
+                <a href="#buy" class="glow-btn inline-block bg-claw-500 hover:bg-claw-400 text-black font-bold text-lg px-10 py-4 rounded-xl transition-colors">
+                    Get OpenClaw &rarr;
+                </a>
+                <p class="text-sm text-gray-500">Works on any $5/mo VPS &middot; Ubuntu 22.04 &amp; 24.04</p>
+            </div>
+
+            <!-- Terminal preview -->
+            <div class="mt-14 max-w-2xl mx-auto terminal text-left">
+                <div class="terminal-bar">
+                    <div class="terminal-dot bg-red-500/80"></div>
+                    <div class="terminal-dot bg-yellow-500/80"></div>
+                    <div class="terminal-dot bg-green-500/80"></div>
+                    <span class="ml-3 text-xs text-gray-500 font-mono">bash</span>
+                </div>
+                <div class="p-5 font-mono text-sm leading-relaxed">
+                    <p class="text-gray-500">$ <span class="text-claw-300">sudo bash install-openclaw.sh</span></p>
+                    <p class="mt-2 text-gray-500">
+                        <span class="text-green-400">&check;</span> Ubuntu 24.04 detected<br>
+                        <span class="text-green-400">&check;</span> Node.js v22 installed<br>
+                        <span class="text-green-400">&check;</span> OpenClaw installed<br>
+                        <span class="text-green-400">&check;</span> VNC + Chromium ready<br>
+                        <span class="text-green-400">&check;</span> Firewall configured<br>
+                        <span class="text-green-400">&check;</span> Service running
+                    </p>
+                    <p class="mt-2 text-gray-500">$ <span class="cursor-blink text-claw-300">_</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- What You Get -->
+    <section class="py-20 px-6">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-4">What you get</h2>
+            <p class="text-gray-500 text-center mb-14 max-w-xl mx-auto">Everything to run your own AI agent, set up automatically by a single script.</p>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Card 1 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 17 10 11 4 5"/>
+                            <line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">One-click install</h3>
+                    <p class="text-sm text-gray-400">Single bash script sets up Node.js, Chromium, VNC, firewall, and systemd service. Idempotent&mdash;safe to re-run.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">Multi-channel</h3>
+                    <p class="text-sm text-gray-400">Connect Discord, Telegram, and Signal. Configure the channels you use, skip the ones you don't.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">Computer vision</h3>
+                    <p class="text-sm text-gray-400">Built-in VNC session with Chromium. Your agent can see and interact with a full desktop environment.</p>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
+                            <circle cx="12" cy="12" r="4"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">Memory &amp; personality</h3>
+                    <p class="text-sm text-gray-400">Persistent memory across sessions. Customizable soul file defines your agent's personality and principles.</p>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">Auto-restart</h3>
+                    <p class="text-sm text-gray-400">Systemd service with automatic restart on failure. Your agent runs 24/7 without babysitting.</p>
+                </div>
+
+                <!-- Card 6 -->
+                <div class="glass rounded-xl p-6 transition-all duration-300">
+                    <div class="w-10 h-10 rounded-lg bg-claw-500/10 flex items-center justify-center mb-4">
+                        <svg class="w-5 h-5 text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-semibold mb-2">Your data, your server</h3>
+                    <p class="text-sm text-gray-400">Nothing phones home. Your API keys, conversations, and memory stay on your machine. Full control.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="py-20 px-6 border-t border-white/5">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-14">Three steps to your own AI</h2>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="w-14 h-14 rounded-full bg-claw-500/10 border border-claw-500/20 flex items-center justify-center mx-auto mb-5">
+                        <span class="text-claw-400 font-bold text-xl">1</span>
+                    </div>
+                    <h3 class="text-white font-semibold text-lg mb-2">Buy &amp; download</h3>
+                    <p class="text-sm text-gray-400">One-time $49 payment. Instant access to the install script via private GitHub repo.</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-14 h-14 rounded-full bg-claw-500/10 border border-claw-500/20 flex items-center justify-center mx-auto mb-5">
+                        <span class="text-claw-400 font-bold text-xl">2</span>
+                    </div>
+                    <h3 class="text-white font-semibold text-lg mb-2">Run the script</h3>
+                    <p class="text-sm text-gray-400"><code class="text-claw-300 bg-white/5 px-2 py-0.5 rounded text-xs">sudo bash install-openclaw.sh</code> on your VPS. Interactive prompts guide you through.</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-14 h-14 rounded-full bg-claw-500/10 border border-claw-500/20 flex items-center justify-center mx-auto mb-5">
+                        <span class="text-claw-400 font-bold text-xl">3</span>
+                    </div>
+                    <h3 class="text-white font-semibold text-lg mb-2">Connect &amp; go</h3>
+                    <p class="text-sm text-gray-400">Your AI is live. Talk to it on Discord, Telegram, or Signal. Watch it work via VNC.</p>
+                </div>
+            </div>
+
+            <p class="mt-10 text-center text-sm text-gray-500">Or choose <a href="#buy" class="text-claw-400 hover:text-claw-300 transition-colors">managed hosting</a> and skip steps 1 &amp; 2&mdash;or go fully managed and we handle everything.</p>
+        </div>
+    </section>
+
+    <!-- System Requirements -->
+    <section class="py-16 px-6 border-t border-white/5">
+        <div class="max-w-3xl mx-auto text-center">
+            <h2 class="text-2xl font-bold text-white mb-8">System requirements</h2>
+            <div class="glass rounded-xl p-8 inline-block text-left">
+                <ul class="space-y-3 text-sm">
+                    <li class="flex items-center gap-3">
+                        <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Ubuntu 22.04 or 24.04 (x86_64 or ARM)</span>
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>1 GB+ RAM, 2 GB+ disk space</span>
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Anthropic API key (you pay Anthropic directly)</span>
+                    </li>
+                    <li class="flex items-center gap-3">
+                        <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Root / sudo access</span>
+                    </li>
+                </ul>
+                <p class="mt-5 text-xs text-gray-500 text-center">Works great on a $5/mo DigitalOcean or Hetzner VPS</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="py-20 px-6 border-t border-white/5">
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-14">Frequently asked questions</h2>
+
+            <div class="space-y-3">
+                <details class="glass rounded-xl group" open>
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What is OpenClaw?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        OpenClaw is an open-source AI agent framework. This install script automates the entire setup process&mdash;Node.js, Chromium, VNC, firewall, systemd service, workspace&mdash;so you can have a running AI assistant in minutes instead of hours.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">Do I need my own server?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Yes. Any Ubuntu VPS works&mdash;DigitalOcean, Hetzner, Linode, AWS, etc. A $5/month droplet with 1 GB RAM is enough to get started. The script handles all the server configuration for you.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What about the Anthropic API key?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        You bring your own Anthropic API key and pay Anthropic directly for usage. This keeps your costs transparent and under your control. Most users spend $5&ndash;$20/month on API usage depending on how active their agent is.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">Can I re-run the script?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Yes. The script is fully idempotent. It checks what's already installed, won't overwrite your config files without asking, and backs up existing configurations before making changes. Safe to run as many times as you need.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What if I need help?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Email support is included with your purchase. If you hit any issues during setup or configuration, we'll help you get running. Most issues are resolved within a few hours.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">Is there a refund policy?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        30-day money-back guarantee, no questions asked. If OpenClaw isn't for you, just email us and we'll refund you in full.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What's included in updates?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Lifetime access to script updates via the private GitHub repo. When we improve the installer or add new features, you get them automatically. Just pull the latest version and re-run.
+                    </div>
+                </details>
+
+                <!-- Managed hosting FAQs -->
+                <div class="mt-8 mb-3">
+                    <p class="text-xs font-medium text-claw-500/60 uppercase tracking-wider px-1">Managed Hosting</p>
+                </div>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What happens after I pay for managed hosting?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        After checkout, we automatically provision your cloud instance. You'll get a "Setting up..." email immediately, then a "Ready!" email with your connection details within ~10 minutes.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">How long does managed setup take?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Usually under 10 minutes. Your instance is provisioned automatically&mdash;no manual steps needed.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">Can I cancel managed hosting?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Yes, cancel anytime from your Stripe billing portal. You'll have 7 days to export your data before the instance is removed.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">Is my API key secure on managed hosting?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Your API key is stored only on your dedicated instance, encrypted at rest. We never access or store your key on our servers. Each customer gets an isolated cloud instance.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What's included in the $75/mo Fully Managed plan?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        Everything&mdash;hosting, API usage (up to $40/mo included), automatic updates, monitoring, and priority support. You don't need an Anthropic API key or a server. Just connect your Discord/Telegram/Signal and start chatting.
+                    </div>
+                </details>
+
+                <details class="glass rounded-xl group">
+                    <summary class="flex items-center justify-between p-5 cursor-pointer">
+                        <span class="text-white font-medium">What's the Opus model upgrade?</span>
+                        <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </summary>
+                    <div class="px-5 pb-5 text-sm text-gray-400">
+                        By default, Fully Managed uses Claude Sonnet which is fast and cost-effective. For $25/mo extra ($100/mo total), you can upgrade to Claude Opus for more capable responses. Contact us to switch.
+                    </div>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- Buy Section -->
+    <section id="buy" class="py-20 px-6 border-t border-white/5">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-4">Choose your plan</h2>
+            <p class="text-gray-500 text-center mb-14 max-w-xl mx-auto">All plans include the full OpenClaw agent. Pick the path that fits your style.</p>
+
+            <div class="grid md:grid-cols-3 gap-6 items-stretch max-w-5xl mx-auto">
+
+                <!-- Tier 1: Self-Install -->
+                <div class="glass rounded-2xl p-8 text-center flex flex-col">
+                    <p class="text-sm font-medium text-claw-400 uppercase tracking-wider mb-2">Self-Install</p>
+                    <div class="flex items-baseline justify-center gap-1 mb-1">
+                        <span class="text-5xl font-bold text-white">$49</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-2">One-time payment</p>
+                    <p class="text-gray-400 text-xs mb-8">For tinkerers who want full control</p>
+
+                    <ul class="space-y-3 text-left mb-10 max-w-xs mx-auto flex-grow">
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Complete install script</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Discord, Telegram &amp; Signal</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>VNC + Chromium computer vision</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Memory &amp; personality</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Lifetime script updates</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Email support</span>
+                        </li>
+                    </ul>
+
+                    <a href="https://buy.stripe.com/PLACEHOLDER_TIER1" class="glow-btn block w-full bg-claw-500 hover:bg-claw-400 text-black font-bold text-lg py-4 rounded-xl transition-colors">
+                        Buy Install Script
+                    </a>
+
+                    <p class="mt-5 text-xs text-gray-500">
+                        30-day money-back guarantee &middot; Instant access
+                    </p>
+                </div>
+
+                <!-- Tier 2: Managed BYOK -->
+                <div class="glass rounded-2xl p-8 text-center flex flex-col">
+                    <p class="text-sm font-medium text-claw-400 uppercase tracking-wider mb-2">Managed BYOK</p>
+                    <div class="flex items-baseline justify-center gap-1 mb-1">
+                        <span class="text-5xl font-bold text-white">$35</span>
+                        <span class="text-lg text-gray-400">/mo</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-2">Subscription</p>
+                    <p class="text-gray-400 text-xs mb-8">We host it, you bring your API key</p>
+
+                    <ul class="space-y-3 text-left mb-10 max-w-xs mx-auto flex-grow">
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="text-white font-medium">Everything in Self-Install, plus:</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Automated cloud setup</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Always-on hosting</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Auto-restarts &amp; automatic updates</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Health monitoring</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Email support</span>
+                        </li>
+                    </ul>
+
+                    <a href="https://buy.stripe.com/PLACEHOLDER_TIER2" class="glow-btn block w-full bg-claw-500 hover:bg-claw-400 text-black font-bold text-lg py-4 rounded-xl transition-colors">
+                        Get Started
+                    </a>
+
+                    <p class="mt-5 text-xs text-gray-500">
+                        Cancel anytime &middot; Instance ready in ~10 minutes
+                    </p>
+                </div>
+
+                <!-- Tier 3: Fully Managed (Featured) -->
+                <div class="glass-featured rounded-2xl p-8 text-center flex flex-col relative md:scale-105 order-first md:order-last">
+                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                        <span class="bg-claw-500 text-black text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-full">Most Popular</span>
+                    </div>
+
+                    <p class="text-sm font-medium text-claw-400 uppercase tracking-wider mb-2 mt-2">Fully Managed</p>
+                    <div class="flex items-baseline justify-center gap-1 mb-1">
+                        <span class="text-5xl font-bold text-white">$75</span>
+                        <span class="text-lg text-gray-400">/mo</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-2">Subscription</p>
+                    <p class="text-gray-400 text-xs mb-8">Zero config&mdash;we handle absolutely everything</p>
+
+                    <ul class="space-y-3 text-left mb-10 max-w-xs mx-auto flex-grow">
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="text-white font-medium">Everything in Managed BYOK, plus:</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>No API key needed</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>API usage included ($40/mo allowance)</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Usage monitoring &amp; budgeting</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Automatic model management</span>
+                        </li>
+                        <li class="flex items-center gap-3 text-sm">
+                            <svg class="check-icon text-claw-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Priority support</span>
+                        </li>
+                    </ul>
+
+                    <a href="https://buy.stripe.com/PLACEHOLDER_TIER3" class="glow-btn block w-full bg-claw-500 hover:bg-claw-400 text-black font-bold text-lg py-4 rounded-xl transition-colors">
+                        Get Fully Managed
+                    </a>
+
+                    <p class="mt-4 text-xs text-gray-400">
+                        Optional: Opus model upgrade +$25/mo
+                    </p>
+                    <p class="mt-2 text-xs text-gray-500">
+                        Cancel anytime &middot; Instance ready in ~10 minutes
+                    </p>
+                </div>
+
+            </div>
+
+            <!-- Feature Comparison Table -->
+            <div class="mt-20 max-w-5xl mx-auto hidden sm:block">
+                <h3 class="text-2xl font-bold text-white text-center mb-10">Compare plans</h3>
+                <div class="glass rounded-2xl overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-white/10">
+                                <th class="text-left text-gray-400 font-medium p-5 w-2/5">Feature</th>
+                                <th class="text-center text-gray-400 font-medium p-5 w-1/5">Self-Install</th>
+                                <th class="text-center text-gray-400 font-medium p-5 w-1/5">Managed BYOK</th>
+                                <th class="text-center text-white font-semibold p-5 w-1/5">Fully Managed</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/5">
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Install script</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Multi-channel</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">VNC + Computer vision</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Memory &amp; personality</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Cloud hosting</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Auto-restarts</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Automatic updates</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Health monitoring</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">API key included</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Usage budgeting</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Model management</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 pl-5 text-gray-300">Priority support</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-gray-500">&mdash;</td>
+                                <td class="p-4 text-center text-claw-400">&#10003;</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Setup Confirmation (hidden by default, shown after managed checkout redirect) -->
+    <div id="setup-confirmation" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0a0a0a]/90 backdrop-blur-sm px-6">
+        <div class="glass rounded-2xl p-10 sm:p-12 text-center max-w-md w-full">
+            <div class="w-16 h-16 rounded-full bg-claw-500/10 border border-claw-500/20 flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-claw-400 pulse-glow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-3">Setting up your instance...</h3>
+            <p class="text-gray-400 text-sm leading-relaxed">
+                Your OpenClaw assistant is being set up! Check your email for connection details in ~10 minutes.
+            </p>
+            <button onclick="document.getElementById('setup-confirmation').classList.add('hidden')" class="mt-8 text-sm text-gray-500 hover:text-gray-300 transition-colors">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/5 py-12 px-6">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-2 text-gray-500 text-sm">
+                <svg class="w-5 h-5 text-claw-500/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>OpenClaw &middot; Built for tinkerers</span>
+            </div>
+            <div class="flex items-center gap-6 text-sm text-gray-500">
+                <a href="#" class="hover:text-gray-300 transition-colors">GitHub</a>
+                <a href="mailto:support@openclaw.dev" class="hover:text-gray-300 transition-colors">Support</a>
+                <a href="#" class="hover:text-gray-300 transition-colors">Terms</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

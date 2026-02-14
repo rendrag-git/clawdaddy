@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenClaw Stripe Webhook Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/openclaw-webhook
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+StandardOutput=append:/var/log/openclaw-webhook.log
+StandardError=append:/var/log/openclaw-webhook.log
+
+[Install]
+WantedBy=multi-user.target

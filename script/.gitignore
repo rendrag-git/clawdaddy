@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+
+# Logs
+*.log
+webhook.log
+
+# Data files
+customers.json
+usage.db
+usage.db-wal
+usage.db-shm
+budget-state.json
+health-state.json
+metrics.json
+
+# Usage reports storage
+usage-reports/
+
+# Provision logs
+provision-*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

@@ -1,0 +1,29 @@
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+export XKL_XMODMAP_DISABLE=1
+
+# Terminal
+if command -v xterm > /dev/null 2>&1; then
+    xterm -geometry 80x24+10+10 -ls -title "OpenClaw Terminal" &
+fi
+
+# Display resolution
+xrandr --output VNC-0 --mode 1920x1080 2>/dev/null || \
+xrandr -s 1920x1080 2>/dev/null || true
+
+# Launch Chromium
+exec chromium \
+    --no-first-run \
+    --disable-translate \
+    --disable-infobars \
+    --disable-suggestions-service \
+    --disable-save-password-bubble \
+    --disable-default-apps \
+    --no-sandbox \
+    --start-maximized \
+    --window-size=1920,1080 \
+    --user-data-dir="${HOME}/.config/openclaw-chromium" \
+    2>/dev/null &
+
+wait
