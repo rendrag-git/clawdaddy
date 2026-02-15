@@ -168,91 +168,6 @@
         transform: none;
       }
 
-      .status-area {
-        margin-top: 1.6rem;
-        padding: 1rem;
-        border-radius: 14px;
-        border: 1px solid rgba(149, 171, 255, 0.25);
-        background: rgba(8, 14, 38, 0.6);
-      }
-
-      .status-headline {
-        margin: 0;
-        font-size: 1.05rem;
-      }
-
-      .status-copy {
-        margin: 0.35rem 0 0;
-        color: var(--text-muted);
-        font-size: 0.94rem;
-      }
-
-      .steps {
-        margin-top: 1.1rem;
-        display: grid;
-        gap: 0.7rem;
-      }
-
-      .step {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        color: var(--pending);
-        font-size: 0.93rem;
-      }
-
-      .dot {
-        width: 0.82rem;
-        height: 0.82rem;
-        border-radius: 999px;
-        background: rgba(128, 140, 182, 0.35);
-        border: 1px solid rgba(170, 182, 220, 0.28);
-      }
-
-      .step.active {
-        color: #d6e2ff;
-      }
-
-      .step.active .dot {
-        background: linear-gradient(140deg, var(--accent), var(--accent-2));
-        border-color: transparent;
-        box-shadow: 0 0 0 5px rgba(93, 170, 255, 0.18);
-        animation: pulse 1.6s ease-in-out infinite;
-      }
-
-      .step.complete {
-        color: var(--success);
-      }
-
-      .step.complete .dot {
-        background: var(--success);
-        border-color: transparent;
-        box-shadow: 0 0 0 4px rgba(69, 228, 165, 0.14);
-      }
-
-      .launch-wrap {
-        margin-top: 1.3rem;
-      }
-
-      .launch-link {
-        display: inline-flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        min-height: 3.35rem;
-        border-radius: 14px;
-        text-decoration: none;
-        font-size: clamp(1.02rem, 2.2vw, 1.25rem);
-        font-weight: 800;
-        color: #020512;
-        background: linear-gradient(105deg, #5ef0d2, #57e4ff);
-        box-shadow: 0 10px 28px rgba(61, 228, 229, 0.28);
-      }
-
-      .launch-link:hover {
-        filter: brightness(1.04);
-      }
-
       .error {
         margin-top: 0.95rem;
         color: #ffb3cb;
@@ -273,6 +188,503 @@
 
       .footer a {
         color: #9fd9ff;
+      }
+
+      /* Step transitions */
+      .step-container {
+        display: none;
+      }
+
+      .step-container.active {
+        display: block;
+        animation: fadeIn 0.4s ease;
+      }
+
+      /* Username availability indicator */
+      .username-check {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        min-height: 1.4rem;
+        margin-top: 0.25rem;
+      }
+
+      .username-check.available {
+        color: var(--success);
+      }
+
+      .username-check.taken {
+        color: #ffb3cb;
+      }
+
+      .username-check .suggestion-link {
+        color: var(--accent-2);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      .subdomain-preview {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-top: 0.2rem;
+        font-family: monospace;
+      }
+
+      /* Provisioning chip */
+      .provision-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        background: rgba(18, 27, 64, 0.85);
+        border: 1px solid rgba(164, 182, 255, 0.25);
+        margin-bottom: 1rem;
+      }
+
+      .provision-chip .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+
+      .provision-chip.ready .pulse-dot {
+        background: var(--success);
+        animation: none;
+      }
+
+      /* Quiz progress bar */
+      .quiz-progress {
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 2px;
+        margin-bottom: 1.2rem;
+        overflow: hidden;
+      }
+
+      .quiz-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        border-radius: 2px;
+        transition: width 0.4s ease;
+      }
+
+      /* Quiz question counter */
+      .quiz-counter {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 0.5rem;
+      }
+
+      /* Quiz question area */
+      .quiz-question-area {
+        position: relative;
+        overflow: hidden;
+        min-height: 280px;
+      }
+
+      /* Quiz question transitions */
+      .quiz-slide {
+        transition: transform 0.3s ease, opacity 0.3s ease;
+      }
+
+      .quiz-slide.slide-out-left {
+        transform: translateX(-30px);
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+      }
+
+      .quiz-slide.slide-in-right {
+        transform: translateX(30px);
+        opacity: 0;
+      }
+
+      .quiz-slide.slide-out-right {
+        transform: translateX(30px);
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+      }
+
+      /* Quiz prompt */
+      .quiz-prompt {
+        font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+        font-weight: 600;
+        line-height: 1.4;
+        margin: 0 0 1.2rem;
+      }
+
+      .quiz-helper {
+        font-size: 0.88rem;
+        color: var(--text-muted);
+        margin: -0.6rem 0 1rem;
+      }
+
+      /* Option buttons (single select) */
+      .quiz-options {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .quiz-option {
+        display: flex;
+        align-items: center;
+        text-align: left;
+        width: 100%;
+        min-height: 52px;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid rgba(149, 171, 255, 0.25);
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 0.95rem;
+        line-height: 1.4;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      }
+
+      .quiz-option:hover {
+        border-color: rgba(124, 140, 255, 0.5);
+        background: rgba(124, 140, 255, 0.08);
+        transform: translateY(-1px);
+      }
+
+      .quiz-option.selected {
+        border-color: var(--accent);
+        background: rgba(124, 140, 255, 0.15);
+        box-shadow: 0 0 0 2px rgba(124, 140, 255, 0.25);
+      }
+
+      /* Multi-select (checkbox style) */
+      .quiz-option.multi {
+        position: relative;
+        padding-left: 2.8rem;
+      }
+
+      .quiz-option.multi::before {
+        content: '';
+        position: absolute;
+        left: 0.85rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        border: 2px solid rgba(149, 171, 255, 0.4);
+        background: transparent;
+        transition: all 0.2s;
+      }
+
+      .quiz-option.multi.selected::before {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .quiz-option.multi.selected::after {
+        content: '\2713';
+        position: absolute;
+        left: 0.95rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #020512;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+
+      /* Add context toggle */
+      .add-context-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        margin-top: 0.8rem;
+        padding: 0.3rem 0;
+        border: none;
+        background: none;
+      }
+
+      .add-context-toggle:hover {
+        color: var(--accent);
+      }
+
+      .context-input {
+        margin-top: 0.5rem;
+      }
+
+      .context-input textarea {
+        width: 100%;
+        min-height: 60px;
+        border-radius: 10px;
+        border: 1px solid rgba(149, 171, 255, 0.2);
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 0.88rem;
+        padding: 0.6rem;
+        resize: vertical;
+        outline: none;
+        font-family: inherit;
+      }
+
+      /* Quiz navigation */
+      .quiz-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1.2rem;
+        gap: 0.8rem;
+      }
+
+      .quiz-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        border: none;
+        background: none;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        cursor: pointer;
+        padding: 0.5rem 0.8rem;
+        border-radius: 8px;
+      }
+
+      .quiz-back:hover {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .quiz-continue {
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(110deg, var(--accent), var(--accent-2));
+        color: #020512;
+        font-size: 0.95rem;
+        font-weight: 700;
+        padding: 0.75rem 1.5rem;
+        cursor: pointer;
+        min-height: 44px;
+        transition: transform 0.15s, filter 0.15s;
+      }
+
+      .quiz-continue:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+      }
+
+      .quiz-continue:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .skip-text {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        text-align: center;
+        margin-top: 0.5rem;
+      }
+
+      /* Section break */
+      .section-break {
+        text-align: center;
+        padding: 2rem 0;
+      }
+
+      .section-break h3 {
+        font-size: 1.3rem;
+        margin: 0 0 0.8rem;
+      }
+
+      .section-break p {
+        color: var(--text-muted);
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+      }
+
+      /* Provider buttons */
+      .provider-buttons {
+        display: grid;
+        gap: 0.8rem;
+        margin-top: 1.2rem;
+      }
+
+      .provider-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        min-height: 56px;
+        border-radius: 14px;
+        border: 1px solid rgba(149, 171, 255, 0.25);
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 1.05rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .provider-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .provider-btn.anthropic:hover {
+        border-color: #D4A574;
+        box-shadow: 0 0 20px rgba(212, 165, 116, 0.15);
+      }
+
+      .provider-btn.openai:hover {
+        border-color: #10A37F;
+        box-shadow: 0 0 20px rgba(16, 163, 127, 0.15);
+      }
+
+      /* Success state */
+      .success-state {
+        text-align: center;
+        padding: 1.5rem 0;
+      }
+
+      .success-check {
+        font-size: 4rem;
+        animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        display: block;
+        margin-bottom: 1rem;
+      }
+
+      .success-title {
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        font-weight: 800;
+        background: linear-gradient(110deg, var(--accent), var(--accent-2), var(--success));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 0 0 1rem;
+      }
+
+      .success-url {
+        font-family: monospace;
+        font-size: clamp(1rem, 2.5vw, 1.3rem);
+        color: var(--accent-2);
+        margin: 0.8rem 0;
+        word-break: break-all;
+      }
+
+      .copy-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 10px;
+        border: 1px solid rgba(149, 171, 255, 0.3);
+        background: rgba(18, 27, 64, 0.6);
+        color: var(--text);
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .copy-btn:hover {
+        border-color: var(--accent);
+        background: rgba(124, 140, 255, 0.1);
+      }
+
+      .copy-btn.copied {
+        border-color: var(--success);
+        color: var(--success);
+      }
+
+      .redirect-text {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        margin-top: 1.5rem;
+      }
+
+      .bookmark-text {
+        color: var(--text-muted);
+        font-size: 0.88rem;
+        margin: 0.8rem 0;
+      }
+
+      /* Waiting/auth states */
+      .waiting-state {
+        text-align: center;
+        padding: 2rem 0;
+      }
+
+      .waiting-state p {
+        color: var(--text-muted);
+        margin: 0.5rem 0;
+      }
+
+      .auth-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+
+      .auth-status.confirmed {
+        color: var(--success);
+      }
+
+      /* Final textarea */
+      .final-textarea {
+        width: 100%;
+        min-height: 120px;
+        border-radius: 12px;
+        border: 1px solid rgba(149, 171, 255, 0.3);
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 1rem;
+        padding: 0.85rem;
+        resize: vertical;
+        outline: none;
+        font-family: inherit;
+        line-height: 1.5;
+      }
+
+      .final-textarea:focus {
+        border-color: rgba(112, 200, 255, 0.85);
+        box-shadow: 0 0 0 3px rgba(72, 176, 255, 0.2);
+      }
+
+      .final-textarea::placeholder {
+        color: var(--text-muted);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes scaleIn {
+        from {
+          transform: scale(0);
+        }
+        to {
+          transform: scale(1);
+        }
       }
 
       @keyframes pulse {
@@ -298,45 +710,90 @@
     <main class="page">
       <section class="shell">
         <h1 class="brand">ClawDaddy Onboarding</h1>
-        <p class="tagline">One quick step, then we spin up your assistant.</p>
+        <p class="tagline">Let's personalize your AI assistant.</p>
 
         <article class="panel" id="onboarding-panel">
-          <span class="session-chip">Stripe session: <strong id="session-preview">loading...</strong></span>
-          <h2 class="title">Name your assistant</h2>
-          <p class="copy">
-            Enter your display name and your assistant name. We will provision your webchat and post your launch link here.
-          </p>
+          <span class="session-chip">Session: <strong id="session-preview">loading...</strong></span>
 
-          <form id="onboarding-form" class="form" novalidate>
-            <div class="field">
-              <label class="label" for="display-name">Display name</label>
-              <input class="input" id="display-name" name="displayName" maxlength="80" required />
+          <!-- Step 1: Your Info -->
+          <div id="step-1" class="step-container active">
+            <h2 class="title">Your Info</h2>
+            <p class="copy">
+              Choose your username (becomes your subdomain) and name your assistant.
+            </p>
+
+            <form id="step-1-form" class="form" novalidate>
+              <div class="field">
+                <label class="label" for="username">Username</label>
+                <input
+                  class="input"
+                  id="username"
+                  name="username"
+                  type="text"
+                  placeholder="yourname"
+                  maxlength="20"
+                  required
+                  autocomplete="off"
+                />
+                <div id="username-check" class="username-check"></div>
+                <div id="subdomain-preview" class="subdomain-preview"></div>
+              </div>
+
+              <div class="field">
+                <label class="label" for="bot-name">Assistant name</label>
+                <input
+                  class="input"
+                  id="bot-name"
+                  name="botName"
+                  type="text"
+                  placeholder="OpenClaw"
+                  maxlength="80"
+                  required
+                />
+              </div>
+
+              <button class="button" id="step-1-submit" type="submit">Let's go</button>
+            </form>
+
+            <p id="step-1-error" class="error" role="alert"></p>
+          </div>
+
+          <!-- Step 2: Personality Quiz -->
+          <div id="step-2" class="step-container">
+            <div id="provision-chip" class="provision-chip">
+              <span class="pulse-dot"></span>
+              <span id="provision-text">Setting up your server...</span>
             </div>
 
-            <div class="field">
-              <label class="label" for="assistant-name">Preferred assistant name</label>
-              <input class="input" id="assistant-name" name="assistantName" maxlength="80" required />
+            <div class="quiz-progress">
+              <div id="quiz-progress-fill" class="quiz-progress-fill" style="width: 0%"></div>
             </div>
 
-            <button class="button" id="submit-button" type="submit">Save and start provisioning</button>
-          </form>
+            <div id="quiz-counter" class="quiz-counter"></div>
 
-          <p id="form-error" class="error" role="alert"></p>
+            <div id="quiz-question-area" class="quiz-question-area"></div>
+          </div>
 
-          <section id="status-section" class="status-area hidden" aria-live="polite">
-            <h3 id="status-headline" class="status-headline">Queued</h3>
-            <p id="status-copy" class="status-copy">We received your onboarding request.</p>
+          <!-- Step 3: Connect Your AI -->
+          <div id="step-3" class="step-container">
+            <h2 class="title">Connect Your AI</h2>
+            <div id="step-3-content"></div>
+          </div>
 
-            <div class="steps" id="status-steps">
-              <div class="step" data-step="queued"><span class="dot" aria-hidden="true"></span>Queued</div>
-              <div class="step" data-step="provisioning"><span class="dot" aria-hidden="true"></span>Provisioning</div>
-              <div class="step" data-step="ready"><span class="dot" aria-hidden="true"></span>Ready</div>
+          <!-- Step 4: You're All Set -->
+          <div id="step-4" class="step-container">
+            <div class="success-state">
+              <span class="success-check">✓</span>
+              <h2 class="success-title">Your assistant is ready!</h2>
+              <div class="success-url" id="final-url"></div>
+              <button class="copy-btn" id="copy-url-btn">
+                <span id="copy-icon">📋</span> <span id="copy-text">Copy URL</span>
+              </button>
+              <p class="bookmark-text">Bookmark this — it's your assistant's home</p>
+              <p class="redirect-text" id="redirect-countdown"></p>
+              <button class="button" id="open-now-btn">Open now</button>
             </div>
-
-            <div class="launch-wrap hidden" id="launch-wrap">
-              <a id="launch-link" class="launch-link" href="#" target="_blank" rel="noopener noreferrer">Open Your Assistant</a>
-            </div>
-          </section>
+          </div>
         </article>
 
         <p class="footer">Need help? <a href="mailto:hello@clawdaddy.sh">hello@clawdaddy.sh</a></p>
@@ -345,6 +802,7 @@
 
     <script>
       (function () {
+        // ======== Session Validation ========
         const params = new URLSearchParams(window.location.search);
         const sessionId = (params.get('session_id') || '').trim();
 
@@ -358,66 +816,254 @@
           return;
         }
 
-        const form = document.getElementById('onboarding-form');
-        const submitButton = document.getElementById('submit-button');
-        const formError = document.getElementById('form-error');
-        const statusSection = document.getElementById('status-section');
-        const statusHeadline = document.getElementById('status-headline');
-        const statusCopy = document.getElementById('status-copy');
-        const launchWrap = document.getElementById('launch-wrap');
-        const launchLink = document.getElementById('launch-link');
-        const sessionPreview = document.getElementById('session-preview');
-        const steps = Array.from(document.querySelectorAll('.step'));
+        document.getElementById('session-preview').textContent = `${sessionId.slice(0, 8)}...${sessionId.slice(-6)}`;
 
-        sessionPreview.textContent = `${sessionId.slice(0, 8)}...${sessionId.slice(-6)}`;
-
-        let pollTimer = null;
-        let pollInFlight = false;
-
-        const statusOrder = ['queued', 'provisioning', 'ready'];
-        const statusText = {
-          queued: {
-            headline: 'Queued',
-            copy: 'Your request is in line. We are preparing your workspace.'
+        // ======== Quiz Data ========
+        const QUIZ_QUESTIONS = [
+          {
+            id: 'A1', section: 'A', type: 'single_select',
+            prompt: 'Your brain is a browser with 37 tabs open. A surprise meeting starts in 10 minutes. What do you do?',
+            options: [
+              { id: 'A1a', label: 'Make a tiny checklist, pick the top 3 tabs, and close the rest like a hero.', weights: { organized: 0.9, proactive: 0.7, detailed: 0.4, serious: 0.2 } },
+              { id: 'A1b', label: 'Improvise. The meeting can\'t hurt you if you pretend it\'s a podcast.', weights: { spontaneous: 0.9, casual: 0.6, playful: 0.4, big_picture: 0.5 } },
+              { id: 'A1c', label: 'Message someone: "Give me the one thing I must know." Then roll in with confidence.', weights: { collaborative: 0.8, reactive: 0.5, big_picture: 0.6, casual: 0.4 } },
+              { id: 'A1d', label: 'Open a doc and write a crisp 5-line brief (problem, goal, plan, risks, next step).', weights: { organized: 0.7, formal: 0.5, proactive: 0.6, detailed: 0.7, serious: 0.4 } }
+            ]
           },
-          provisioning: {
-            headline: 'Provisioning in progress',
-            copy: 'Your OpenClaw environment is being configured now.'
+          {
+            id: 'A2', section: 'A', type: 'single_select',
+            prompt: 'You buy a new gadget. There is no setup wizard. Your move?',
+            options: [
+              { id: 'A2a', label: 'Read the manual. Yes, cover-to-cover. Like a bedtime story.', weights: { organized: 0.6, detailed: 0.8, serious: 0.4, independent: 0.5 } },
+              { id: 'A2b', label: 'Press buttons until it works. If it sparks, that\'s feedback.', weights: { spontaneous: 0.8, playful: 0.4, independent: 0.6, big_picture: 0.4 } },
+              { id: 'A2c', label: 'Search "best settings" and steal wisdom from the internet hive-mind.', weights: { proactive: 0.6, big_picture: 0.6, independent: 0.4, detailed: 0.3 } },
+              { id: 'A2d', label: 'Ask a friend who\'s into this stuff and let them do the first run.', weights: { collaborative: 0.8, casual: 0.5, reactive: 0.4 } }
+            ]
           },
-          ready: {
-            headline: 'Your assistant is ready',
-            copy: 'Launch your webchat and start chatting.'
+          {
+            id: 'A3', section: 'A', type: 'single_select',
+            prompt: 'You\'re traveling. The plan says "Museum at 2." At 1:50 you see an alley that smells like incredible food. You…',
+            options: [
+              { id: 'A3a', label: 'Stick to the plan. The museum ticket is already in my calendar (and my soul).', weights: { organized: 0.8, proactive: 0.4, serious: 0.3 } },
+              { id: 'A3b', label: 'Detour immediately. The best stories are never in the itinerary.', weights: { spontaneous: 0.9, playful: 0.5, big_picture: 0.4 } },
+              { id: 'A3c', label: 'Do both: quick bite now, museum later. Time is a suggestion.', weights: { organized: 0.4, spontaneous: 0.5, proactive: 0.5, big_picture: 0.4 } },
+              { id: 'A3d', label: 'Ask a local (or the assistant) which choice will make Future Me happiest.', weights: { collaborative: 0.6, big_picture: 0.6, proactive: 0.4 } }
+            ]
+          },
+          {
+            id: 'A4', section: 'A', type: 'single_select',
+            prompt: 'Someone pings: "Quick question" at 4:59pm. You…',
+            options: [
+              { id: 'A4a', label: 'Answer now with context, steps, and a tiny screenshot if needed.', weights: { proactive: 0.7, detailed: 0.8, collaborative: 0.3, serious: 0.3 } },
+              { id: 'A4b', label: 'Reply with a one-liner + suggest a time tomorrow if it\'s bigger than quick.', weights: { organized: 0.6, formal: 0.4, proactive: 0.5, big_picture: 0.5 } },
+              { id: 'A4c', label: 'Send a friendly TL;DR and a meme. It\'s morale maintenance.', weights: { casual: 0.8, playful: 0.7, big_picture: 0.3 } },
+              { id: 'A4d', label: 'Pretend I didn\'t see it. Boundaries are self-care.', weights: { reactive: 0.7, independent: 0.5, serious: 0.4 } }
+            ]
+          },
+          {
+            id: 'A5', section: 'A', type: 'single_select',
+            prompt: 'Pick your assistant\'s vibe in a movie scene:',
+            options: [
+              { id: 'A5a', label: 'Polished concierge: crisp, calm, and always one step ahead.', weights: { formal: 0.8, organized: 0.5, proactive: 0.6, serious: 0.5 } },
+              { id: 'A5b', label: 'Friendly co-pilot: warm, plainspoken, and low-drama.', weights: { casual: 0.7, collaborative: 0.6, serious: 0.2, proactive: 0.3 } },
+              { id: 'A5c', label: 'Witty sidekick: helpful, fast, and occasionally unhinged (in a safe way).', weights: { playful: 0.8, casual: 0.6, proactive: 0.4, big_picture: 0.3 } },
+              { id: 'A5d', label: 'Zen minimalist: fewer words, more results.', weights: { serious: 0.4, big_picture: 0.6, independent: 0.5, formal: 0.3 } }
+            ]
+          },
+          {
+            id: 'A6', section: 'A', type: 'single_select',
+            prompt: 'If the assistant thinks you\'re about to do something suboptimal (but not dangerous), it should…',
+            options: [
+              { id: 'A6a', label: 'Gently push back with evidence and a better option.', weights: { proactive: 0.6, serious: 0.4, detailed: 0.5, independent: 0.3 } },
+              { id: 'A6b', label: 'Ask 1-2 clarifying questions before suggesting anything.', weights: { collaborative: 0.7, detailed: 0.6, organized: 0.3 } },
+              { id: 'A6c', label: 'Show quick pros/cons, then let me decide immediately.', weights: { big_picture: 0.7, casual: 0.4, independent: 0.5 } },
+              { id: 'A6d', label: 'Default to what I asked, unless I explicitly say "challenge me."', weights: { reactive: 0.6, casual: 0.3, independent: 0.4 } }
+            ]
+          },
+          {
+            id: 'A7', section: 'A', type: 'single_select',
+            prompt: 'You\'re hosting dinner for friends. What\'s your cooking style?',
+            options: [
+              { id: 'A7a', label: 'Mise en place. Timers. Spreadsheet energy. Everything is labeled.', weights: { organized: 0.9, detailed: 0.6, serious: 0.3 } },
+              { id: 'A7b', label: 'Vibes only. I cook like jazz and hope everyone likes jazz.', weights: { spontaneous: 0.8, playful: 0.5, casual: 0.4 } },
+              { id: 'A7c', label: 'I turn it into a group activity. Someone chop, someone stir, someone taste-test.', weights: { collaborative: 0.9, casual: 0.5, playful: 0.3 } },
+              { id: 'A7d', label: 'I optimize: one impressive main, two easy sides, and a backup plan.', weights: { organized: 0.6, big_picture: 0.6, proactive: 0.5 } }
+            ]
+          },
+          {
+            id: 'A8', section: 'A', type: 'single_select',
+            prompt: 'When the assistant is working on something (research, planning, drafting), how should it update you?',
+            options: [
+              { id: 'A8a', label: 'Frequent check-ins. I like to steer the ship in real time.', weights: { collaborative: 0.6, detailed: 0.5, proactive: 0.4 } },
+              { id: 'A8b', label: 'Only at milestones: "Here\'s where I am, here\'s what\'s next."', weights: { organized: 0.6, big_picture: 0.6, serious: 0.2 } },
+              { id: 'A8c', label: 'Only if blocked or if a decision is needed.', weights: { independent: 0.6, big_picture: 0.5, proactive: 0.3 } },
+              { id: 'A8d', label: 'No updates—just deliver the finished thing (with a quick recap).', weights: { independent: 0.8, organized: 0.4, serious: 0.3 } }
+            ]
+          },
+          {
+            id: 'A9', section: 'A', type: 'single_select',
+            prompt: 'You\'re starting something new (project, hobby, business idea). Your first hour looks like…',
+            options: [
+              { id: 'A9a', label: 'Define goals + constraints, then map the steps. I love a clean runway.', weights: { organized: 0.8, proactive: 0.6, big_picture: 0.4 } },
+              { id: 'A9b', label: 'Build a scrappy prototype immediately. Learning-by-doing is the point.', weights: { spontaneous: 0.7, proactive: 0.4, independent: 0.5 } },
+              { id: 'A9c', label: 'Brainstorm with people. The best ideas appear mid-conversation.', weights: { collaborative: 0.8, big_picture: 0.5, playful: 0.3 } },
+              { id: 'A9d', label: 'Research the landscape first: examples, pitfalls, and best practices.', weights: { detailed: 0.6, proactive: 0.5, serious: 0.3, organized: 0.4 } }
+            ]
+          },
+          {
+            id: 'A10', section: 'A', type: 'single_select',
+            prompt: 'A long article lands in your lap. How do you consume it?',
+            options: [
+              { id: 'A10a', label: 'Read carefully, highlight, and summarize the key points.', weights: { detailed: 0.9, organized: 0.5, serious: 0.3 } },
+              { id: 'A10b', label: 'Skim for the gist: headings, intro, and any spicy charts.', weights: { big_picture: 0.8, casual: 0.3 } },
+              { id: 'A10c', label: 'Jump to the conclusion first. Then backfill only if needed.', weights: { big_picture: 0.7, proactive: 0.3, independent: 0.4 } },
+              { id: 'A10d', label: 'Have the assistant give me a punchy brief + actions in bullets.', weights: { organized: 0.5, proactive: 0.5, big_picture: 0.5 } }
+            ]
+          },
+          {
+            id: 'A11', section: 'A', type: 'single_select',
+            prompt: 'The assistant makes a pun. Your reaction is…',
+            options: [
+              { id: 'A11a', label: 'MORE. If it\'s not slightly ridiculous, what are we even doing.', weights: { playful: 0.9, casual: 0.6 } },
+              { id: 'A11b', label: 'Occasional jokes are great—just don\'t derail the task.', weights: { playful: 0.6, organized: 0.3, big_picture: 0.3 } },
+              { id: 'A11c', label: 'Keep it straightforward. I\'m here to get things done.', weights: { serious: 0.8, formal: 0.3, organized: 0.3 } },
+              { id: 'A11d', label: 'Only joke when I do. Mirror my energy like a pro.', weights: { collaborative: 0.5, reactive: 0.5, casual: 0.4 } }
+            ]
+          },
+          {
+            id: 'SECTION_BREAK', section: 'BREAK', type: 'section_break',
+            title: 'Almost there! Now let\'s talk about what you need help with.',
+            subtitle: 'Tell us what you want help with (and how often). We\'ll tune the assistant accordingly.'
+          },
+          {
+            id: 'B1', section: 'B', type: 'multi_select', maxSelections: 8,
+            prompt: 'What do you want help with personally? (Pick any)',
+            helperText: 'Pick all that sound useful. You can change this later.',
+            options: [
+              { id: 'B1_calendar', label: 'Calendar & scheduling', tags: ['personal:calendar'] },
+              { id: 'B1_reminders', label: 'Reminders & routines', tags: ['personal:reminders'] },
+              { id: 'B1_shopping', label: 'Shopping & price tracking', tags: ['personal:shopping'] },
+              { id: 'B1_travel', label: 'Travel planning', tags: ['personal:travel'] },
+              { id: 'B1_health', label: 'Health & fitness nudges', tags: ['personal:health'] },
+              { id: 'B1_finance', label: 'Budgeting & personal finance', tags: ['personal:finance'] },
+              { id: 'B1_meals', label: 'Meals, recipes, groceries', tags: ['personal:meals'] },
+              { id: 'B1_learning', label: 'Learning & hobbies', tags: ['personal:learning'] },
+              { id: 'B1_home', label: 'Home / life admin (bills, services, chores)', tags: ['personal:home_admin'] },
+              { id: 'B1_relationships', label: 'Social planning (birthdays, events)', tags: ['personal:social'] }
+            ]
+          },
+          {
+            id: 'B2', section: 'B', type: 'multi_select', maxSelections: 8,
+            prompt: 'What do you want help with professionally? (Pick any)',
+            helperText: 'Pick all that sound useful. You can change this later.',
+            options: [
+              { id: 'B2_email', label: 'Email triage & drafting', tags: ['work:email'] },
+              { id: 'B2_research', label: 'Research & summaries', tags: ['work:research'] },
+              { id: 'B2_writing', label: 'Writing (docs, proposals, briefs)', tags: ['work:writing'] },
+              { id: 'B2_coding', label: 'Coding help (debugging, scaffolds, reviews)', tags: ['work:coding'] },
+              { id: 'B2_data', label: 'Data analysis (spreadsheets, SQL, charts)', tags: ['work:data_analysis'] },
+              { id: 'B2_pm', label: 'Project management (plans, tasks, standups)', tags: ['work:project_management'] },
+              { id: 'B2_meetings', label: 'Meeting notes & action items', tags: ['work:meetings'] },
+              { id: 'B2_social', label: 'Social media / content ideas', tags: ['work:social_media'] },
+              { id: 'B2_sales', label: 'Sales / outreach messaging', tags: ['work:sales'] },
+              { id: 'B2_customer', label: 'Customer support drafts / macros', tags: ['work:customer_support'] }
+            ]
+          },
+          {
+            id: 'B3', section: 'B', type: 'single_select',
+            prompt: 'How often do you expect to interact with your assistant?',
+            options: [
+              { id: 'B3a', label: 'All day — it\'s basically my second brain.', weights: { proactive: 0.5, collaborative: 0.4, casual: 0.3, organized: 0.3 }, tags: ['usage:high'] },
+              { id: 'B3b', label: 'A few times a day — quick questions and a little planning.', weights: { organized: 0.3, proactive: 0.3, big_picture: 0.3 }, tags: ['usage:medium'] },
+              { id: 'B3c', label: 'A few times a week — when I need a boost.', weights: { independent: 0.3, reactive: 0.5, big_picture: 0.2 }, tags: ['usage:low'] },
+              { id: 'B3d', label: 'Rarely — I want it there, but mostly quiet.', weights: { independent: 0.4, reactive: 0.7, serious: 0.2 }, tags: ['usage:minimal'] }
+            ]
+          },
+          {
+            id: 'B4', section: 'B', type: 'short_text',
+            prompt: 'What\'s your job / role (or what you spend most of your time doing)?',
+            placeholder: 'e.g., Product manager, founder, student, nurse, consultant, stay-at-home parent, etc.',
+            field: 'user.role'
+          },
+          {
+            id: 'B5', section: 'B', type: 'short_text',
+            prompt: 'What should the assistant call you?',
+            placeholder: 'Name or nickname',
+            field: 'user.preferred_name'
+          },
+          {
+            id: 'FINAL_SCREEN', section: 'FINAL', type: 'final_screen',
+            prompt: 'Anything else your assistant should know?',
+            placeholder: 'I\'m a night owl, I hate small talk, I run a landscaping business...'
           }
+        ];
+
+        // ======== State ========
+        const state = {
+          sessionId,
+          username: '',
+          usernameAvailable: null,
+          botName: '',
+          currentStep: 1,
+          quizIndex: 0,
+          answers: {},
+          perQuestionContext: {},
+          serverStatus: 'queued',
+          serverReady: false,
+          authComplete: false,
+          webchatUrl: '',
+          suggestionUsername: ''
         };
 
-        function showError(message) {
-          formError.textContent = message || '';
+        // ======== DOM References ========
+        const step1Container = document.getElementById('step-1');
+        const step2Container = document.getElementById('step-2');
+        const step3Container = document.getElementById('step-3');
+        const step4Container = document.getElementById('step-4');
+
+        const usernameInput = document.getElementById('username');
+        const botNameInput = document.getElementById('bot-name');
+        const usernameCheck = document.getElementById('username-check');
+        const subdomainPreview = document.getElementById('subdomain-preview');
+        const step1Form = document.getElementById('step-1-form');
+        const step1Submit = document.getElementById('step-1-submit');
+        const step1Error = document.getElementById('step-1-error');
+
+        const provisionChip = document.getElementById('provision-chip');
+        const provisionText = document.getElementById('provision-text');
+        const quizProgressFill = document.getElementById('quiz-progress-fill');
+        const quizCounter = document.getElementById('quiz-counter');
+        const quizQuestionArea = document.getElementById('quiz-question-area');
+
+        const step3Content = document.getElementById('step-3-content');
+
+        const finalUrlDisplay = document.getElementById('final-url');
+        const copyUrlBtn = document.getElementById('copy-url-btn');
+        const copyIcon = document.getElementById('copy-icon');
+        const copyText = document.getElementById('copy-text');
+        const redirectCountdown = document.getElementById('redirect-countdown');
+        const openNowBtn = document.getElementById('open-now-btn');
+
+        // ======== Helpers ========
+        function slugify(str) {
+          return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         }
 
-        function setStatus(status, webchatUrl) {
-          const safeStatus = statusOrder.includes(status) ? status : 'queued';
-          const targetIndex = statusOrder.indexOf(safeStatus);
+        function escapeHtml(str) {
+          const div = document.createElement('div');
+          div.textContent = str;
+          return div.innerHTML;
+        }
 
-          steps.forEach((step) => {
-            const stepIndex = statusOrder.indexOf(step.dataset.step);
-            step.classList.remove('active', 'complete');
+        function showError(el, message) {
+          el.textContent = message || '';
+        }
 
-            if (stepIndex < targetIndex) {
-              step.classList.add('complete');
-            } else if (stepIndex === targetIndex) {
-              step.classList.add('active');
-            }
+        function showStep(stepNum) {
+          state.currentStep = stepNum;
+          [step1Container, step2Container, step3Container, step4Container].forEach((el, i) => {
+            el.classList.toggle('active', i + 1 === stepNum);
           });
-
-          statusHeadline.textContent = statusText[safeStatus].headline;
-          statusCopy.textContent = statusText[safeStatus].copy;
-
-          if (safeStatus === 'ready' && webchatUrl) {
-            launchLink.href = webchatUrl;
-            launchWrap.classList.remove('hidden');
-          } else {
-            launchWrap.classList.add('hidden');
-          }
         }
 
         async function readJson(response) {
@@ -427,6 +1073,149 @@
             return {};
           }
         }
+
+        // ======== Username Check (Step 1) ========
+        let usernameDebounceTimer = null;
+
+        async function checkUsername(username) {
+          if (!username || username.length < 3 || username.length > 20) {
+            usernameCheck.innerHTML = '';
+            usernameCheck.className = 'username-check';
+            state.usernameAvailable = null;
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/onboarding/check-username/${encodeURIComponent(username)}`);
+            const payload = await readJson(response);
+
+            if (!response.ok) {
+              usernameCheck.innerHTML = '<span>❌ Error checking availability</span>';
+              usernameCheck.className = 'username-check taken';
+              state.usernameAvailable = false;
+              return;
+            }
+
+            if (payload.available) {
+              usernameCheck.innerHTML = '<span>✓ available</span>';
+              usernameCheck.className = 'username-check available';
+              state.usernameAvailable = true;
+              state.suggestionUsername = '';
+            } else {
+              const suggestion = payload.suggestion || '';
+              state.suggestionUsername = suggestion;
+              const suggestionHtml = suggestion
+                ? ` <a class="suggestion-link" data-suggestion="${suggestion}">try "${suggestion}"</a>`
+                : '';
+              usernameCheck.innerHTML = `<span>✕ taken</span>${suggestionHtml}`;
+              usernameCheck.className = 'username-check taken';
+              state.usernameAvailable = false;
+
+              if (suggestion) {
+                const suggestionLink = usernameCheck.querySelector('.suggestion-link');
+                suggestionLink.addEventListener('click', () => {
+                  usernameInput.value = suggestion;
+                  state.username = suggestion;
+                  updateSubdomainPreview(suggestion);
+                  checkUsername(suggestion);
+                });
+              }
+            }
+          } catch (error) {
+            usernameCheck.innerHTML = '<span>❌ Error checking</span>';
+            usernameCheck.className = 'username-check taken';
+            state.usernameAvailable = false;
+          }
+        }
+
+        function updateSubdomainPreview(username) {
+          if (username) {
+            subdomainPreview.textContent = `${username}.clawdaddy.sh`;
+          } else {
+            subdomainPreview.textContent = '';
+          }
+        }
+
+        usernameInput.addEventListener('input', (e) => {
+          let raw = e.target.value.trim();
+          const slugged = slugify(raw);
+          if (raw !== slugged) {
+            e.target.value = slugged;
+            raw = slugged;
+          }
+          state.username = raw;
+          updateSubdomainPreview(raw);
+
+          clearTimeout(usernameDebounceTimer);
+          usernameDebounceTimer = setTimeout(() => {
+            checkUsername(raw);
+          }, 400);
+        });
+
+        botNameInput.addEventListener('input', (e) => {
+          state.botName = e.target.value.trim();
+        });
+
+        step1Form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          showError(step1Error, '');
+
+          const username = state.username;
+          const botName = state.botName;
+
+          const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+          if (username.length < 3 || username.length > 20 || !usernameRegex.test(username)) {
+            showError(step1Error, 'Username must be 3-20 characters, start/end with a letter or number, no consecutive hyphens.');
+            return;
+          }
+
+          if (botName.length < 2) {
+            showError(step1Error, 'Assistant name must be at least 2 characters.');
+            return;
+          }
+
+          if (state.usernameAvailable === false) {
+            showError(step1Error, 'Username is taken. Try another.');
+            return;
+          }
+
+          if (state.usernameAvailable === null) {
+            showError(step1Error, 'Checking username availability...');
+            return;
+          }
+
+          step1Submit.disabled = true;
+
+          try {
+            const response = await fetch('/api/onboarding', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ displayName: username, assistantName: botName, sessionId })
+            });
+
+            const payload = await readJson(response);
+
+            if (!response.ok) {
+              if (response.status === 400 && /session/i.test(payload.error || '')) {
+                window.location.replace('./error.html?reason=invalid_session');
+                return;
+              }
+              throw new Error(payload.error || 'Could not submit onboarding details.');
+            }
+
+            showStep(2);
+            startPolling();
+            renderQuestion();
+          } catch (error) {
+            showError(step1Error, error.message || 'Unable to submit.');
+          } finally {
+            step1Submit.disabled = false;
+          }
+        });
+
+        // ======== Provisioning Polling ========
+        let pollTimer = null;
+        let pollInFlight = false;
 
         async function pollStatus() {
           if (pollInFlight) return;
@@ -445,69 +1234,576 @@
                 window.location.replace('./error.html?reason=invalid_session');
                 return;
               }
-              throw new Error(payload.error || 'Failed to fetch onboarding status.');
+              throw new Error(payload.error || 'Failed to fetch status.');
             }
 
-            setStatus(payload.status, payload.webchatUrl);
-            if (payload.status === 'ready') {
+            state.serverStatus = payload.status || 'queued';
+            state.webchatUrl = payload.webchatUrl || '';
+
+            if (state.serverStatus === 'ready') {
+              state.serverReady = true;
+              provisionChip.classList.add('ready');
+              provisionText.textContent = 'Server ready';
               clearInterval(pollTimer);
               pollTimer = null;
             }
           } catch (error) {
-            showError(error.message || 'Temporary issue checking status. Retrying...');
+            // Silently retry
           } finally {
             pollInFlight = false;
           }
         }
 
         function startPolling() {
-          statusSection.classList.remove('hidden');
           void pollStatus();
-
           if (pollTimer) clearInterval(pollTimer);
           pollTimer = setInterval(pollStatus, 3000);
         }
 
-        form.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          showError('');
+        // ======== Quiz Engine (Step 2) ========
+        function updateProgress() {
+          const totalScreens = QUIZ_QUESTIONS.length;
+          const percent = ((state.quizIndex + 1) / totalScreens) * 100;
+          quizProgressFill.style.width = `${percent}%`;
 
-          const displayName = (document.getElementById('display-name').value || '').trim();
-          const assistantName = (document.getElementById('assistant-name').value || '').trim();
+          // Count actual questions (exclude section break and final screen)
+          const questionCount = QUIZ_QUESTIONS.filter(q => q.type !== 'section_break' && q.type !== 'final_screen').length;
+          const currentQuestionNum = QUIZ_QUESTIONS.slice(0, state.quizIndex + 1).filter(q => q.type !== 'section_break' && q.type !== 'final_screen').length;
+          quizCounter.textContent = `Question ${currentQuestionNum} of ${questionCount}`;
+        }
 
-          if (displayName.length < 2 || assistantName.length < 2) {
-            showError('Please enter both names (at least 2 characters each).');
+        function renderQuestion() {
+          const q = QUIZ_QUESTIONS[state.quizIndex];
+          updateProgress();
+
+          if (q.type === 'section_break') {
+            quizQuestionArea.innerHTML = `
+              <div class="quiz-slide section-break">
+                <h3>${q.title}</h3>
+                <p>${q.subtitle}</p>
+                <div class="quiz-nav">
+                  <button class="quiz-back">← Back</button>
+                  <button class="quiz-continue">Continue</button>
+                </div>
+              </div>
+            `;
+            attachSectionBreakListeners();
             return;
           }
 
-          submitButton.disabled = true;
+          if (q.type === 'final_screen') {
+            quizQuestionArea.innerHTML = `
+              <div class="quiz-slide">
+                <div class="quiz-prompt">${q.prompt}</div>
+                <textarea class="final-textarea" id="final-textarea" placeholder="${q.placeholder}"></textarea>
+                <div class="quiz-nav">
+                  <button class="quiz-back">← Back</button>
+                  <button class="quiz-continue">Finish Quiz</button>
+                </div>
+              </div>
+            `;
+            attachFinalScreenListeners();
+            return;
+          }
 
-          try {
-            const response = await fetch('/api/onboarding', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ displayName, assistantName, sessionId })
+          if (q.type === 'single_select') {
+            renderSingleSelect(q);
+          } else if (q.type === 'multi_select') {
+            renderMultiSelect(q);
+          } else if (q.type === 'short_text') {
+            renderShortText(q);
+          }
+        }
+
+        function renderSingleSelect(q) {
+          const optionsHtml = q.options.map(opt => {
+            const selected = state.answers[q.id] === opt.id ? 'selected' : '';
+            return `<button class="quiz-option ${selected}" data-option-id="${opt.id}">${opt.label}</button>`;
+          }).join('');
+
+          const contextExpanded = state.perQuestionContext[q.id] !== undefined;
+          const contextValue = state.perQuestionContext[q.id] || '';
+
+          quizQuestionArea.innerHTML = `
+            <div class="quiz-slide">
+              <div class="quiz-prompt">${q.prompt}</div>
+              <div class="quiz-options">${optionsHtml}</div>
+              <button class="add-context-toggle">+ Add context</button>
+              <div class="context-input ${contextExpanded ? '' : 'hidden'}">
+                <textarea placeholder="Add any context..." id="context-textarea">${escapeHtml(contextValue)}</textarea>
+              </div>
+              <div class="quiz-nav">
+                ${state.quizIndex > 0 ? '<button class="quiz-back">← Back</button>' : '<div></div>'}
+                <div></div>
+              </div>
+            </div>
+          `;
+
+          attachSingleSelectListeners(q);
+        }
+
+        function renderMultiSelect(q) {
+          const selected = Array.isArray(state.answers[q.id]) ? state.answers[q.id] : [];
+          const optionsHtml = q.options.map(opt => {
+            const isSelected = selected.includes(opt.id) ? 'selected' : '';
+            return `<button class="quiz-option multi ${isSelected}" data-option-id="${opt.id}">${opt.label}</button>`;
+          }).join('');
+
+          const contextExpanded = state.perQuestionContext[q.id] !== undefined;
+          const contextValue = state.perQuestionContext[q.id] || '';
+
+          quizQuestionArea.innerHTML = `
+            <div class="quiz-slide">
+              <div class="quiz-prompt">${q.prompt}</div>
+              ${q.helperText ? `<div class="quiz-helper">${q.helperText}</div>` : ''}
+              <div class="quiz-options">${optionsHtml}</div>
+              <button class="add-context-toggle">+ Add context</button>
+              <div class="context-input ${contextExpanded ? '' : 'hidden'}">
+                <textarea placeholder="Add any context..." id="context-textarea">${escapeHtml(contextValue)}</textarea>
+              </div>
+              <div class="quiz-nav">
+                ${state.quizIndex > 0 ? '<button class="quiz-back">← Back</button>' : '<div></div>'}
+                <button class="quiz-continue">Continue</button>
+              </div>
+            </div>
+          `;
+
+          attachMultiSelectListeners(q);
+        }
+
+        function renderShortText(q) {
+          const value = state.answers[q.id] || '';
+
+          quizQuestionArea.innerHTML = `
+            <div class="quiz-slide">
+              <div class="quiz-prompt">${q.prompt}</div>
+              <input class="input" type="text" id="short-text-input" placeholder="${q.placeholder}" value="${escapeHtml(value)}" />
+              <div class="skip-text">You can skip this — your assistant won't judge you.</div>
+              <div class="quiz-nav">
+                ${state.quizIndex > 0 ? '<button class="quiz-back">← Back</button>' : '<div></div>'}
+                <button class="quiz-continue">Continue</button>
+              </div>
+            </div>
+          `;
+
+          attachShortTextListeners(q);
+        }
+
+        function attachSingleSelectListeners(q) {
+          const options = quizQuestionArea.querySelectorAll('.quiz-option');
+          options.forEach(optEl => {
+            optEl.addEventListener('click', () => {
+              const optionId = optEl.dataset.optionId;
+              state.answers[q.id] = optionId;
+
+              options.forEach(o => o.classList.remove('selected'));
+              optEl.classList.add('selected');
+
+              setTimeout(() => {
+                nextQuestion();
+              }, 400);
             });
+          });
 
-            const payload = await readJson(response);
+          attachContextToggle(q);
+          attachBackButton();
+        }
 
-            if (!response.ok) {
-              if (response.status === 400 && /session/i.test(payload.error || '')) {
-                window.location.replace('./error.html?reason=invalid_session');
-                return;
+        function attachMultiSelectListeners(q) {
+          const options = quizQuestionArea.querySelectorAll('.quiz-option.multi');
+          options.forEach(optEl => {
+            optEl.addEventListener('click', () => {
+              const optionId = optEl.dataset.optionId;
+              let selected = Array.isArray(state.answers[q.id]) ? state.answers[q.id] : [];
+
+              if (selected.includes(optionId)) {
+                selected = selected.filter(id => id !== optionId);
+                optEl.classList.remove('selected');
+              } else {
+                if (q.maxSelections && selected.length >= q.maxSelections) {
+                  return;
+                }
+                selected.push(optionId);
+                optEl.classList.add('selected');
               }
-              throw new Error(payload.error || 'Could not submit onboarding details.');
+
+              state.answers[q.id] = selected;
+            });
+          });
+
+          attachContextToggle(q);
+          attachBackButton();
+          attachContinueButton();
+        }
+
+        function attachShortTextListeners(q) {
+          const input = document.getElementById('short-text-input');
+          input.addEventListener('input', (e) => {
+            state.answers[q.id] = e.target.value.trim();
+          });
+
+          input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              nextQuestion();
+            }
+          });
+
+          attachBackButton();
+          attachContinueButton();
+        }
+
+        function attachSectionBreakListeners() {
+          attachBackButton();
+          attachContinueButton();
+        }
+
+        function attachFinalScreenListeners() {
+          const textarea = document.getElementById('final-textarea');
+          textarea.addEventListener('input', (e) => {
+            state.answers['FINAL_SCREEN'] = e.target.value.trim();
+          });
+
+          attachBackButton();
+
+          const continueBtn = quizQuestionArea.querySelector('.quiz-continue');
+          continueBtn.addEventListener('click', () => {
+            submitQuiz();
+          });
+        }
+
+        function attachContextToggle(q) {
+          const toggle = quizQuestionArea.querySelector('.add-context-toggle');
+          const contextInput = quizQuestionArea.querySelector('.context-input');
+          const textarea = document.getElementById('context-textarea');
+
+          if (!toggle || !contextInput || !textarea) return;
+
+          toggle.addEventListener('click', () => {
+            const isHidden = contextInput.classList.contains('hidden');
+            if (isHidden) {
+              contextInput.classList.remove('hidden');
+              textarea.focus();
+            } else {
+              contextInput.classList.add('hidden');
+            }
+          });
+
+          textarea.addEventListener('input', (e) => {
+            state.perQuestionContext[q.id] = e.target.value.trim();
+          });
+        }
+
+        function attachBackButton() {
+          const backBtn = quizQuestionArea.querySelector('.quiz-back');
+          if (backBtn) {
+            backBtn.addEventListener('click', () => {
+              prevQuestion();
+            });
+          }
+        }
+
+        function attachContinueButton() {
+          const continueBtn = quizQuestionArea.querySelector('.quiz-continue');
+          if (continueBtn) {
+            continueBtn.addEventListener('click', () => {
+              nextQuestion();
+            });
+          }
+        }
+
+        function nextQuestion() {
+          if (state.quizIndex < QUIZ_QUESTIONS.length - 1) {
+            const currentSlide = quizQuestionArea.querySelector('.quiz-slide');
+            if (currentSlide) {
+              currentSlide.classList.add('slide-out-left');
             }
 
-            form.classList.add('hidden');
-            setStatus(payload.status, payload.webchatUrl);
-            startPolling();
-          } catch (error) {
-            showError(error.message || 'Unable to submit onboarding details.');
-          } finally {
-            submitButton.disabled = false;
+            setTimeout(() => {
+              state.quizIndex++;
+              renderQuestion();
+            }, 300);
           }
-        });
+        }
+
+        function prevQuestion() {
+          if (state.quizIndex > 0) {
+            const currentSlide = quizQuestionArea.querySelector('.quiz-slide');
+            if (currentSlide) {
+              currentSlide.classList.add('slide-out-right');
+            }
+
+            setTimeout(() => {
+              state.quizIndex--;
+              renderQuestion();
+            }, 300);
+          }
+        }
+
+        async function submitQuiz() {
+          const scores = calculateScores(state.answers, state.perQuestionContext);
+
+          // Include "anything else" free text from final screen
+          const anythingElse = state.answers['FINAL_SCREEN'] || '';
+          if (anythingElse) {
+            scores.freeText.anything_else = anythingElse;
+          }
+
+          quizQuestionArea.innerHTML = `
+            <div class="waiting-state">
+              <p>Generating your profile...</p>
+            </div>
+          `;
+
+          try {
+            const quizRes = await fetch(`/api/onboarding/quiz/${encodeURIComponent(sessionId)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({
+                answers: state.answers,
+                perQuestionContext: state.perQuestionContext,
+                traits: scores.traits,
+                dimensionScores: scores.dimensionScores,
+                tags: scores.tags,
+                freeText: scores.freeText
+              })
+            });
+            if (!quizRes.ok) throw new Error('Failed to save quiz results.');
+
+            const profileRes = await fetch(`/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
+              method: 'POST',
+              headers: { Accept: 'application/json' }
+            });
+            if (!profileRes.ok) throw new Error('Failed to generate profile.');
+
+            const writeRes = await fetch(`/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
+              method: 'POST',
+              headers: { Accept: 'application/json' }
+            });
+            if (!writeRes.ok) throw new Error('Failed to write profile files.');
+
+            showStep(3);
+            renderStep3();
+          } catch (error) {
+            quizQuestionArea.innerHTML = `
+              <div class="waiting-state">
+                <p style="color: #ffb3cb;">Error submitting quiz. Please try again.</p>
+                <button class="button" onclick="location.reload()">Retry</button>
+              </div>
+            `;
+          }
+        }
+
+        function calculateScores(answers, perQuestionContext) {
+          const traits = {
+            organized: 0, spontaneous: 0, formal: 0, casual: 0,
+            proactive: 0, reactive: 0, detailed: 0, big_picture: 0,
+            serious: 0, playful: 0, independent: 0, collaborative: 0
+          };
+          const tags = [];
+          const freeText = {};
+
+          for (const q of QUIZ_QUESTIONS) {
+            const answer = answers[q.id];
+            if (!answer) continue;
+
+            if (q.type === 'single_select') {
+              const opt = q.options.find(o => o.id === answer);
+              if (opt?.weights) {
+                for (const [trait, w] of Object.entries(opt.weights)) {
+                  traits[trait] += Math.min(Math.max(w, 0), 1);
+                }
+              }
+              if (opt?.tags) tags.push(...opt.tags);
+            } else if (q.type === 'multi_select') {
+              const selected = Array.isArray(answer) ? answer : [];
+              for (const selId of selected) {
+                const opt = q.options.find(o => o.id === selId);
+                if (opt?.tags) tags.push(...opt.tags);
+                if (opt?.weights) {
+                  for (const [trait, w] of Object.entries(opt.weights)) {
+                    traits[trait] += Math.min(Math.max(w, 0), 1);
+                  }
+                }
+              }
+            } else if (q.type === 'short_text' && answer) {
+              freeText[q.field] = answer;
+            }
+          }
+
+          const epsilon = 1e-9;
+          const dimensions = {
+            organized_vs_spontaneous: ['organized', 'spontaneous'],
+            formal_vs_casual: ['formal', 'casual'],
+            proactive_vs_reactive: ['proactive', 'reactive'],
+            detailed_vs_big_picture: ['detailed', 'big_picture'],
+            serious_vs_playful: ['serious', 'playful'],
+            independent_vs_collaborative: ['independent', 'collaborative']
+          };
+
+          const dimensionScores = {};
+          for (const [dim, [left, right]] of Object.entries(dimensions)) {
+            const L = traits[left], R = traits[right];
+            dimensionScores[dim] = (L + R === 0) ? 0.5 : L / (L + R + epsilon);
+          }
+
+          return { traits, dimensionScores, tags, freeText };
+        }
+
+        // ======== Step 3: Connect Your AI ========
+        function renderStep3() {
+          if (!state.serverReady) {
+            step3Content.innerHTML = `
+              <div class="waiting-state">
+                <p>Almost ready, setting up your server...</p>
+                <div class="auth-status">
+                  <span class="pulse-dot"></span>
+                  <span>Provisioning...</span>
+                </div>
+              </div>
+            `;
+
+            const checkInterval = setInterval(() => {
+              if (state.serverReady) {
+                clearInterval(checkInterval);
+                renderStep3();
+              }
+            }, 1000);
+            return;
+          }
+
+          step3Content.innerHTML = `
+            <p class="copy">Choose your AI provider to connect.</p>
+            <div class="provider-buttons">
+              <button class="provider-btn anthropic" data-provider="anthropic">
+                Anthropic
+              </button>
+              <button class="provider-btn openai" data-provider="openai">
+                OpenAI
+              </button>
+            </div>
+            <div class="auth-status hidden" id="auth-status">
+              <span class="pulse-dot"></span>
+              <span id="auth-status-text">Waiting for authorization...</span>
+            </div>
+          `;
+
+          const providerBtns = step3Content.querySelectorAll('.provider-btn');
+          providerBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+              selectProvider(btn.dataset.provider);
+            });
+          });
+        }
+
+        async function selectProvider(provider) {
+          try {
+            const response = await fetch(`/api/onboarding/auth-url/${encodeURIComponent(sessionId)}?provider=${provider}`);
+            const payload = await readJson(response);
+
+            if (payload.url) {
+              window.open(payload.url, '_blank');
+            }
+
+            const authStatus = document.getElementById('auth-status');
+            authStatus.classList.remove('hidden');
+
+            setTimeout(async () => {
+              await fetch(`/api/onboarding/auth-complete/${encodeURIComponent(sessionId)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ provider })
+              });
+
+              document.getElementById('auth-status-text').textContent = 'Authorization confirmed!';
+              authStatus.classList.add('confirmed');
+
+              setTimeout(() => {
+                state.authComplete = true;
+                showStep(4);
+                renderStep4();
+              }, 1000);
+            }, 3000);
+          } catch (error) {
+            const authStatus = document.getElementById('auth-status');
+            authStatus.classList.remove('hidden');
+            document.getElementById('auth-status-text').textContent = 'Error authorizing. Please try again.';
+          }
+        }
+
+        // ======== Step 4: Success ========
+        function renderStep4() {
+          const url = `https://${state.username}.clawdaddy.sh`;
+          state.webchatUrl = url;
+
+          finalUrlDisplay.textContent = url;
+
+          copyUrlBtn.onclick = () => {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(url).then(() => {
+                copyIcon.textContent = '✓';
+                copyText.textContent = 'Copied!';
+                copyUrlBtn.classList.add('copied');
+
+                setTimeout(() => {
+                  copyIcon.textContent = '📋';
+                  copyText.textContent = 'Copy URL';
+                  copyUrlBtn.classList.remove('copied');
+                }, 2000);
+              }).catch(() => {
+                fallbackCopy(url);
+              });
+            } else {
+              fallbackCopy(url);
+            }
+          };
+
+          openNowBtn.onclick = () => {
+            window.location.href = url;
+          };
+
+          startCountdown(5, url);
+        }
+
+        function fallbackCopy(text) {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            copyIcon.textContent = '✓';
+            copyText.textContent = 'Copied!';
+            copyUrlBtn.classList.add('copied');
+
+            setTimeout(() => {
+              copyIcon.textContent = '📋';
+              copyText.textContent = 'Copy URL';
+              copyUrlBtn.classList.remove('copied');
+            }, 2000);
+          } catch (err) {
+            copyText.textContent = 'Copy failed';
+          }
+          document.body.removeChild(textarea);
+        }
+
+        function startCountdown(seconds, url) {
+          let remaining = seconds;
+
+          const updateCountdown = () => {
+            if (remaining > 0) {
+              redirectCountdown.textContent = `Redirecting in ${remaining}...`;
+              remaining--;
+              setTimeout(updateCountdown, 1000);
+            } else {
+              window.location.href = url;
+            }
+          };
+
+          updateCountdown();
+        }
       })();
     </script>
   </body>

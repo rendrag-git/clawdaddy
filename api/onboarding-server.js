@@ -5,6 +5,7 @@ const cors = require('cors');
 const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
+const { generateProfile } = require('./lib/profile-generator');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
@@ -273,6 +274,8 @@ app.post('/api/onboarding', async (req, res) => {
       record.readyAt = nowIso;
     }
 
+    record.username = slugify(displayName);
+
     store.sessions[sessionId] = record;
     await saveStore(store);
 
@@ -330,6 +333,299 @@ app.get('/api/onboarding/status/:sessionId', async (req, res) => {
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/api/onboarding/check-username/:username', async (req, res) => {
+  try {
+    const raw = (req.params.username || '').toLowerCase().trim();
+
+    // Validate format: lowercase, alphanumeric + hyphens, 3-20 chars, no leading/trailing hyphens
+    const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+    if (!raw || raw.length < 3 || raw.length > 20 || !usernameRegex.test(raw)) {
+      return res.status(400).json({
+        available: false,
+        error: 'Username must be 3-20 characters, lowercase alphanumeric and hyphens, no leading/trailing hyphens.',
+        suggestion: null
+      });
+    }
+
+    const store = await loadStore();
+
+    // Check against existing usernames in all sessions
+    const taken = Object.values(store.sessions).some(
+      s => s.username === raw || slugify(s.displayName) === raw
+    );
+
+    if (taken) {
+      // Suggest alternatives: append numbers
+      let suggestion = null;
+      for (let i = 1; i <= 99; i++) {
+        const candidate = `${raw}${i}`;
+        if (candidate.length <= 20) {
+          const candidateTaken = Object.values(store.sessions).some(
+            s => s.username === candidate || slugify(s.displayName) === candidate
+          );
+          if (!candidateTaken) {
+            suggestion = candidate;
+            break;
+          }
+        }
+      }
+      return res.json({ available: false, suggestion });
+    }
+
+    return res.json({ available: true, suggestion: null });
+  } catch (error) {
+    console.error('Username check failed:', error.message);
+    return res.status(500).json({ available: false, error: 'Unable to check username availability.' });
+  }
+});
+
+app.post('/api/onboarding/quiz/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    // Store quiz results alongside onboarding record
+    record.quizResults = {
+      traits: req.body.traits || {},
+      dimensionScores: req.body.dimensionScores || {},
+      tags: req.body.tags || [],
+      freeText: req.body.freeText || {},
+      answers: req.body.answers || {},
+      perQuestionContext: req.body.perQuestionContext || {},
+      submittedAt: new Date().toISOString()
+    };
+    record.updatedAt = new Date().toISOString();
+
+    store.sessions[sessionId] = record;
+    await saveStore(store);
+
+    console.log(`Quiz results saved for session ${sessionId}`);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error(`Quiz save failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to save quiz results.' });
+  }
+});
+
+app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    if (!record.quizResults) {
+      return res.status(400).json({ ok: false, error: 'Quiz results not found. Submit quiz first.' });
+    }
+
+    const username = record.username || slugify(record.displayName);
+    const botName = record.assistantName || 'Assistant';
+
+    const { soulMd, userMd, identityMd } = await generateProfile(
+      record.quizResults,
+      username,
+      botName
+    );
+
+    record.generatedFiles = { soulMd, userMd, identityMd };
+    record.profileGeneratedAt = new Date().toISOString();
+    record.updatedAt = new Date().toISOString();
+
+    store.sessions[sessionId] = record;
+    await saveStore(store);
+
+    console.log(`Profile generated for session ${sessionId}`);
+    return res.json({ ok: true, files: ['SOUL.md', 'USER.md', 'IDENTITY.md'] });
+  } catch (error) {
+    console.error(`Profile generation failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to generate profile.' });
+  }
+});
+
+app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    if (!record.generatedFiles) {
+      return res.status(400).json({ ok: false, error: 'Profile not generated yet.' });
+    }
+
+    const username = record.username || slugify(record.displayName);
+
+    // TODO: SSH to customer instance — for now, write to local directory
+    const baseDir = path.join(__dirname, 'generated');
+    const outputDir = path.resolve(baseDir, username);
+    if (!outputDir.startsWith(baseDir)) {
+      return res.status(400).json({ ok: false, error: 'Invalid username for file path.' });
+    }
+    await fs.mkdir(outputDir, { recursive: true });
+
+    // Write generated files
+    await fs.writeFile(path.join(outputDir, 'SOUL.md'), record.generatedFiles.soulMd, 'utf8');
+    await fs.writeFile(path.join(outputDir, 'USER.md'), record.generatedFiles.userMd, 'utf8');
+    await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), record.generatedFiles.identityMd, 'utf8');
+
+    // Write BOOTSTRAP.md template
+    const bootstrapPath = path.join(__dirname, '..', 'templates', 'BOOTSTRAP.md');
+    let bootstrapContent;
+    try {
+      bootstrapContent = await fs.readFile(bootstrapPath, 'utf8');
+    } catch (_err) {
+      bootstrapContent = '# Welcome\nBootstrap template not found.';
+    }
+    await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), bootstrapContent, 'utf8');
+
+    record.filesWritten = true;
+    record.filesWrittenAt = new Date().toISOString();
+    record.updatedAt = new Date().toISOString();
+
+    store.sessions[sessionId] = record;
+    await saveStore(store);
+
+    console.log(`Files written for session ${sessionId} to ${outputDir}`);
+    return res.json({ ok: true, written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'] });
+  } catch (error) {
+    console.error(`File write failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to write files.' });
+  }
+});
+
+app.get('/api/onboarding/auth-url/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    // TODO: wire to real OAuth provider URLs
+    if (record.status !== 'ready') {
+      return res.json({ status: 'pending' });
+    }
+
+    const username = record.username || slugify(record.displayName);
+    const provider = req.query.provider || 'anthropic';
+    return res.json({
+      status: 'ready',
+      url: `https://auth.clawdaddy.sh/oauth/authorize?provider=${encodeURIComponent(provider)}&instance=${encodeURIComponent(username)}&session=${encodeURIComponent(sessionId)}`,
+      provider
+    });
+  } catch (error) {
+    console.error(`Auth URL fetch failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to get auth URL.' });
+  }
+});
+
+app.post('/api/onboarding/auth-complete/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    // TODO: wire to real OAuth callback verification
+    record.authComplete = true;
+    record.authCompletedAt = new Date().toISOString();
+    record.updatedAt = new Date().toISOString();
+
+    store.sessions[sessionId] = record;
+    await saveStore(store);
+
+    console.log(`Auth completed for session ${sessionId}`);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error(`Auth complete failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to complete auth.' });
+  }
+});
+
+app.get('/api/onboarding/ready/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    // Advance status if auto-progress is on
+    if (AUTO_PROGRESS) {
+      const changed = advanceStatus(record, Date.now());
+      if (changed) {
+        store.sessions[sessionId] = record;
+        await saveStore(store);
+      }
+    }
+
+    const username = record.username || slugify(record.displayName);
+    const allReady = record.status === 'ready'
+      && record.filesWritten
+      && record.authComplete;
+
+    if (!allReady) {
+      return res.json({ status: 'pending' });
+    }
+
+    return res.json({
+      status: 'ready',
+      webchatUrl: `https://${username}.clawdaddy.sh`
+    });
+  } catch (error) {
+    console.error(`Ready check failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to check readiness.' });
+  }
 });
 
 app.listen(PORT, () => {
