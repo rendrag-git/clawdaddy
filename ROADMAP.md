@@ -234,3 +234,31 @@
 6. **Deploy webhook server** — Stripe → auto-provision
 7. **Submit Google OAuth app** — start verification clock early
 8. **Test full E2E** — pay → provision → webchat + email works
+
+---
+
+## Audit Follow-ups (Open TODOs)
+
+### Revenue-critical
+- [ ] **Validate full E2E payment -> provision flow (test mode)**
+  - Verify: Stripe checkout -> `script/webhook-server/server.js` webhook -> `script/webhook-server/lib/stripe-handlers.js` -> `script/provision.sh` -> completion email with working access details.
+- [ ] **Docker production pass (current-code validation, not doc assumptions)**
+  - Resolve launch blockers from `docker/ISSUES.md` that still reproduce in current runtime.
+  - Verify customer usability after restart and stable webchat access.
+
+### Ops / security / cleanup
+- [ ] **Consolidate waitlist service to one implementation**
+  - Keep canonical handler in `script/webhook-server/server.js`.
+  - Remove/archive legacy `api/waitlist-server.js` + `api/waitlist.service`.
+- [ ] **Harden waitlist security**
+  - Remove hardcoded Zoho fallback key/URL from `script/webhook-server/server.js`.
+  - Keep Zoho endpoint/credentials in environment only and rotate exposed secrets.
+- [ ] **Add analytics + link hygiene on landing page**
+  - Add CTA + waitlist conversion instrumentation in `index.html`.
+  - Replace placeholder footer links (`href="#"`) with real destinations.
+- [ ] **Archive legacy landing page variants**
+  - Deprecate `index-codex.html`, `index-original.html`, and `script/index.html` so `index.html` is the single source of truth.
+
+### Completed from this audit thread
+- [x] **Persist Stripe identity across provisioning lifecycle**
+  - Implemented in `script/webhook-server/lib/stripe-handlers.js`, `script/webhook-server/lib/customers.js`, `script/webhook-server/lib/provisioner.js`, and `script/provision.sh`.
