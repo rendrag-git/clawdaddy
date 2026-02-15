@@ -1,0 +1,20 @@
+[Unit]
+Description=ClawDaddy Waitlist API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/clawd/clawdaddy/api
+ExecStart=/usr/bin/node /home/ubuntu/clawd/clawdaddy/api/waitlist-server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clawdaddy-waitlist
+
+Environment=NODE_ENV=production
+Environment=PATH=/usr/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target

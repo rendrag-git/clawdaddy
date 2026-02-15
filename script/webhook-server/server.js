@@ -4,14 +4,21 @@ import Stripe from 'stripe';
 import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  handle_checkout_completed,
-  handle_subscription_deleted,
-  handle_payment_failed,
-} from './lib/stripe-handlers.js';
+// Lazy-load stripe handlers to prevent email.js from crashing startup
+let stripe_handlers = null;
+async function getStripeHandlers() {
+  if (!stripe_handlers) {
+    stripe_handlers = await import('./lib/stripe-handlers.js');
+  }
+  return stripe_handlers;
+}
 
 const PORT = process.env.PORT || 3000;
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+let stripe = null;
+function getStripe() {
+  if (!stripe) stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  return stripe;
+}
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 const app = express();
@@ -56,12 +63,96 @@ app.post('/usage-report', express.json(), async (req, res) => {
   }
 });
 
+// Waitlist endpoint -- receives signups from landing page, creates Zoho CRM lead
+const ZOHO_MCP_URL = process.env.ZOHO_MCP_URL || 'https://openclaw-zoho-914186014.zohomcp.com/mcp/message?key=ca37cc03e18427fc42e08b61d5d3a16c';
+const ALLOWED_ORIGINS = ['https://clawdaddy.sh', 'https://www.clawdaddy.sh', 'https://getclawdaddy.com', 'https://www.getclawdaddy.com'];
+
+app.options('/api/waitlist', (req, res) => {
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Max-Age', '86400');
+  res.status(204).end();
+});
+
+app.post('/api/waitlist', express.json(), async (req, res) => {
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+
+  const { name, email } = req.body || {};
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: 'Valid email required' });
+  }
+  if (!name || !name.trim()) {
+    return res.status(400).json({ ok: false, error: 'Name required' });
+  }
+
+  const parts = name.trim().split(/\s+/);
+  const firstName = parts[0];
+  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Waitlist';
+
+  log(`Waitlist signup: ${name} <${email}>`);
+
+  try {
+    // Call Zoho CRM via MCP to create lead
+    const mcpPayload = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'tools/call',
+      params: {
+        name: 'ZohoCRM_Create_Records',
+        arguments: {
+          body: JSON.stringify({
+            data: [{
+              First_Name: firstName,
+              Last_Name: lastName,
+              Email: email,
+              Lead_Source: 'Advertisement',
+              Company: 'ClawDaddy Waitlist',
+              Description: `Waitlist signup from ${origin || 'unknown'} at ${new Date().toISOString()}`
+            }]
+          }),
+          path_variables: JSON.stringify({ module: 'Leads' })
+        }
+      }
+    };
+
+    const zohoRes = await fetch(ZOHO_MCP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcpPayload),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const zohoData = await zohoRes.json();
+
+    if (zohoData.error || (zohoData.result && zohoData.result.isError)) {
+      log(`Zoho CRM error: ${JSON.stringify(zohoData.error || zohoData.result)}`);
+      // Still return success to customer — we logged the signup
+      res.json({ ok: true, note: 'Signup recorded (CRM sync pending)' });
+    } else {
+      log(`Zoho CRM lead created for ${email}`);
+      res.json({ ok: true });
+    }
+  } catch (err) {
+    log(`Waitlist error: ${err.message}`);
+    // Don't fail the signup — log it and return success
+    res.json({ ok: true, note: 'Signup recorded (CRM sync pending)' });
+  }
+});
+
 // Webhook endpoint -- needs raw body for Stripe signature verification
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], WEBHOOK_SECRET);
+    event = getStripe().webhooks.constructEvent(req.body, req.headers['stripe-signature'], WEBHOOK_SECRET);
   } catch (err) {
     log(`Signature verification failed: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -72,15 +163,15 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   try {
     switch (event.type) {
       case 'checkout.session.completed':
-        await handle_checkout_completed(event.data.object);
+        await (await getStripeHandlers()).handle_checkout_completed(event.data.object);
         break;
 
       case 'customer.subscription.deleted':
-        await handle_subscription_deleted(event.data.object);
+        await (await getStripeHandlers()).handle_subscription_deleted(event.data.object);
         break;
 
       case 'invoice.payment_failed':
-        await handle_payment_failed(event.data.object);
+        await (await getStripeHandlers()).handle_payment_failed(event.data.object);
         break;
 
       default:
