@@ -24,9 +24,29 @@ export async function find_by_email(email) {
   return customers.find(c => c.email === email) || null;
 }
 
+export async function find_most_recent_by_email(email) {
+  const customers = await read_customers();
+  for (let i = customers.length - 1; i >= 0; i -= 1) {
+    if (customers[i].email === email) {
+      return customers[i];
+    }
+  }
+  return null;
+}
+
 export async function find_by_stripe_id(stripe_customer_id) {
   const customers = await read_customers();
   return customers.find(c => c.stripe_customer_id === stripe_customer_id) || null;
+}
+
+export async function find_by_stripe_subscription_id(stripe_subscription_id) {
+  const customers = await read_customers();
+  return customers.find(c => c.stripe_subscription_id === stripe_subscription_id) || null;
+}
+
+export async function find_by_checkout_session_id(checkout_session_id) {
+  const customers = await read_customers();
+  return customers.find(c => c.stripe_checkout_session_id === checkout_session_id) || null;
 }
 
 export async function update_customer(id, updates) {

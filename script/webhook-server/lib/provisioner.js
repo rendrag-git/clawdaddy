@@ -53,6 +53,15 @@ export function spawn_provision(params) {
     if (params.preferred_region) {
       args.push('--region', params.preferred_region);
     }
+    if (params.stripe_customer_id) {
+      args.push('--stripe-customer-id', params.stripe_customer_id);
+    }
+    if (params.stripe_subscription_id) {
+      args.push('--stripe-subscription-id', params.stripe_subscription_id);
+    }
+    if (params.stripe_checkout_session_id) {
+      args.push('--stripe-checkout-session-id', params.stripe_checkout_session_id);
+    }
 
     log_append(`Spawning provision.sh for ${params.email}`);
 

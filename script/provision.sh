@@ -21,6 +21,9 @@
 #   --telegram-chat      Telegram chat ID
 #   --signal-phone       Signal phone number
 #   --region             AWS region (default: us-east-1)
+#   --stripe-customer-id Stripe customer ID (optional, persisted to customers.json)
+#   --stripe-subscription-id Stripe subscription ID (optional, persisted to customers.json)
+#   --stripe-checkout-session-id Stripe checkout session ID (optional, persisted to customers.json)
 #
 # Environment variables:
 #   CUSTOMERS_FILE       Path to customers.json (default: ./customers.json)
@@ -110,6 +113,9 @@ ARG_TELEGRAM_TOKEN=""
 ARG_TELEGRAM_CHAT=""
 ARG_SIGNAL_PHONE=""
 ARG_REGION="us-east-1"
+ARG_STRIPE_CUSTOMER_ID=""
+ARG_STRIPE_SUBSCRIPTION_ID=""
+ARG_STRIPE_CHECKOUT_SESSION_ID=""
 
 usage() {
     cat <<EOF
@@ -129,6 +135,9 @@ ${BOLD}Optional:${RESET}
   --telegram-chat      Telegram chat ID
   --signal-phone       Signal phone number
   --region             AWS region (default: us-east-1)
+  --stripe-customer-id Stripe customer ID (optional)
+  --stripe-subscription-id Stripe subscription ID (optional)
+  --stripe-checkout-session-id Stripe checkout session ID (optional)
   --help               Show this help message
 
 ${BOLD}Environment:${RESET}
@@ -179,6 +188,18 @@ parse_args() {
                 ;;
             --region)
                 ARG_REGION="${2:?--region requires a value}"
+                shift 2
+                ;;
+            --stripe-customer-id)
+                ARG_STRIPE_CUSTOMER_ID="${2:?--stripe-customer-id requires a value}"
+                shift 2
+                ;;
+            --stripe-subscription-id)
+                ARG_STRIPE_SUBSCRIPTION_ID="${2:?--stripe-subscription-id requires a value}"
+                shift 2
+                ;;
+            --stripe-checkout-session-id)
+                ARG_STRIPE_CHECKOUT_SESSION_ID="${2:?--stripe-checkout-session-id requires a value}"
                 shift 2
                 ;;
             --help|-h)
@@ -565,6 +586,9 @@ add_customer_record() {
     local tier="${9:-byok}"
     local budget_limit="${10:-}"
     local model_tier="${11:-}"
+    local stripe_customer_id="${12:-}"
+    local stripe_subscription_id="${13:-}"
+    local stripe_checkout_session_id="${14:-}"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -583,12 +607,16 @@ add_customer_record() {
        --arg tier "${tier}" \
        --arg budget "${budget_limit}" \
        --arg model "${model_tier}" \
+       --arg stripe_customer "${stripe_customer_id}" \
+       --arg stripe_subscription "${stripe_subscription_id}" \
+       --arg stripe_checkout "${stripe_checkout_session_id}" \
        --arg now "${now}" \
        '.customers += [{
             id: $id,
             email: $email,
-            stripe_customer_id: "",
-            stripe_subscription_id: "",
+            stripe_customer_id: $stripe_customer,
+            stripe_subscription_id: $stripe_subscription,
+            stripe_checkout_session_id: $stripe_checkout,
             instance_id: $instance,
             static_ip: $ip,
             static_ip_name: $ip_name,
@@ -796,7 +824,8 @@ main() {
         add_customer_record \
             "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
             "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "failed" \
-            "${ARG_TIER}" "${budget_val}" "${model_val}"
+            "${ARG_TIER}" "${budget_val}" "${model_val}" \
+            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
         die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
     fi
 
@@ -810,7 +839,8 @@ main() {
     add_customer_record \
         "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
         "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "provisioning" \
-        "${ARG_TIER}" "${budget_val}" "${model_val}"
+        "${ARG_TIER}" "${budget_val}" "${model_val}" \
+        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
 
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
