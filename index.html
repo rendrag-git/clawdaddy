@@ -203,6 +203,18 @@
     </style>
   </head>
   <body class="pb-24 text-zinc-100 antialiased sm:pb-0">
+    <!-- Launch Offer Banner -->
+    <div id="launch-banner" class="relative z-50 overflow-hidden bg-gradient-to-r from-lobster via-red-500 to-lobster bg-[length:200%_100%] text-center" style="animation: shimmer 3s ease-in-out infinite">
+      <div class="mx-auto flex max-w-4xl items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white sm:text-base">
+        <span class="animate-pulse">🔥</span>
+        <span>Launch Special — <strong>First 5 customers:</strong> 50% off for 2 months + free white-glove setup</span>
+        <span class="animate-pulse">🔥</span>
+      </div>
+    </div>
+    <style>
+      @keyframes shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+    </style>
+
     <header class="sticky top-0 z-40 border-b border-zinc-800/70 bg-[#090b10]/85 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <a href="#" class="text-xl font-black tracking-tight sm:text-2xl">ClawDaddy <span aria-hidden="true">🦞</span></a>
@@ -356,6 +368,18 @@
           <div class="text-center">
             <h2 class="text-3xl font-black text-white sm:text-4xl">Be First In Line 🦞</h2>
             <p class="mx-auto mt-4 max-w-xl text-base leading-relaxed text-zinc-300 sm:text-lg">We're launching managed OpenClaw hosting next week. Drop your email and we'll reach out when your spot opens.</p>
+            
+            <!-- Launch Offer Details -->
+            <div class="mx-auto mt-6 max-w-md space-y-3 text-left">
+              <div class="rounded-lg border border-lobster/40 bg-lobster/10 p-3">
+                <p class="text-sm font-bold text-lobster">🔥 First 5 customers</p>
+                <p class="mt-1 text-sm text-zinc-200">50% off hosting for 2 months + free white-glove setup</p>
+              </div>
+              <div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                <p class="text-sm font-bold text-zinc-200">🎉 All signups</p>
+                <p class="mt-1 text-sm text-zinc-300">3-day free trial + 20% off your first month</p>
+              </div>
+            </div>
           </div>
           
           <form id="waitlist-form" class="mx-auto mt-8 max-w-lg space-y-4">
