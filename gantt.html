@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawDaddy — Full Project Gantt Chart</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a2e;--border:#2a2a3e;
+  --text:#e0e0e0;--text-dim:#888;--purple:#7c3aed;--blue:#3b82f6;
+  --green:#22c55e;--red:#ef4444;--gray:#555;--yellow:#eab308;
+  --gradient:linear-gradient(135deg,#7c3aed,#3b82f6);
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow-x:auto}
+h1{text-align:center;padding:24px 16px 4px;font-size:1.6rem;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{text-align:center;color:var(--text-dim);font-size:.85rem;padding-bottom:4px}
+.updated{text-align:center;color:var(--text-dim);font-size:.7rem;padding-bottom:16px}
+.legend{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;padding:0 16px 20px;font-size:.78rem}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+.stats{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;padding:0 16px 20px;font-size:.8rem;color:var(--text-dim)}
+.stats .num{font-weight:700;font-size:1rem}
+.stats .done-num{color:var(--green)}.stats .prog-num{color:var(--blue)}.stats .block-num{color:var(--red)}.stats .ns-num{color:var(--gray)}
+.chart-wrap{overflow-x:auto;padding:0 12px 40px}
+.chart{min-width:1000px;position:relative}
+.header{display:flex;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+.label-col{min-width:320px;max-width:320px;padding:8px 12px;font-weight:600;font-size:.75rem;color:var(--text-dim)}
+.timeline-col{flex:1;display:flex;position:relative}
+.day-col{flex:1;text-align:center;font-size:.65rem;color:var(--text-dim);padding:6px 0;border-left:1px solid var(--border)}
+.day-col.weekend{background:rgba(255,255,255,.02)}
+.group{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.group .label-col{font-weight:700;font-size:.82rem;color:#fff;padding:10px 12px}
+.group .toggle{margin-left:auto;padding-right:12px;font-size:.7rem;color:var(--text-dim)}
+.group:hover{background:var(--surface2)}
+.row{display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s}
+.row:hover{background:var(--surface2)}
+.row .label-col{font-size:.76rem;padding:6px 12px 6px 28px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .label-col:hover{color:#fff}
+.row.hidden{display:none}
+.bar-area{flex:1;position:relative;height:26px}
+.bar{position:absolute;height:14px;top:6px;border-radius:4px;min-width:4px;opacity:.9}
+.bar:hover{opacity:1;filter:brightness(1.2)}
+.bar.done{background:var(--green)}
+.bar.in-progress{background:linear-gradient(90deg,var(--purple),var(--blue))}
+.bar.blocked{background:var(--red)}
+.bar.not-started{background:var(--gray);opacity:.5}
+.gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--border);pointer-events:none}
+.marker{position:absolute;top:0;bottom:0;width:2px;z-index:5;pointer-events:none}
+.marker.today{background:var(--yellow)}
+.marker.launch{background:var(--red);opacity:.7}
+.marker-label{position:absolute;top:-18px;font-size:.63rem;white-space:nowrap;transform:translateX(-50%);font-weight:700}
+.marker.today .marker-label{color:var(--yellow)}
+.marker.launch .marker-label{color:var(--red)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:460px;width:92%;max-height:80vh;overflow-y:auto}
+.modal h3{margin-bottom:8px;font-size:1.05rem}
+.modal .sb{display:inline-block;padding:3px 12px;border-radius:12px;font-size:.73rem;font-weight:600;margin-bottom:10px}
+.modal .sb.done{background:rgba(34,197,94,.15);color:var(--green)}
+.modal .sb.in-progress{background:rgba(124,58,237,.15);color:#a78bfa}
+.modal .sb.blocked{background:rgba(239,68,68,.15);color:var(--red)}
+.modal .sb.not-started{background:rgba(85,85,85,.25);color:#aaa}
+.modal p{font-size:.84rem;color:var(--text-dim);line-height:1.5;margin-bottom:6px}
+.modal .close-btn{margin-top:14px;background:var(--gradient);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600;font-size:.85rem}
+.modal .close-btn:hover{filter:brightness(1.15)}
+.dep-list{font-size:.76rem;color:var(--text-dim);margin-top:6px}
+.dep-list span{color:var(--blue)}
+.modal .phase{font-size:.7rem;color:var(--purple);font-weight:600;margin-bottom:4px}
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-box{text-align:center;padding:60px 20px;color:var(--red);font-size:.9rem}
+.error-box p{color:var(--text-dim);margin-top:8px;font-size:.8rem}
+@media(max-width:700px){
+  .label-col{min-width:180px;max-width:180px;font-size:.68rem}
+  .row .label-col{padding-left:16px}
+}
+</style>
+</head>
+<body>
+<h1>🐾 ClawDaddy — Full Project Gantt</h1>
+<p class="subtitle" id="subtitle">Loading…</p>
+<p class="updated" id="updated"></p>
+<div class="legend">
+  <span><span class="dot" style="background:var(--green)"></span> Done</span>
+  <span><span class="dot" style="background:linear-gradient(90deg,var(--purple),var(--blue))"></span> In Progress</span>
+  <span><span class="dot" style="background:var(--gray);opacity:.5"></span> Not Started</span>
+  <span><span class="dot" style="background:var(--red)"></span> Blocked (Pearson)</span>
+  <span>│</span>
+  <span style="color:var(--yellow)">━ Today</span>
+  <span style="color:var(--red)">━ 🚀 Launch</span>
+</div>
+<div class="stats" id="stats"></div>
+<div class="chart-wrap"><div class="chart" id="chart"><div class="loader"><div class="spinner"></div><span style="color:var(--text-dim);font-size:.8rem">Loading project data…</span></div></div></div>
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+const DATA_URL='https://raw.githubusercontent.com/rendrag-git/clawdaddy/master/gantt-data.json';
+const TODAY=new Date();
+const collapsed=new Set();
+let ganttData=null;
+let allTasksFlat=[];
+
+const statusLabels={'done':'Done','in-progress':'In Progress','blocked':'Blocked (Pearson)','not-started':'Not Started'};
+
+function parseDate(s){const p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2])}
+function dayIndex(date,start,days){return Math.max(0,Math.min(days,(date-start)/864e5))}
+function pct(v,days){return v/days*100}
+
+async function init(){
+  try{
+    const resp=await fetch(DATA_URL+'?t='+Date.now());
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    ganttData=await resp.json();
+  }catch(e){
+    document.getElementById('chart').innerHTML='<div class="error-box">⚠️ Failed to load project data<p>'+e.message+'</p><p style="margin-top:12px"><a href="'+DATA_URL+'" style="color:var(--blue)">View raw data</a></p></div>';
+    return;
+  }
+  const meta=ganttData.meta;
+  const START=parseDate(meta.chartStart);
+  const DAYS=meta.chartDays;
+  const LAUNCH=parseDate(meta.launchDate);
+  const endDate=new Date(START.getTime()+(DAYS-1)*864e5);
+
+  document.getElementById('subtitle').textContent='All workstreams • '+START.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+endDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' • Launch target: Feb 21';
+  if(meta.lastUpdated){
+    const d=new Date(meta.lastUpdated);
+    document.getElementById('updated').textContent='Last updated: '+d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  }
+
+  // Build flat task list
+  allTasksFlat=[];
+  let counts={done:0,'in-progress':0,blocked:0,'not-started':0,total:0};
+  ganttData.groups.forEach(g=>g.tasks.forEach(t=>{
+    allTasksFlat.push(t);
+    counts.total++;
+    counts[t.status]=(counts[t.status]||0)+1;
+  }));
+
+  document.getElementById('stats').innerHTML=
+    '<span><span class="num done-num">'+counts.done+'</span> done</span>'+
+    '<span><span class="num prog-num">'+counts['in-progress']+'</span> in progress</span>'+
+    '<span><span class="num block-num">'+counts.blocked+'</span> blocked</span>'+
+    '<span><span class="num ns-num">'+counts['not-started']+'</span> not started</span>'+
+    '<span>│ <span class="num" style="color:var(--text)">'+counts.total+'</span> total</span>'+
+    '<span>│ <span class="num done-num">'+Math.round(counts.done/counts.total*100)+'%</span> complete</span>';
+
+  render(START,DAYS,LAUNCH);
+}
+
+function render(START,DAYS,LAUNCH){
+  const chart=document.getElementById('chart');
+  let html='';
+
+  // Header
+  html+='<div class="header"><div class="label-col">Task</div><div class="timeline-col">';
+  for(let i=0;i<DAYS;i++){
+    const dt=new Date(START.getTime()+i*864e5);
+    const dow=dt.getDay();
+    const label=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const dayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow];
+    html+='<div class="day-col'+(dow===0||dow===6?' weekend':'')+'">'+dayName+'<br>'+label+'</div>';
+  }
+  html+='</div></div>';
+
+  let taskIdx=0;
+  ganttData.groups.forEach(function(g,gi){
+    const isCollapsed=collapsed.has(gi);
+    const groupDone=g.tasks.filter(function(t){return t.status==='done'}).length;
+    const groupTotal=g.tasks.length;
+
+    html+='<div class="group" onclick="toggleGroup('+gi+')"><div class="label-col">'+g.name+' <span style="font-size:.7rem;color:var(--text-dim);font-weight:400">('+groupDone+'/'+groupTotal+')</span></div><div class="timeline-col">';
+    for(let i=0;i<DAYS;i++){
+      const dt=new Date(START.getTime()+i*864e5);
+      const dow=dt.getDay();
+      html+='<div class="day-col'+(dow===0||dow===6?' weekend':'')+'"></div>';
+    }
+    html+='</div><span class="toggle">'+(isCollapsed?'▶':'▼')+'</span></div>';
+
+    g.tasks.forEach(function(t){
+      const si=dayIndex(parseDate(t.start),START,DAYS);
+      const ei=dayIndex(parseDate(t.end),START,DAYS);
+      const left=pct(si,DAYS);
+      const width=Math.max(pct(ei-si,DAYS),0.4);
+      const tp=pct(dayIndex(TODAY,START,DAYS),DAYS);
+      const lp=pct(dayIndex(LAUNCH,START,DAYS),DAYS);
+
+      html+='<div class="row'+(isCollapsed?' hidden':'')+'" onclick="showModal('+taskIdx+')">';
+      html+='<div class="label-col" title="'+t.name.replace(/"/g,'&quot;')+'">'+t.name+'</div>';
+      html+='<div class="bar-area">';
+      for(let i=0;i<DAYS;i++) html+='<div class="gridline" style="left:'+pct(i,DAYS)+'%"></div>';
+      html+='<div class="bar '+t.status+'" style="left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+'%"></div>';
+      html+='<div class="marker today" style="left:'+tp.toFixed(2)+'%"></div>';
+      html+='<div class="marker launch" style="left:'+lp.toFixed(2)+'%"></div>';
+      html+='</div></div>';
+      taskIdx++;
+    });
+  });
+
+  chart.innerHTML=html;
+
+  const firstBar=document.querySelector('.row:not(.hidden) .bar-area');
+  if(firstBar){
+    const tp=pct(dayIndex(TODAY,START,DAYS),DAYS);
+    const lp=pct(dayIndex(LAUNCH,START,DAYS),DAYS);
+    firstBar.querySelector('.marker.today').innerHTML='<div class="marker-label">📍 TODAY</div>';
+    firstBar.querySelector('.marker.launch').innerHTML='<div class="marker-label">🚀 LAUNCH Feb 21</div>';
+  }
+
+  // Store for re-render
+  window._ganttState={START:START,DAYS:DAYS,LAUNCH:LAUNCH};
+}
+
+function toggleGroup(gi){
+  if(collapsed.has(gi))collapsed.delete(gi);else collapsed.add(gi);
+  render(window._ganttState.START,window._ganttState.DAYS,window._ganttState.LAUNCH);
+}
+
+function showModal(idx){
+  const t=allTasksFlat[idx];
+  let deps='';
+  if(t.depends&&t.depends.length) deps='<p class="dep-list">⛓️ Depends on: '+t.depends.map(function(d){return '<span>'+d+'</span>'}).join(', ')+'</p>';
+  let phase=t.phase?'<div class="phase">'+t.phase+'</div>':'';
+  const s=parseDate(t.start),e=parseDate(t.end);
+  document.getElementById('modal').innerHTML=
+    phase+
+    '<h3>'+t.name+'</h3>'+
+    '<div class="sb '+t.status+'">'+statusLabels[t.status]+'</div>'+
+    '<p>'+(t.details||'')+'</p>'+
+    '<p style="font-size:.73rem;color:var(--text-dim)">'+s.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' → '+e.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+'</p>'+
+    deps+
+    '<button class="close-btn" onclick="closeModal()">Close</button>';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
+
+init();
+</script>
+</body>
+</html>
