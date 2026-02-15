@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClawDaddy Onboarding Error</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #060914;
+        --panel: rgba(15, 21, 45, 0.82);
+        --panel-border: rgba(138, 162, 255, 0.25);
+        --text: #e5ecff;
+        --muted: #a5b4de;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 10% 0%, rgba(124, 105, 255, 0.34), transparent 35%),
+          radial-gradient(circle at 90% 15%, rgba(45, 170, 255, 0.3), transparent 34%),
+          var(--bg);
+      }
+
+      .card {
+        width: min(620px, 100%);
+        border-radius: 18px;
+        border: 1px solid var(--panel-border);
+        background: var(--panel);
+        box-shadow: 0 20px 50px rgba(8, 12, 30, 0.52);
+        padding: clamp(1.2rem, 2.8vw, 2rem);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.3rem, 3vw, 1.9rem);
+      }
+
+      p {
+        margin: 0.8rem 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .actions {
+        margin-top: 1.2rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.7rem;
+        border-radius: 11px;
+        font-weight: 700;
+        padding: 0.65rem 1rem;
+        text-decoration: none;
+      }
+
+      .btn-primary {
+        background: linear-gradient(108deg, #7d8eff, #49dfff);
+        color: #020512;
+      }
+
+      .btn-secondary {
+        border: 1px solid rgba(156, 175, 255, 0.4);
+        color: #dbe5ff;
+      }
+
+      .note {
+        margin-top: 0.8rem;
+        font-size: 0.92rem;
+      }
+
+      .note a {
+        color: #9cd3ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>We could not load your onboarding session</h1>
+      <p>
+        Your checkout session may be invalid, expired, or already completed. If you just paid, wait a minute and try your link again.
+      </p>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Back to ClawDaddy</a>
+        <a class="btn btn-secondary" href="mailto:hello@clawdaddy.sh">Contact Support</a>
+      </div>
+
+      <p class="note">Need help now? Email <a href="mailto:hello@clawdaddy.sh">hello@clawdaddy.sh</a>.</p>
+    </main>
+  </body>
+</html>

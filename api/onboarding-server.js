@@ -1,0 +1,339 @@
+#!/usr/bin/env node
+
+const express = require('express');
+const cors = require('cors');
+const https = require('https');
+const path = require('path');
+const { promises: fs } = require('fs');
+
+const app = express();
+const PORT = Number(process.env.PORT || 3848);
+
+const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
+const DATA_FILE = process.env.ONBOARDING_STORE_PATH || path.join(__dirname, 'onboarding-data.json');
+const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
+const QUEUED_TO_PROVISIONING_MS = Number(process.env.QUEUED_TO_PROVISIONING_MS || 15000);
+const PROVISIONING_TO_READY_MS = Number(process.env.PROVISIONING_TO_READY_MS || 45000);
+const AUTO_PROGRESS = process.env.ONBOARDING_AUTO_PROGRESS !== 'false';
+
+const allowedOrigins = new Set([
+  'https://clawdaddy.sh',
+  'https://www.clawdaddy.sh',
+  'https://getclawdaddy.com',
+  'https://www.getclawdaddy.com',
+  'http://localhost',
+  'http://localhost:3000'
+]);
+
+const SESSION_ID_REGEX = /^cs_[a-zA-Z0-9_]+$/;
+
+let cachedStripeKey = null;
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed by CORS'));
+  },
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+app.use(express.json());
+
+function normalizeName(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function parseSessionId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function isValidSessionId(sessionId) {
+  return SESSION_ID_REGEX.test(sessionId);
+}
+
+function slugify(input) {
+  const slug = (input || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return slug || 'assistant';
+}
+
+function buildWebchatUrl(record) {
+  const suffix = record.sessionId.slice(-8).toLowerCase();
+  const slug = slugify(record.assistantName || record.displayName);
+  return `${WEBCHAT_BASE_URL}/${slug}-${suffix}`;
+}
+
+async function getStripeSecretKey() {
+  if (cachedStripeKey) return cachedStripeKey;
+
+  const raw = await fs.readFile(STRIPE_KEY_PATH, 'utf8');
+  const key = raw.trim();
+
+  if (!key) {
+    throw new Error(`Stripe key file is empty: ${STRIPE_KEY_PATH}`);
+  }
+
+  cachedStripeKey = key;
+  return cachedStripeKey;
+}
+
+function stripeGet(pathname, secretKey) {
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      {
+        hostname: 'api.stripe.com',
+        method: 'GET',
+        path: pathname,
+        headers: {
+          Authorization: `Bearer ${secretKey}`
+        }
+      },
+      (response) => {
+        let body = '';
+
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          body += chunk;
+        });
+
+        response.on('end', () => {
+          let parsed;
+          try {
+            parsed = body ? JSON.parse(body) : {};
+          } catch (error) {
+            reject(new Error('Stripe response was not valid JSON.'));
+            return;
+          }
+
+          const ok = response.statusCode >= 200 && response.statusCode < 300;
+          if (!ok) {
+            const message = parsed?.error?.message || `Stripe API request failed with ${response.statusCode}`;
+            const stripeError = new Error(message);
+            stripeError.statusCode = response.statusCode;
+            stripeError.details = parsed;
+            reject(stripeError);
+            return;
+          }
+
+          resolve(parsed);
+        });
+      }
+    );
+
+    request.on('error', (error) => reject(error));
+    request.end();
+  });
+}
+
+function isPaidCheckoutSession(session) {
+  return Boolean(
+    session
+      && session.object === 'checkout.session'
+      && session.status === 'complete'
+      && (session.payment_status === 'paid' || session.payment_status === 'no_payment_required')
+  );
+}
+
+async function validateStripeCheckoutSession(sessionId) {
+  const stripeKey = await getStripeSecretKey();
+  const session = await stripeGet(`/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, stripeKey);
+
+  if (!isPaidCheckoutSession(session)) {
+    const message = 'Checkout session is not complete and paid.';
+    const error = new Error(message);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return session;
+}
+
+async function loadStore() {
+  try {
+    const content = await fs.readFile(DATA_FILE, 'utf8');
+    const parsed = JSON.parse(content);
+
+    if (!parsed || typeof parsed !== 'object') {
+      return { sessions: {} };
+    }
+
+    if (!parsed.sessions || typeof parsed.sessions !== 'object') {
+      parsed.sessions = {};
+    }
+
+    return parsed;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return { sessions: {} };
+    }
+
+    throw error;
+  }
+}
+
+async function saveStore(store) {
+  const directory = path.dirname(DATA_FILE);
+  await fs.mkdir(directory, { recursive: true });
+
+  const tmpPath = `${DATA_FILE}.tmp`;
+  const payload = `${JSON.stringify(store, null, 2)}\n`;
+
+  await fs.writeFile(tmpPath, payload, 'utf8');
+  await fs.rename(tmpPath, DATA_FILE);
+}
+
+function advanceStatus(record, nowMs) {
+  let changed = false;
+
+  if (record.status === 'queued') {
+    const queuedAtMs = Date.parse(record.queuedAt || record.createdAt || '');
+    if (Number.isFinite(queuedAtMs) && (nowMs - queuedAtMs) >= QUEUED_TO_PROVISIONING_MS) {
+      record.status = 'provisioning';
+      record.provisioningAt = new Date(nowMs).toISOString();
+      changed = true;
+    }
+  }
+
+  if (record.status === 'provisioning') {
+    const provisioningAtMs = Date.parse(record.provisioningAt || record.updatedAt || record.createdAt || '');
+    if (Number.isFinite(provisioningAtMs) && (nowMs - provisioningAtMs) >= PROVISIONING_TO_READY_MS) {
+      record.status = 'ready';
+      record.readyAt = new Date(nowMs).toISOString();
+      if (!record.webchatUrl) {
+        record.webchatUrl = buildWebchatUrl(record);
+      }
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    record.updatedAt = new Date(nowMs).toISOString();
+  }
+
+  return changed;
+}
+
+app.post('/api/onboarding', async (req, res) => {
+  const timestamp = new Date().toISOString();
+
+  try {
+    const displayName = normalizeName(req.body?.displayName);
+    const assistantName = normalizeName(req.body?.assistantName);
+    const sessionId = parseSessionId(req.body?.sessionId || req.body?.session_id || req.body?.stripeSessionId);
+
+    if (!displayName || displayName.length < 2 || displayName.length > 80) {
+      return res.status(400).json({ ok: false, error: 'Display name must be 2-80 characters.' });
+    }
+
+    if (!assistantName || assistantName.length < 2 || assistantName.length > 80) {
+      return res.status(400).json({ ok: false, error: 'Assistant name must be 2-80 characters.' });
+    }
+
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid Stripe session ID.' });
+    }
+
+    const checkoutSession = await validateStripeCheckoutSession(sessionId);
+
+    const store = await loadStore();
+    const existing = store.sessions[sessionId] || {};
+
+    const nowIso = new Date().toISOString();
+    const status = existing.status || 'queued';
+
+    const record = {
+      ...existing,
+      sessionId,
+      displayName,
+      assistantName,
+      status,
+      webchatUrl: existing.webchatUrl || buildWebchatUrl({ sessionId, displayName, assistantName }),
+      stripeCustomerId: checkoutSession.customer || null,
+      stripeCustomerEmail: checkoutSession.customer_details?.email || null,
+      stripePaymentStatus: checkoutSession.payment_status || null,
+      stripeStatus: checkoutSession.status || null,
+      createdAt: existing.createdAt || nowIso,
+      queuedAt: existing.queuedAt || nowIso,
+      updatedAt: nowIso
+    };
+
+    if (record.status === 'provisioning' && !record.provisioningAt) {
+      record.provisioningAt = nowIso;
+    }
+
+    if (record.status === 'ready' && !record.readyAt) {
+      record.readyAt = nowIso;
+    }
+
+    store.sessions[sessionId] = record;
+    await saveStore(store);
+
+    console.log(`[${timestamp}] Onboarding submitted for session ${sessionId}`);
+
+    return res.json({
+      ok: true,
+      status: record.status,
+      webchatUrl: record.status === 'ready' ? record.webchatUrl : null
+    });
+  } catch (error) {
+    console.error(`[${timestamp}] Failed onboarding submit:`, error.message);
+
+    if (error.statusCode === 404 || error.statusCode === 400) {
+      return res.status(400).json({ ok: false, error: 'Invalid or expired Stripe checkout session.' });
+    }
+
+    return res.status(500).json({ ok: false, error: 'Unable to process onboarding request.' });
+  }
+});
+
+app.get('/api/onboarding/status/:sessionId', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+
+  try {
+    if (!sessionId || !isValidSessionId(sessionId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    }
+
+    const store = await loadStore();
+    const record = store.sessions[sessionId];
+
+    if (!record) {
+      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+
+    if (AUTO_PROGRESS) {
+      const nowMs = Date.now();
+      const changed = advanceStatus(record, nowMs);
+      if (changed) {
+        store.sessions[sessionId] = record;
+        await saveStore(store);
+      }
+    }
+
+    return res.json({
+      status: record.status,
+      webchatUrl: record.status === 'ready' ? record.webchatUrl : null
+    });
+  } catch (error) {
+    console.error(`Status lookup failed for ${sessionId}:`, error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to fetch onboarding status.' });
+  }
+});
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.listen(PORT, () => {
+  console.log(`ClawDaddy onboarding API listening on port ${PORT}`);
+  console.log(`Data file: ${DATA_FILE}`);
+  console.log(`Stripe key path: ${STRIPE_KEY_PATH}`);
+});

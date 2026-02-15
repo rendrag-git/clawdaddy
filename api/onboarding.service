@@ -1,0 +1,21 @@
+[Unit]
+Description=ClawDaddy Onboarding API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/clawd/clawdaddy/api
+ExecStart=/usr/bin/node /home/ubuntu/clawd/clawdaddy/api/onboarding-server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clawdaddy-onboarding
+
+Environment=NODE_ENV=production
+Environment=PORT=3848
+Environment=PATH=/usr/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target

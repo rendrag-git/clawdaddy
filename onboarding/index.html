@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClawDaddy Onboarding</title>
+    <meta
+      name="description"
+      content="Complete your ClawDaddy setup and get your OpenClaw webchat URL."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #050714;
+        --bg-soft: #0b1024;
+        --panel: rgba(12, 16, 38, 0.78);
+        --panel-border: rgba(140, 168, 255, 0.22);
+        --text: #e6ecff;
+        --text-muted: #a7b3d8;
+        --input-bg: rgba(8, 12, 30, 0.9);
+        --accent: #7c8cff;
+        --accent-2: #3ee7ff;
+        --success: #45e4a5;
+        --pending: #7a82a8;
+        --shadow: 0 20px 50px rgba(8, 14, 40, 0.5);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 10% 0%, rgba(121, 103, 255, 0.35), transparent 34%),
+          radial-gradient(circle at 90% 15%, rgba(56, 180, 255, 0.32), transparent 30%),
+          radial-gradient(circle at 50% 120%, rgba(35, 49, 112, 0.4), transparent 48%),
+          var(--bg);
+      }
+
+      .page {
+        width: 100%;
+        min-height: 100vh;
+        padding: 2rem 1rem;
+        display: grid;
+        place-items: center;
+      }
+
+      .shell {
+        width: min(780px, 100%);
+      }
+
+      .brand {
+        margin: 0 0 1rem;
+        text-align: center;
+        font-size: clamp(1.5rem, 4vw, 1.95rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .tagline {
+        text-align: center;
+        margin: 0 0 2rem;
+        color: var(--text-muted);
+      }
+
+      .panel {
+        background: linear-gradient(180deg, rgba(17, 24, 55, 0.82), rgba(9, 13, 31, 0.88));
+        border: 1px solid var(--panel-border);
+        border-radius: 20px;
+        padding: clamp(1.2rem, 2.2vw, 2rem);
+        box-shadow: var(--shadow);
+      }
+
+      .session-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 999px;
+        border: 1px solid rgba(164, 182, 255, 0.34);
+        background: rgba(18, 27, 64, 0.85);
+        padding: 0.4rem 0.7rem;
+        color: #c9d4ff;
+        font-size: 0.82rem;
+        letter-spacing: 0.01em;
+      }
+
+      .title {
+        margin: 0.9rem 0 0.5rem;
+        font-size: clamp(1.35rem, 2.8vw, 2rem);
+        line-height: 1.2;
+      }
+
+      .copy {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .form {
+        margin-top: 1.4rem;
+        display: grid;
+        gap: 1rem;
+      }
+
+      .field {
+        display: grid;
+        gap: 0.45rem;
+      }
+
+      .label {
+        font-size: 0.9rem;
+        color: #d4deff;
+        font-weight: 600;
+      }
+
+      .input {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(149, 171, 255, 0.34);
+        background: var(--input-bg);
+        color: var(--text);
+        font-size: 1rem;
+        padding: 0.78rem 0.85rem;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .input:focus {
+        border-color: rgba(112, 200, 255, 0.85);
+        box-shadow: 0 0 0 3px rgba(72, 176, 255, 0.2);
+      }
+
+      .button {
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(110deg, var(--accent), var(--accent-2));
+        color: #020512;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        padding: 0.88rem 1rem;
+        cursor: pointer;
+        transition: transform 0.15s ease, filter 0.15s ease;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+      }
+
+      .button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+        transform: none;
+      }
+
+      .status-area {
+        margin-top: 1.6rem;
+        padding: 1rem;
+        border-radius: 14px;
+        border: 1px solid rgba(149, 171, 255, 0.25);
+        background: rgba(8, 14, 38, 0.6);
+      }
+
+      .status-headline {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      .status-copy {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+        font-size: 0.94rem;
+      }
+
+      .steps {
+        margin-top: 1.1rem;
+        display: grid;
+        gap: 0.7rem;
+      }
+
+      .step {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        color: var(--pending);
+        font-size: 0.93rem;
+      }
+
+      .dot {
+        width: 0.82rem;
+        height: 0.82rem;
+        border-radius: 999px;
+        background: rgba(128, 140, 182, 0.35);
+        border: 1px solid rgba(170, 182, 220, 0.28);
+      }
+
+      .step.active {
+        color: #d6e2ff;
+      }
+
+      .step.active .dot {
+        background: linear-gradient(140deg, var(--accent), var(--accent-2));
+        border-color: transparent;
+        box-shadow: 0 0 0 5px rgba(93, 170, 255, 0.18);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+
+      .step.complete {
+        color: var(--success);
+      }
+
+      .step.complete .dot {
+        background: var(--success);
+        border-color: transparent;
+        box-shadow: 0 0 0 4px rgba(69, 228, 165, 0.14);
+      }
+
+      .launch-wrap {
+        margin-top: 1.3rem;
+      }
+
+      .launch-link {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        min-height: 3.35rem;
+        border-radius: 14px;
+        text-decoration: none;
+        font-size: clamp(1.02rem, 2.2vw, 1.25rem);
+        font-weight: 800;
+        color: #020512;
+        background: linear-gradient(105deg, #5ef0d2, #57e4ff);
+        box-shadow: 0 10px 28px rgba(61, 228, 229, 0.28);
+      }
+
+      .launch-link:hover {
+        filter: brightness(1.04);
+      }
+
+      .error {
+        margin-top: 0.95rem;
+        color: #ffb3cb;
+        min-height: 1.2rem;
+        font-size: 0.9rem;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .footer {
+        margin-top: 1.1rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.88rem;
+      }
+
+      .footer a {
+        color: #9fd9ff;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.08);
+          opacity: 0.84;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          padding: 1rem 0.85rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="shell">
+        <h1 class="brand">ClawDaddy Onboarding</h1>
+        <p class="tagline">One quick step, then we spin up your assistant.</p>
+
+        <article class="panel" id="onboarding-panel">
+          <span class="session-chip">Stripe session: <strong id="session-preview">loading...</strong></span>
+          <h2 class="title">Name your assistant</h2>
+          <p class="copy">
+            Enter your display name and your assistant name. We will provision your webchat and post your launch link here.
+          </p>
+
+          <form id="onboarding-form" class="form" novalidate>
+            <div class="field">
+              <label class="label" for="display-name">Display name</label>
+              <input class="input" id="display-name" name="displayName" maxlength="80" required />
+            </div>
+
+            <div class="field">
+              <label class="label" for="assistant-name">Preferred assistant name</label>
+              <input class="input" id="assistant-name" name="assistantName" maxlength="80" required />
+            </div>
+
+            <button class="button" id="submit-button" type="submit">Save and start provisioning</button>
+          </form>
+
+          <p id="form-error" class="error" role="alert"></p>
+
+          <section id="status-section" class="status-area hidden" aria-live="polite">
+            <h3 id="status-headline" class="status-headline">Queued</h3>
+            <p id="status-copy" class="status-copy">We received your onboarding request.</p>
+
+            <div class="steps" id="status-steps">
+              <div class="step" data-step="queued"><span class="dot" aria-hidden="true"></span>Queued</div>
+              <div class="step" data-step="provisioning"><span class="dot" aria-hidden="true"></span>Provisioning</div>
+              <div class="step" data-step="ready"><span class="dot" aria-hidden="true"></span>Ready</div>
+            </div>
+
+            <div class="launch-wrap hidden" id="launch-wrap">
+              <a id="launch-link" class="launch-link" href="#" target="_blank" rel="noopener noreferrer">Open Your Assistant</a>
+            </div>
+          </section>
+        </article>
+
+        <p class="footer">Need help? <a href="mailto:hello@clawdaddy.sh">hello@clawdaddy.sh</a></p>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = (params.get('session_id') || '').trim();
+
+        if (!sessionId) {
+          window.location.replace('./error.html?reason=missing_session');
+          return;
+        }
+
+        if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId)) {
+          window.location.replace('./error.html?reason=invalid_session');
+          return;
+        }
+
+        const form = document.getElementById('onboarding-form');
+        const submitButton = document.getElementById('submit-button');
+        const formError = document.getElementById('form-error');
+        const statusSection = document.getElementById('status-section');
+        const statusHeadline = document.getElementById('status-headline');
+        const statusCopy = document.getElementById('status-copy');
+        const launchWrap = document.getElementById('launch-wrap');
+        const launchLink = document.getElementById('launch-link');
+        const sessionPreview = document.getElementById('session-preview');
+        const steps = Array.from(document.querySelectorAll('.step'));
+
+        sessionPreview.textContent = `${sessionId.slice(0, 8)}...${sessionId.slice(-6)}`;
+
+        let pollTimer = null;
+        let pollInFlight = false;
+
+        const statusOrder = ['queued', 'provisioning', 'ready'];
+        const statusText = {
+          queued: {
+            headline: 'Queued',
+            copy: 'Your request is in line. We are preparing your workspace.'
+          },
+          provisioning: {
+            headline: 'Provisioning in progress',
+            copy: 'Your OpenClaw environment is being configured now.'
+          },
+          ready: {
+            headline: 'Your assistant is ready',
+            copy: 'Launch your webchat and start chatting.'
+          }
+        };
+
+        function showError(message) {
+          formError.textContent = message || '';
+        }
+
+        function setStatus(status, webchatUrl) {
+          const safeStatus = statusOrder.includes(status) ? status : 'queued';
+          const targetIndex = statusOrder.indexOf(safeStatus);
+
+          steps.forEach((step) => {
+            const stepIndex = statusOrder.indexOf(step.dataset.step);
+            step.classList.remove('active', 'complete');
+
+            if (stepIndex < targetIndex) {
+              step.classList.add('complete');
+            } else if (stepIndex === targetIndex) {
+              step.classList.add('active');
+            }
+          });
+
+          statusHeadline.textContent = statusText[safeStatus].headline;
+          statusCopy.textContent = statusText[safeStatus].copy;
+
+          if (safeStatus === 'ready' && webchatUrl) {
+            launchLink.href = webchatUrl;
+            launchWrap.classList.remove('hidden');
+          } else {
+            launchWrap.classList.add('hidden');
+          }
+        }
+
+        async function readJson(response) {
+          try {
+            return await response.json();
+          } catch (_error) {
+            return {};
+          }
+        }
+
+        async function pollStatus() {
+          if (pollInFlight) return;
+          pollInFlight = true;
+
+          try {
+            const response = await fetch(`/api/onboarding/status/${encodeURIComponent(sessionId)}?t=${Date.now()}`, {
+              method: 'GET',
+              headers: { Accept: 'application/json' }
+            });
+
+            const payload = await readJson(response);
+
+            if (!response.ok) {
+              if (response.status === 400 || response.status === 404) {
+                window.location.replace('./error.html?reason=invalid_session');
+                return;
+              }
+              throw new Error(payload.error || 'Failed to fetch onboarding status.');
+            }
+
+            setStatus(payload.status, payload.webchatUrl);
+            if (payload.status === 'ready') {
+              clearInterval(pollTimer);
+              pollTimer = null;
+            }
+          } catch (error) {
+            showError(error.message || 'Temporary issue checking status. Retrying...');
+          } finally {
+            pollInFlight = false;
+          }
+        }
+
+        function startPolling() {
+          statusSection.classList.remove('hidden');
+          void pollStatus();
+
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(pollStatus, 3000);
+        }
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          showError('');
+
+          const displayName = (document.getElementById('display-name').value || '').trim();
+          const assistantName = (document.getElementById('assistant-name').value || '').trim();
+
+          if (displayName.length < 2 || assistantName.length < 2) {
+            showError('Please enter both names (at least 2 characters each).');
+            return;
+          }
+
+          submitButton.disabled = true;
+
+          try {
+            const response = await fetch('/api/onboarding', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ displayName, assistantName, sessionId })
+            });
+
+            const payload = await readJson(response);
+
+            if (!response.ok) {
+              if (response.status === 400 && /session/i.test(payload.error || '')) {
+                window.location.replace('./error.html?reason=invalid_session');
+                return;
+              }
+              throw new Error(payload.error || 'Could not submit onboarding details.');
+            }
+
+            form.classList.add('hidden');
+            setStatus(payload.status, payload.webchatUrl);
+            startPolling();
+          } catch (error) {
+            showError(error.message || 'Unable to submit onboarding details.');
+          } finally {
+            submitButton.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
