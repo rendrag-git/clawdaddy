@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ClawDaddy | OpenClaw Hosting</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -22,6 +22,7 @@
     <style>
       html {
         scroll-behavior: smooth;
+        scroll-padding-top: 6rem;
       }
 
       body {
@@ -29,6 +30,7 @@
           radial-gradient(circle at 10% 0%, rgba(230, 57, 70, 0.2), transparent 34%),
           radial-gradient(circle at 90% 20%, rgba(230, 57, 70, 0.12), transparent 30%),
           #090b10;
+        overflow-x: clip;
       }
 
       .reveal {
@@ -110,13 +112,13 @@
         animation: blink 1s infinite;
       }
 
-      @media (max-width: 430px) {
+      @media (max-width: 640px) {
         .hero-section {
-          padding-top: calc(5rem + env(safe-area-inset-top));
+          padding-top: calc(4.75rem + env(safe-area-inset-top));
         }
 
         .hero-grid {
-          gap: 2rem;
+          gap: 1.75rem;
         }
 
         .hero-visual {
@@ -133,9 +135,9 @@
         }
 
         .hero-terminal .space-y-2 {
-          padding: 1rem;
-          font-size: 0.75rem;
-          line-height: 1.45;
+          padding: 0.95rem;
+          font-size: 0.72rem;
+          line-height: 1.4;
         }
 
         .hero-terminal p {
@@ -155,9 +157,52 @@
           text-align: center;
         }
       }
+
+      @media (max-width: 390px) {
+        .hero-section {
+          padding-top: calc(4.25rem + env(safe-area-inset-top));
+        }
+
+        .hero-grid {
+          gap: 1.25rem;
+        }
+
+        .hero-terminal .space-y-2 {
+          padding: 0.85rem;
+          font-size: 0.68rem;
+          line-height: 1.35;
+        }
+
+        .terminal-detail-lines .detail-line:nth-child(n + 5) {
+          display: none;
+        }
+
+        .bottom-cta {
+          padding: 0.65rem;
+          padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+
+        .marquee-track,
+        .lobster-bob,
+        .cursor-blink {
+          animation: none !important;
+        }
+      }
     </style>
   </head>
-  <body class="text-zinc-100 antialiased">
+  <body class="pb-24 text-zinc-100 antialiased sm:pb-0">
     <header class="sticky top-0 z-40 border-b border-zinc-800/70 bg-[#090b10]/85 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <a href="#" class="text-xl font-black tracking-tight sm:text-2xl">ClawDaddy <span aria-hidden="true">🦞</span></a>
@@ -166,14 +211,14 @@
     </header>
 
     <main>
-      <section class="hero-section reveal mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
-        <div class="hero-grid grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+      <section class="hero-section reveal mx-auto max-w-6xl px-4 pb-12 pt-14 sm:px-6 sm:pb-20 sm:pt-24 lg:px-8">
+        <div class="hero-grid grid items-center gap-10 sm:gap-12 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
-            <p class="mb-4 inline-flex items-center rounded-full border border-lobster/35 bg-lobster/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-lobster">OpenClaw Hosting & Deployment</p>
-            <h1 class="text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">Your AI assistant. Running in 10 minutes. No PhD required.</h1>
+            <p class="mb-4 inline-flex items-center rounded-full border border-lobster/35 bg-lobster/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-lobster sm:text-xs sm:tracking-[0.2em]">OpenClaw Hosting & Deployment</p>
+            <h1 class="text-balance text-[clamp(2rem,8vw,3.75rem)] font-black leading-tight text-white">Your AI assistant. Running in 10 minutes. No PhD required.</h1>
             <p class="mt-5 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">OpenClaw is incredible. Setting it up shouldn't require a weekend and a Stack Overflow addiction. Pick your plan. We handle the rest.</p>
             <div class="mt-8">
-              <a href="#" data-scroll="#waitlist" class="inline-flex items-center rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500">Join Waitlist →</a>
+              <a href="#" data-scroll="#waitlist" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500 sm:w-auto">Join Waitlist →</a>
             </div>
           </div>
           <div class="hero-visual relative flex items-center justify-center">
@@ -188,13 +233,13 @@
               </div>
               <div class="space-y-2 p-5 font-mono text-sm leading-relaxed text-zinc-300">
                 <p><span class="text-zinc-500">$</span> <span class="text-lobster">sudo bash install-openclaw.sh</span></p>
-                <p class="text-zinc-400">
-                  <span class="text-green-400">✓</span> Ubuntu 24.04 detected<br />
-                  <span class="text-green-400">✓</span> Node.js v22 installed<br />
-                  <span class="text-green-400">✓</span> OpenClaw installed<br />
-                  <span class="text-green-400">✓</span> VNC + Chromium ready<br />
-                  <span class="text-green-400">✓</span> Firewall configured<br />
-                  <span class="text-green-400">✓</span> Service running
+                <p class="terminal-detail-lines text-zinc-400">
+                  <span class="detail-line"><span class="text-green-400">✓</span> Ubuntu 24.04 detected</span><br />
+                  <span class="detail-line"><span class="text-green-400">✓</span> Node.js v22 installed</span><br />
+                  <span class="detail-line"><span class="text-green-400">✓</span> OpenClaw installed</span><br />
+                  <span class="detail-line"><span class="text-green-400">✓</span> VNC + Chromium ready</span><br />
+                  <span class="detail-line"><span class="text-green-400">✓</span> Firewall configured</span><br />
+                  <span class="detail-line"><span class="text-green-400">✓</span> Service running</span>
                 </p>
                 <p><span class="text-zinc-500">$</span> <span class="cursor-blink text-lobster">_</span></p>
               </div>
@@ -206,7 +251,7 @@
 
       <!-- Testimonials section removed — no real ClawDaddy customer reviews yet. Will add when we have genuine testimonials. -->
 
-      <section class="reveal mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+      <section class="reveal mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
           <h2 class="text-3xl font-black text-white sm:text-4xl">What Is OpenClaw?</h2>
           <p class="mt-5 text-base leading-relaxed text-zinc-300 sm:text-lg">An open-source AI assistant that lives on a server and connects to your chat apps. Think ChatGPT, but it can actually do things — check your email, manage your calendar, write code, browse the web, and remember everything.</p>
@@ -221,7 +266,7 @@
         </div>
       </section>
 
-      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-16">
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-12 sm:py-16">
         <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <h2 class="text-center text-3xl font-black text-white sm:text-4xl">How It Works</h2>
           <div class="mt-10 grid gap-4 md:grid-cols-3">
@@ -244,7 +289,7 @@
         </div>
       </section>
 
-      <section class="reveal mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+      <section class="reveal mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <h2 class="text-center text-3xl font-black text-white sm:text-4xl">What You Get</h2>
         <p class="mx-auto mt-4 max-w-2xl text-center text-zinc-300">Everything needed to run your own AI assistant is bundled in one setup flow, with transparent ownership from day one.</p>
         <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -281,7 +326,7 @@
         </div>
       </section>
 
-      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-16">
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-12 sm:py-16">
         <div class="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
           <article class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 class="text-2xl font-black text-white">Trust and Guarantees</h2>
@@ -306,7 +351,7 @@
         </div>
       </section>
 
-      <section id="waitlist" class="reveal mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+      <section id="waitlist" class="reveal scroll-mt-24 mx-auto max-w-3xl px-4 py-12 sm:scroll-mt-28 sm:px-6 sm:py-16 lg:px-8">
         <div class="rounded-2xl border border-lobster bg-zinc-900/90 p-8 shadow-glow sm:p-12">
           <div class="text-center">
             <h2 class="text-3xl font-black text-white sm:text-4xl">Be First In Line 🦞</h2>
@@ -321,7 +366,8 @@
                 id="name" 
                 name="name" 
                 required
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-500 focus:border-lobster focus:outline-none focus:ring-2 focus:ring-lobster/50"
+                autocomplete="name"
+                class="min-h-[46px] w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-500 focus:border-lobster focus:outline-none focus:ring-2 focus:ring-lobster/50"
                 placeholder="Your name"
               />
             </div>
@@ -333,14 +379,19 @@
                 id="email" 
                 name="email" 
                 required
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-500 focus:border-lobster focus:outline-none focus:ring-2 focus:ring-lobster/50"
+                autocomplete="email"
+                inputmode="email"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                class="min-h-[46px] w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-white placeholder-zinc-500 focus:border-lobster focus:outline-none focus:ring-2 focus:ring-lobster/50"
                 placeholder="you@example.com"
               />
             </div>
             
             <button 
               type="submit" 
-              class="w-full rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500"
+              class="min-h-[46px] w-full rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500"
             >
               Join Waitlist
             </button>
@@ -356,7 +407,7 @@
         </div>
       </section>
 
-      <section id="pricing" class="reveal mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+      <section id="pricing" class="reveal scroll-mt-24 mx-auto max-w-6xl px-4 py-12 sm:scroll-mt-28 sm:px-6 sm:py-16 lg:px-8">
         <h2 class="text-center text-3xl font-black text-white sm:text-4xl">Pricing</h2>
         <p class="mx-auto mt-3 max-w-2xl text-center text-sm text-zinc-400">Launching February 2026 — join the waitlist for early access</p>
         <div class="mt-10 grid gap-6 lg:grid-cols-2">
@@ -373,7 +424,7 @@
               <li>You manage it, you own it</li>
             </ul>
             <p class="mt-4 text-sm italic text-zinc-400">Got a spare laptop or old PC? That's all you need.</p>
-            <a href="#" data-scroll="#waitlist" class="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Join Waitlist</a>
+            <a href="#" data-scroll="#waitlist" class="mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Join Waitlist</a>
           </article>
 
           <article class="relative flex flex-col rounded-2xl border border-lobster bg-zinc-900 p-6 shadow-glow">
@@ -388,15 +439,69 @@
               <li>Ready in about 10 minutes; cancel anytime</li>
             </ul>
             <p class="mt-4 text-xs text-zinc-400">Transparent AI spend: you pay Anthropic directly for usage.</p>
-            <a href="#" data-scroll="#waitlist" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-lobster px-4 py-3 font-bold text-white transition hover:bg-red-500">Join Waitlist</a>
+            <a href="#" data-scroll="#waitlist" class="mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-4 py-3 font-bold text-white transition hover:bg-red-500">Join Waitlist</a>
           </article>
         </div>
       </section>
 
-      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-16">
+      <section class="reveal border-y border-zinc-800/80 bg-zinc-950/40 py-12 sm:py-16">
         <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <h2 class="text-center text-3xl font-black text-white sm:text-4xl">Comparison Table</h2>
-          <div class="mt-8 overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60">
+
+          <div class="mt-8 grid gap-3 sm:hidden">
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Setup</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> You run the script</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> Automatic</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Hosting</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> Your machine</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> We host</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">API Key</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> Yours</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> Yours</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Channels</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> All</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> All</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Backups</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> DIY</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> Daily</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Updates</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> Manual</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> Automatic</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Monitoring</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> DIY</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> 24/7</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Support</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> FAQ/Guide</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> Email</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">VNC Access</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> Optional</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> ✅</p>
+            </article>
+            <article class="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+              <h3 class="font-semibold text-white">Setup Time</h3>
+              <p class="mt-2 text-sm text-zinc-300"><span class="text-zinc-100">Self-Install:</span> ~10-20 min</p>
+              <p class="text-sm text-zinc-300"><span class="text-zinc-100">Managed BYOK:</span> ~10 min</p>
+            </article>
+          </div>
+
+          <div class="mt-8 hidden overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60 sm:block">
             <table class="min-w-full text-left text-sm">
               <thead>
                 <tr class="border-b border-zinc-800 bg-zinc-900/90 text-zinc-200">
@@ -422,56 +527,60 @@
         </div>
       </section>
 
-      <section class="reveal mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+      <section class="reveal mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <h2 class="text-center text-3xl font-black text-white sm:text-4xl">FAQ</h2>
         <div class="mt-10 space-y-3">
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">What is OpenClaw?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">What is OpenClaw?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">An open-source AI assistant that lives on a server and connects to your chat apps. It can check your email, manage your calendar, write code, browse the web, and remember everything across conversations. It's like having a really smart intern who never sleeps.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">What do I need to run this myself?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">What do I need to run this myself?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Any Mac (Intel or Apple Silicon), Windows PC (10/11 with WSL), or Linux machine. Even that old laptop collecting dust works — OpenClaw is lightweight. Leave it plugged in and connected to WiFi, and you've got a 24/7 AI assistant. A $5/mo VPS works too if you'd rather run it in the cloud.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">Do I need to keep my computer on?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">Do I need to keep my computer on?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Yes — your assistant lives on that machine. If it sleeps, your assistant sleeps. That's why we offer managed plans — we keep it running 24/7 so you don't have to.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">Why not just set it up myself for free?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">Why not just set it up myself for free?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">You absolutely can! OpenClaw is open source. Our $49 script just saves you the afternoon of googling error messages. And if you'd rather skip the terminal entirely, our managed plans exist.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">Is my data safe?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">Is my data safe?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Your instance is yours alone — dedicated server, not shared. We never access your data, conversations, or API keys. You get full VNC access to your machine.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">What if I want to leave?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">What if I want to leave?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Export your data anytime. Cancel and we keep your instance running for 7 days so you can migrate. No lock-in, no guilt trips.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">What's an API key?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">What's an API key?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">It's like a password that lets your assistant talk to the AI. You get one from Anthropic (the company behind Claude) at console.anthropic.com. Takes 2 minutes. Both our Self-Install and Managed BYOK plans use your own API key for full transparency over costs.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">Can I re-run the install script?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">Can I re-run the install script?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Yes. The installer is idempotent. It checks what is already installed, avoids overwriting your config without asking, and backs up files before changes.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">When does ClawDaddy launch?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">When does ClawDaddy launch?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">We're launching in February 2026. Join the waitlist and we'll reach out as soon as your spot opens. Most early waitlist members will get access within the first week of launch.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">Is there a refund policy?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">Is there a refund policy?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Self-Install includes a 30-day money-back guarantee. Managed plans are monthly and can be canceled anytime, with time to export your data.</p>
           </details>
           <details class="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <summary class="cursor-pointer list-none font-semibold text-white">What updates are included?</summary>
+            <summary class="cursor-pointer list-none py-1 font-semibold text-white">What updates are included?</summary>
             <p class="mt-3 text-sm leading-relaxed text-zinc-300">Self-Install gets lifetime installer updates through the private repository. Managed plans include automatic runtime and infrastructure updates.</p>
           </details>
         </div>
       </section>
     </main>
+
+    <div class="bottom-cta fixed inset-x-0 bottom-0 z-50 border-t border-zinc-800/80 bg-[#090b10]/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+      <a href="#" data-scroll="#waitlist" class="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-5 py-3 text-base font-bold text-white shadow-glow transition hover:bg-red-500">Join Waitlist →</a>
+    </div>
 
     <footer class="border-t border-zinc-800/80 bg-zinc-950/70">
       <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
