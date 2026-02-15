@@ -1,0 +1,1054 @@
+{
+  "meta": {
+    "product": "ClawDaddy",
+    "artifact": "onboarding quiz design (personality + use cases)",
+    "version": "1.0.0",
+    "estimated_completion_seconds": 240,
+    "ui_notes": [
+      "Section A: single-select (radio). Section B: mix of multi-select, single-select, and short text inputs.",
+      "Keep copy snappy; show one question per screen (or small grouped pages) to stay under 5 minutes."
+    ]
+  },
+  "traits": {
+    "poles": [
+      "organized",
+      "spontaneous",
+      "formal",
+      "casual",
+      "proactive",
+      "reactive",
+      "detailed",
+      "big_picture",
+      "serious",
+      "playful",
+      "independent",
+      "collaborative"
+    ],
+    "dimensions": {
+      "organized_vs_spontaneous": [
+        "organized",
+        "spontaneous"
+      ],
+      "formal_vs_casual": [
+        "formal",
+        "casual"
+      ],
+      "proactive_vs_reactive": [
+        "proactive",
+        "reactive"
+      ],
+      "detailed_vs_big_picture": [
+        "detailed",
+        "big_picture"
+      ],
+      "serious_vs_playful": [
+        "serious",
+        "playful"
+      ],
+      "independent_vs_collaborative": [
+        "independent",
+        "collaborative"
+      ]
+    }
+  },
+  "sections": [
+    {
+      "id": "A",
+      "title": "Personality / Style",
+      "instructions": "Pick the answer that feels most like you. No wrong answers—just vibes and useful defaults.",
+      "question_count_target": "10-15"
+    },
+    {
+      "id": "B",
+      "title": "Use Cases",
+      "instructions": "Tell us what you want help with (and how often). We'll tune the assistant accordingly.",
+      "question_count_target": "4-5"
+    }
+  ],
+  "questions": [
+    {
+      "id": "A1",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "Your brain is a browser with 37 tabs open. A surprise meeting starts in 10 minutes. What do you do?",
+      "options": [
+        {
+          "id": "A1a",
+          "label": "Make a tiny checklist, pick the top 3 tabs, and close the rest like a hero.",
+          "trait_weights": {
+            "organized": 0.9,
+            "proactive": 0.7,
+            "detailed": 0.4,
+            "serious": 0.2
+          }
+        },
+        {
+          "id": "A1b",
+          "label": "Improvise. The meeting can’t hurt you if you pretend it’s a podcast.",
+          "trait_weights": {
+            "spontaneous": 0.9,
+            "casual": 0.6,
+            "playful": 0.4,
+            "big_picture": 0.5
+          }
+        },
+        {
+          "id": "A1c",
+          "label": "Message someone: “Give me the one thing I must know.” Then roll in with confidence.",
+          "trait_weights": {
+            "collaborative": 0.8,
+            "reactive": 0.5,
+            "big_picture": 0.6,
+            "casual": 0.4
+          }
+        },
+        {
+          "id": "A1d",
+          "label": "Open a doc and write a crisp 5-line brief (problem, goal, plan, risks, next step).",
+          "trait_weights": {
+            "organized": 0.7,
+            "formal": 0.5,
+            "proactive": 0.6,
+            "detailed": 0.7,
+            "serious": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A2",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "You buy a new gadget. There is no setup wizard. Your move?",
+      "options": [
+        {
+          "id": "A2a",
+          "label": "Read the manual. Yes, cover-to-cover. Like a bedtime story.",
+          "trait_weights": {
+            "organized": 0.6,
+            "detailed": 0.8,
+            "serious": 0.4,
+            "independent": 0.5
+          }
+        },
+        {
+          "id": "A2b",
+          "label": "Press buttons until it works. If it sparks, that’s feedback.",
+          "trait_weights": {
+            "spontaneous": 0.8,
+            "playful": 0.4,
+            "independent": 0.6,
+            "big_picture": 0.4
+          }
+        },
+        {
+          "id": "A2c",
+          "label": "Search “best settings” and steal wisdom from the internet hive-mind.",
+          "trait_weights": {
+            "proactive": 0.6,
+            "big_picture": 0.6,
+            "independent": 0.4,
+            "detailed": 0.3
+          }
+        },
+        {
+          "id": "A2d",
+          "label": "Ask a friend who’s into this stuff and let them do the first run.",
+          "trait_weights": {
+            "collaborative": 0.8,
+            "casual": 0.5,
+            "reactive": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A3",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "You’re traveling. The plan says “Museum at 2.” At 1:50 you see an alley that smells like incredible food. You…",
+      "options": [
+        {
+          "id": "A3a",
+          "label": "Stick to the plan. The museum ticket is already in my calendar (and my soul).",
+          "trait_weights": {
+            "organized": 0.8,
+            "proactive": 0.4,
+            "serious": 0.3
+          }
+        },
+        {
+          "id": "A3b",
+          "label": "Detour immediately. The best stories are never in the itinerary.",
+          "trait_weights": {
+            "spontaneous": 0.9,
+            "playful": 0.5,
+            "big_picture": 0.4
+          }
+        },
+        {
+          "id": "A3c",
+          "label": "Do both: quick bite now, museum later. Time is a suggestion.",
+          "trait_weights": {
+            "organized": 0.4,
+            "spontaneous": 0.5,
+            "proactive": 0.5,
+            "big_picture": 0.4
+          }
+        },
+        {
+          "id": "A3d",
+          "label": "Ask a local (or the assistant) which choice will make Future Me happiest.",
+          "trait_weights": {
+            "collaborative": 0.6,
+            "big_picture": 0.6,
+            "proactive": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A4",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "Someone pings: “Quick question” at 4:59pm. You…",
+      "options": [
+        {
+          "id": "A4a",
+          "label": "Answer now with context, steps, and a tiny screenshot if needed.",
+          "trait_weights": {
+            "proactive": 0.7,
+            "detailed": 0.8,
+            "collaborative": 0.3,
+            "serious": 0.3
+          }
+        },
+        {
+          "id": "A4b",
+          "label": "Reply with a one-liner + suggest a time tomorrow if it’s bigger than quick.",
+          "trait_weights": {
+            "organized": 0.6,
+            "formal": 0.4,
+            "proactive": 0.5,
+            "big_picture": 0.5
+          }
+        },
+        {
+          "id": "A4c",
+          "label": "Send a friendly TL;DR and a meme. It’s morale maintenance.",
+          "trait_weights": {
+            "casual": 0.8,
+            "playful": 0.7,
+            "big_picture": 0.3
+          }
+        },
+        {
+          "id": "A4d",
+          "label": "Pretend I didn’t see it. Boundaries are self-care.",
+          "trait_weights": {
+            "reactive": 0.7,
+            "independent": 0.5,
+            "serious": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A5",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "Pick your assistant’s vibe in a movie scene:",
+      "options": [
+        {
+          "id": "A5a",
+          "label": "Polished concierge: crisp, calm, and always one step ahead.",
+          "trait_weights": {
+            "formal": 0.8,
+            "organized": 0.5,
+            "proactive": 0.6,
+            "serious": 0.5
+          }
+        },
+        {
+          "id": "A5b",
+          "label": "Friendly co-pilot: warm, plainspoken, and low-drama.",
+          "trait_weights": {
+            "casual": 0.7,
+            "collaborative": 0.6,
+            "serious": 0.2,
+            "proactive": 0.3
+          }
+        },
+        {
+          "id": "A5c",
+          "label": "Witty sidekick: helpful, fast, and occasionally unhinged (in a safe way).",
+          "trait_weights": {
+            "playful": 0.8,
+            "casual": 0.6,
+            "proactive": 0.4,
+            "big_picture": 0.3
+          }
+        },
+        {
+          "id": "A5d",
+          "label": "Zen minimalist: fewer words, more results.",
+          "trait_weights": {
+            "serious": 0.4,
+            "big_picture": 0.6,
+            "independent": 0.5,
+            "formal": 0.3
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A6",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "If the assistant thinks you’re about to do something suboptimal (but not dangerous), it should…",
+      "options": [
+        {
+          "id": "A6a",
+          "label": "Gently push back with evidence and a better option.",
+          "trait_weights": {
+            "proactive": 0.6,
+            "serious": 0.4,
+            "detailed": 0.5,
+            "independent": 0.3
+          }
+        },
+        {
+          "id": "A6b",
+          "label": "Ask 1-2 clarifying questions before suggesting anything.",
+          "trait_weights": {
+            "collaborative": 0.7,
+            "detailed": 0.6,
+            "organized": 0.3
+          }
+        },
+        {
+          "id": "A6c",
+          "label": "Show quick pros/cons, then let me decide immediately.",
+          "trait_weights": {
+            "big_picture": 0.7,
+            "casual": 0.4,
+            "independent": 0.5
+          }
+        },
+        {
+          "id": "A6d",
+          "label": "Default to what I asked, unless I explicitly say “challenge me.”",
+          "trait_weights": {
+            "reactive": 0.6,
+            "casual": 0.3,
+            "independent": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A7",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "You’re hosting dinner for friends. What’s your cooking style?",
+      "options": [
+        {
+          "id": "A7a",
+          "label": "Mise en place. Timers. Spreadsheet energy. Everything is labeled.",
+          "trait_weights": {
+            "organized": 0.9,
+            "detailed": 0.6,
+            "serious": 0.3
+          }
+        },
+        {
+          "id": "A7b",
+          "label": "Vibes only. I cook like jazz and hope everyone likes jazz.",
+          "trait_weights": {
+            "spontaneous": 0.8,
+            "playful": 0.5,
+            "casual": 0.4
+          }
+        },
+        {
+          "id": "A7c",
+          "label": "I turn it into a group activity. Someone chop, someone stir, someone taste-test.",
+          "trait_weights": {
+            "collaborative": 0.9,
+            "casual": 0.5,
+            "playful": 0.3
+          }
+        },
+        {
+          "id": "A7d",
+          "label": "I optimize: one impressive main, two easy sides, and a backup plan.",
+          "trait_weights": {
+            "organized": 0.6,
+            "big_picture": 0.6,
+            "proactive": 0.5
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A8",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "When the assistant is working on something (research, planning, drafting), how should it update you?",
+      "options": [
+        {
+          "id": "A8a",
+          "label": "Frequent check-ins. I like to steer the ship in real time.",
+          "trait_weights": {
+            "collaborative": 0.6,
+            "detailed": 0.5,
+            "proactive": 0.4
+          }
+        },
+        {
+          "id": "A8b",
+          "label": "Only at milestones: “Here’s where I am, here’s what’s next.”",
+          "trait_weights": {
+            "organized": 0.6,
+            "big_picture": 0.6,
+            "serious": 0.2
+          }
+        },
+        {
+          "id": "A8c",
+          "label": "Only if blocked or if a decision is needed.",
+          "trait_weights": {
+            "independent": 0.6,
+            "big_picture": 0.5,
+            "proactive": 0.3
+          }
+        },
+        {
+          "id": "A8d",
+          "label": "No updates—just deliver the finished thing (with a quick recap).",
+          "trait_weights": {
+            "independent": 0.8,
+            "organized": 0.4,
+            "serious": 0.3
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A9",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "You’re starting something new (project, hobby, business idea). Your first hour looks like…",
+      "options": [
+        {
+          "id": "A9a",
+          "label": "Define goals + constraints, then map the steps. I love a clean runway.",
+          "trait_weights": {
+            "organized": 0.8,
+            "proactive": 0.6,
+            "big_picture": 0.4
+          }
+        },
+        {
+          "id": "A9b",
+          "label": "Build a scrappy prototype immediately. Learning-by-doing is the point.",
+          "trait_weights": {
+            "spontaneous": 0.7,
+            "proactive": 0.4,
+            "independent": 0.5
+          }
+        },
+        {
+          "id": "A9c",
+          "label": "Brainstorm with people. The best ideas appear mid-conversation.",
+          "trait_weights": {
+            "collaborative": 0.8,
+            "big_picture": 0.5,
+            "playful": 0.3
+          }
+        },
+        {
+          "id": "A9d",
+          "label": "Research the landscape first: examples, pitfalls, and best practices.",
+          "trait_weights": {
+            "detailed": 0.6,
+            "proactive": 0.5,
+            "serious": 0.3,
+            "organized": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A10",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "A long article lands in your lap. How do you consume it?",
+      "options": [
+        {
+          "id": "A10a",
+          "label": "Read carefully, highlight, and summarize the key points.",
+          "trait_weights": {
+            "detailed": 0.9,
+            "organized": 0.5,
+            "serious": 0.3
+          }
+        },
+        {
+          "id": "A10b",
+          "label": "Skim for the gist: headings, intro, and any spicy charts.",
+          "trait_weights": {
+            "big_picture": 0.8,
+            "casual": 0.3
+          }
+        },
+        {
+          "id": "A10c",
+          "label": "Jump to the conclusion first. Then backfill only if needed.",
+          "trait_weights": {
+            "big_picture": 0.7,
+            "proactive": 0.3,
+            "independent": 0.4
+          }
+        },
+        {
+          "id": "A10d",
+          "label": "Have the assistant give me a punchy brief + actions in bullets.",
+          "trait_weights": {
+            "organized": 0.5,
+            "proactive": 0.5,
+            "big_picture": 0.5
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "A11",
+      "section": "A",
+      "type": "single_select",
+      "prompt": "The assistant makes a pun. Your reaction is…",
+      "options": [
+        {
+          "id": "A11a",
+          "label": "MORE. If it’s not slightly ridiculous, what are we even doing.",
+          "trait_weights": {
+            "playful": 0.9,
+            "casual": 0.6
+          }
+        },
+        {
+          "id": "A11b",
+          "label": "Occasional jokes are great—just don’t derail the task.",
+          "trait_weights": {
+            "playful": 0.6,
+            "organized": 0.3,
+            "big_picture": 0.3
+          }
+        },
+        {
+          "id": "A11c",
+          "label": "Keep it straightforward. I’m here to get things done.",
+          "trait_weights": {
+            "serious": 0.8,
+            "formal": 0.3,
+            "organized": 0.3
+          }
+        },
+        {
+          "id": "A11d",
+          "label": "Only joke when I do. Mirror my energy like a pro.",
+          "trait_weights": {
+            "collaborative": 0.5,
+            "reactive": 0.5,
+            "casual": 0.4
+          }
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "B1",
+      "section": "B",
+      "type": "multi_select",
+      "prompt": "What do you want help with personally? (Pick any)",
+      "max_selections": 8,
+      "options": [
+        {
+          "id": "B1_calendar",
+          "label": "Calendar & scheduling",
+          "tags": [
+            "personal:calendar"
+          ]
+        },
+        {
+          "id": "B1_reminders",
+          "label": "Reminders & routines",
+          "tags": [
+            "personal:reminders"
+          ]
+        },
+        {
+          "id": "B1_shopping",
+          "label": "Shopping & price tracking",
+          "tags": [
+            "personal:shopping"
+          ]
+        },
+        {
+          "id": "B1_travel",
+          "label": "Travel planning",
+          "tags": [
+            "personal:travel"
+          ]
+        },
+        {
+          "id": "B1_health",
+          "label": "Health & fitness nudges",
+          "tags": [
+            "personal:health"
+          ]
+        },
+        {
+          "id": "B1_finance",
+          "label": "Budgeting & personal finance",
+          "tags": [
+            "personal:finance"
+          ]
+        },
+        {
+          "id": "B1_meals",
+          "label": "Meals, recipes, groceries",
+          "tags": [
+            "personal:meals"
+          ]
+        },
+        {
+          "id": "B1_learning",
+          "label": "Learning & hobbies",
+          "tags": [
+            "personal:learning"
+          ]
+        },
+        {
+          "id": "B1_home",
+          "label": "Home / life admin (bills, services, chores)",
+          "tags": [
+            "personal:home_admin"
+          ]
+        },
+        {
+          "id": "B1_relationships",
+          "label": "Social planning (birthdays, events)",
+          "tags": [
+            "personal:social"
+          ]
+        }
+      ],
+      "required": false,
+      "scoring": {
+        "mode": "tags_only",
+        "note": "Use-cases feed USER.md and assistant defaults; no trait scoring directly."
+      }
+    },
+    {
+      "id": "B2",
+      "section": "B",
+      "type": "multi_select",
+      "prompt": "What do you want help with professionally? (Pick any)",
+      "max_selections": 8,
+      "options": [
+        {
+          "id": "B2_email",
+          "label": "Email triage & drafting",
+          "tags": [
+            "work:email"
+          ]
+        },
+        {
+          "id": "B2_research",
+          "label": "Research & summaries",
+          "tags": [
+            "work:research"
+          ]
+        },
+        {
+          "id": "B2_writing",
+          "label": "Writing (docs, proposals, briefs)",
+          "tags": [
+            "work:writing"
+          ]
+        },
+        {
+          "id": "B2_coding",
+          "label": "Coding help (debugging, scaffolds, reviews)",
+          "tags": [
+            "work:coding"
+          ]
+        },
+        {
+          "id": "B2_data",
+          "label": "Data analysis (spreadsheets, SQL, charts)",
+          "tags": [
+            "work:data_analysis"
+          ]
+        },
+        {
+          "id": "B2_pm",
+          "label": "Project management (plans, tasks, standups)",
+          "tags": [
+            "work:project_management"
+          ]
+        },
+        {
+          "id": "B2_meetings",
+          "label": "Meeting notes & action items",
+          "tags": [
+            "work:meetings"
+          ]
+        },
+        {
+          "id": "B2_social",
+          "label": "Social media / content ideas",
+          "tags": [
+            "work:social_media"
+          ]
+        },
+        {
+          "id": "B2_sales",
+          "label": "Sales / outreach messaging",
+          "tags": [
+            "work:sales"
+          ]
+        },
+        {
+          "id": "B2_customer",
+          "label": "Customer support drafts / macros",
+          "tags": [
+            "work:customer_support"
+          ]
+        }
+      ],
+      "required": false,
+      "scoring": {
+        "mode": "tags_only"
+      }
+    },
+    {
+      "id": "B3",
+      "section": "B",
+      "type": "single_select",
+      "prompt": "How often do you expect to interact with your assistant?",
+      "options": [
+        {
+          "id": "B3a",
+          "label": "All day — it’s basically my second brain.",
+          "trait_weights": {
+            "proactive": 0.5,
+            "collaborative": 0.4,
+            "casual": 0.3,
+            "organized": 0.3
+          },
+          "tags": [
+            "usage:high"
+          ]
+        },
+        {
+          "id": "B3b",
+          "label": "A few times a day — quick questions and a little planning.",
+          "trait_weights": {
+            "organized": 0.3,
+            "proactive": 0.3,
+            "big_picture": 0.3
+          },
+          "tags": [
+            "usage:medium"
+          ]
+        },
+        {
+          "id": "B3c",
+          "label": "A few times a week — when I need a boost.",
+          "trait_weights": {
+            "independent": 0.3,
+            "reactive": 0.5,
+            "big_picture": 0.2
+          },
+          "tags": [
+            "usage:low"
+          ]
+        },
+        {
+          "id": "B3d",
+          "label": "Rarely — I want it there, but mostly quiet.",
+          "trait_weights": {
+            "independent": 0.4,
+            "reactive": 0.7,
+            "serious": 0.2
+          },
+          "tags": [
+            "usage:minimal"
+          ]
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "B4",
+      "section": "B",
+      "type": "short_text",
+      "prompt": "What’s your job / role (or what you spend most of your time doing)?",
+      "placeholder": "e.g., Product manager, founder, student, nurse, consultant, stay-at-home parent, etc.",
+      "required": false,
+      "scoring": {
+        "mode": "free_text_store_only",
+        "field": "user.role"
+      }
+    },
+    {
+      "id": "B5",
+      "section": "B",
+      "type": "short_text",
+      "prompt": "What should the assistant call you?",
+      "placeholder": "Name or nickname",
+      "required": false,
+      "scoring": {
+        "mode": "free_text_store_only",
+        "field": "user.preferred_name"
+      }
+    }
+  ],
+  "scoring_logic": {
+    "trait_weight_range": [
+      0.0,
+      1.0
+    ],
+    "defaults": {
+      "epsilon": 1e-09,
+      "dimension_default_score_when_no_votes": 0.5
+    },
+    "accumulation": {
+      "description": "Each selected answer contributes weighted votes to one or more trait poles. Unmentioned traits get 0 for that answer.",
+      "multi_select_handling": {
+        "mode": "scaled_sum",
+        "scale_per_question": 0.7,
+        "note": "If you later add trait-bearing multi-select questions, scale each selected option by (scale_per_question / max(1, num_selected)) so multi-select doesn't overwhelm single-select."
+      }
+    },
+    "dimension_normalization": {
+      "description": "Convert pole totals into a 0..1 score for the left pole of each dimension.",
+      "formula": "score(left) = left_total / (left_total + right_total + epsilon). If both totals are 0, score = 0.5",
+      "outputs": {
+        "dimension_scores": "0..1 per dimension (left pole strength)",
+        "pole_totals": "raw sums per trait pole (useful for debugging)",
+        "confidence": "optional: confidence = min(1, (left_total + right_total) / 3.0) to reflect how much signal was collected"
+      }
+    },
+    "pseudocode": [
+      "traits = {organized:0, spontaneous:0, formal:0, casual:0, proactive:0, reactive:0, detailed:0, big_picture:0, serious:0, playful:0, independent:0, collaborative:0}",
+      "tags = []",
+      "free_text = {}",
+      "",
+      "for each response in responses:",
+      "  if response.type in ['single_select','multi_select']:",
+      "    for each selected_option:",
+      "      if selected_option.trait_weights exists:",
+      "        for (trait, w) in selected_option.trait_weights:",
+      "          traits[trait] += clamp(w,0,1)",
+      "      if selected_option.tags exists: tags += selected_option.tags",
+      "  if response.type in ['short_text','long_text'] and response.value not empty:",
+      "    store free_text according to question.scoring.field",
+      "",
+      "dimensions = {",
+      "  organized_vs_spontaneous: ['organized','spontaneous'],",
+      "  formal_vs_casual: ['formal','casual'],",
+      "  proactive_vs_reactive: ['proactive','reactive'],",
+      "  detailed_vs_big_picture: ['detailed','big_picture'],",
+      "  serious_vs_playful: ['serious','playful'],",
+      "  independent_vs_collaborative: ['independent','collaborative']",
+      "}",
+      "",
+      "dimension_scores = {}",
+      "for each (dim, [left,right]) in dimensions:",
+      "  L = traits[left]; R = traits[right]",
+      "  if L+R == 0: dimension_scores[dim] = 0.5",
+      "  else: dimension_scores[dim] = L / (L + R + epsilon)",
+      "",
+      "return {traits, dimension_scores, tags, free_text}"
+    ]
+  },
+  "style_summary_generator": {
+    "description": "Turn final dimension scores into a one-sentence personality summary for the assistant to use as its north star.",
+    "thresholds": {
+      "strong": 0.67,
+      "mild": 0.56
+    },
+    "pseudocode": [
+      "def side(score, left_label, right_label):",
+      "  if score >= 0.67: return left_label",
+      "  if score <= 0.33: return right_label",
+      "  if score >= 0.56: return 'mostly ' + left_label",
+      "  if score <= 0.44: return 'mostly ' + right_label",
+      "  return 'balanced'",
+      "",
+      "org = side(scores.organized_vs_spontaneous, 'organized', 'spontaneous')",
+      "tone = side(scores.formal_vs_casual, 'formal', 'casual')",
+      "initiative = side(scores.proactive_vs_reactive, 'proactive', 'reactive')",
+      "scope = side(scores.detailed_vs_big_picture, 'detailed', 'big-picture')",
+      "vibe = side(scores.serious_vs_playful, 'serious', 'playful')",
+      "workstyle = side(scores.independent_vs_collaborative, 'independent', 'collaborative')",
+      "",
+      "components = []",
+      "components.append(f\"{org} and {initiative}\")",
+      "components.append(f\"prefers a {tone} tone\")",
+      "components.append(f\"{scope} by default\")",
+      "components.append(f\"leans {vibe}\")",
+      "components.append(f\"works best when {workstyle}\")",
+      "",
+      "# Optional: remove any 'balanced' fragments for cleanliness",
+      "components = [c for c in components if 'balanced' not in c]",
+      "summary = ', '.join(components[:3]) + (', ' + ', '.join(components[3:]) if len(components) > 3 else '')",
+      "return summary"
+    ],
+    "example_output": "Organized and proactive, prefers a casual tone, detailed by default, leans playful, works best when collaborative."
+  },
+  "profile_generation_logic": {
+    "description": "How quiz results map into SOUL.md (assistant personality) and USER.md (user profile).",
+    "derived_fields": {
+      "tone_formality": "dimension_scores.formal_vs_casual is the FORMAL strength (0..1). Derived dial: casualness = 1 - formal_strength.",
+      "humor_level": "dimension_scores.serious_vs_playful is the SERIOUS strength (0..1). Derived dial: humor = 1 - serious_strength.",
+      "verbosity": "blend(detailed, organized, proactive, usage_frequency); higher means more detail by default",
+      "initiative": "dimension_scores.proactive_vs_reactive is the PROACTIVE strength (0..1).",
+      "autonomy": "dimension_scores.independent_vs_collaborative is the INDEPENDENT strength (0..1): higher => fewer check-ins and more 'deliver + recap'."
+    },
+    "pseudocode": [
+      "# Inputs: dimension_scores, tags, free_text",
+      "name = free_text.get('user.preferred_name','')",
+      "role = free_text.get('user.role','')",
+      "",
+      "personal_areas = sorted(unique([t.split(':',1)[1] for t in tags if t.startswith('personal:')]))",
+      "work_areas = sorted(unique([t.split(':',1)[1] for t in tags if t.startswith('work:')]))",
+      "usage = first_tag_value(tags, prefix='usage:', default='medium')",
+      "",
+      "# Dimension scores are LEFT-pole strengths (0..1).",
+      "formal_strength = clamp(dimension_scores.formal_vs_casual, 0, 1)",
+      "casualness = clamp(1 - formal_strength, 0, 1)  # 0 formal, 1 casual",
+      "serious_strength = clamp(dimension_scores.serious_vs_playful, 0, 1)",
+      "humor = clamp(1 - serious_strength, 0, 1)  # 0 serious, 1 playful",
+      "proactivity = clamp(dimension_scores.proactive_vs_reactive, 0, 1)  # 0 reactive, 1 proactive",
+      "detail = clamp(dimension_scores.detailed_vs_big_picture, 0, 1)  # 0 big-picture, 1 detailed",
+      "structure = clamp(dimension_scores.organized_vs_spontaneous, 0, 1)  # 0 spontaneous, 1 organized",
+      "autonomy = clamp(dimension_scores.independent_vs_collaborative, 0, 1)  # 0 collaborative, 1 independent",
+      "",
+      "# Usage influences verbosity and check-in behavior",
+      "usage_factor = {'high': 0.20, 'medium': 0.10, 'low': -0.05, 'minimal': -0.10}[usage]",
+      "verbosity = clamp(0.55*detail + 0.25*structure + 0.20*proactivity + usage_factor, 0, 1)",
+      "",
+      "# Disagreement style: blend autonomy + proactivity + tone",
+      "if proactivity > 0.62 and autonomy < 0.45:",
+      "  disagreement_mode = 'coach'  # asks + nudges",
+      "elif proactivity > 0.62 and autonomy >= 0.45:",
+      "  disagreement_mode = 'advisor'  # pushes back with evidence",
+      "elif proactivity <= 0.62 and autonomy >= 0.55:",
+      "  disagreement_mode = 'executor'  # follows instructions; flags only big issues",
+      "else:",
+      "  disagreement_mode = 'collaborator'  # lightweight pros/cons",
+      "",
+      "# Humor style based on humor + casualness",
+      "if humor > 0.70 and casualness > 0.55: humor_style = 'witty sidekick'",
+      "elif humor > 0.70: humor_style = 'light & friendly'",
+      "elif humor > 0.40: humor_style = 'occasional smiles'",
+      "else: humor_style = 'straightforward'",
+      "",
+      "# Output objects for templating",
+      "assistant_dials = {casualness, humor, humor_style, proactivity, verbosity, structure, autonomy, disagreement_mode}",
+      "user_profile = {name, role, personal_areas, work_areas, usage}",
+      "return {assistant_dials, user_profile}"
+    ],
+    "templates": {
+      "SOUL_md": {
+        "frontmatter": [
+          "## Assistant Personality (SOUL.md)",
+          "",
+          "- Name: {{assistant_name}}",
+          "- Core summary: {{style_summary}}",
+          "- Default tone: {{tone_label}}",
+          "- Casualness (0..1): {{casualness}}",
+          "- Humor (0..1 playful): {{humor}} ({{humor_style}})",
+          "- Proactivity (0..1 proactive): {{proactivity}}",
+          "- Verbosity (0..1 verbose): {{verbosity}}",
+          "- Structure (0..1 organized): {{structure}}",
+          "- Autonomy (0..1 independent): {{autonomy}}"
+        ],
+        "behavior_rules": [
+          "",
+          "### How I communicate",
+          "- Start with the answer or next step. Then add detail based on the user’s signals.",
+          "- Use {{tone_label}} language; match the user’s vibe while staying helpful.",
+          "- If something is ambiguous, ask the smallest useful question (1–2 max) and propose a default.",
+          "",
+          "### How I take initiative",
+          "- If proactivity is high: suggest next actions, reminders, and small optimizations.",
+          "- If proactivity is low: wait for prompts; keep suggestions minimal and opt-in.",
+          "",
+          "### How I handle disagreements",
+          "- Mode: {{disagreement_mode}}",
+          "- If the user’s request seems inefficient or inconsistent with their stated goals, respond with:",
+          "  1) a brief note about the issue,",
+          "  2) a better alternative,",
+          "  3) a fast confirmation question (unless autonomy is high, then pick a reasonable default).",
+          "",
+          "### Output style defaults",
+          "- For plans: {{plan_style}}",
+          "- For writing: {{writing_style}}",
+          "- For technical help: show runnable steps, small examples, and sanity checks."
+        ],
+        "parameter_logic_notes": [
+          "",
+          "### Dial-to-style mapping (implementation notes)",
+          "- tone_label: if casualness < 0.45 => 'formal', else if casualness > 0.55 => 'casual', else 'neutral'",
+          "- plan_style: if structure > 0.62 => 'checklist + timeline', else if structure < 0.38 => 'flexible options', else 'light structure'",
+          "- writing_style: if verbosity > 0.62 => 'thorough', else if verbosity < 0.38 => 'concise', else 'balanced'"
+        ]
+      },
+      "USER_md": {
+        "frontmatter": [
+          "## User Profile (USER.md)",
+          "",
+          "- Preferred name: {{user_name}}",
+          "- Role: {{user_role}}",
+          "- Interaction frequency: {{usage}}",
+          "- Personal help areas: {{personal_areas_csv}}",
+          "- Professional help areas: {{work_areas_csv}}",
+          "- Communication preference: {{comm_pref_sentence}}"
+        ],
+        "preferences_logic_notes": [
+          "",
+          "### Communication preferences (derived)",
+          "- If detailed_vs_big_picture > 0.62: prefers step-by-step instructions and examples",
+          "- If big_picture dominates: prefers summaries first, then drill-down on request",
+          "- If independent is high: fewer check-ins; deliver finished work + recap",
+          "- If collaborative is high: ask clarifying questions and offer choices"
+        ]
+      }
+    }
+  },
+  "rendering_hints": {
+    "progress_display": {
+      "show_question_number": true,
+      "show_section_break": true
+    },
+    "microcopy": {
+      "skip_allowed_text_questions": "You can skip this—your assistant won’t judge you.",
+      "multi_select_helper": "Pick all that sound useful. You can change this later."
+    }
+  }
+}
