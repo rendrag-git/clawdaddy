@@ -153,6 +153,8 @@ ${BOLD}Environment:${RESET}
   DEFAULT_BUDGET       Default monthly budget in USD (default: 40)
   SSH_KEY_DIR          Persistent directory for SSH keys (default: ~/.ssh/customer-keys/)
   ROUTE53_HOSTED_ZONE_ID  Route 53 hosted zone ID for clawdaddy.sh DNS
+  ROUTE53_AWS_PROFILE  AWS CLI profile for Route 53 calls (if hosted zone is in different account)
+  CONTROL_PLANE_URL    URL of the control plane for DNS callbacks (default: http://3.230.7.207:3848)
 EOF
 }
 
@@ -1047,9 +1049,13 @@ main() {
 DNSEOF
 )"
 
+        local profile_arg=""
+        [[ -n "${ROUTE53_AWS_PROFILE:-}" ]] && profile_arg="--profile ${ROUTE53_AWS_PROFILE}"
+
         if aws route53 change-resource-record-sets \
             --hosted-zone-id "${ROUTE53_HOSTED_ZONE_ID}" \
             --change-batch "${dns_change}" \
+            ${profile_arg} \
             >> "${LOG_FILE}" 2>&1; then
             ok "DNS record created: ${ARG_USERNAME}.clawdaddy.sh"
             dns_created="true"

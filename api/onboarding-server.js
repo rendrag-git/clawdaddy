@@ -381,9 +381,10 @@ app.post('/api/dns-update', async (req, res) => {
     });
 
     const { exec } = require('node:child_process');
+    const profileArg = process.env.ROUTE53_AWS_PROFILE ? ` --profile ${process.env.ROUTE53_AWS_PROFILE}` : '';
     await new Promise((resolve, reject) => {
       exec(
-        `aws route53 change-resource-record-sets --hosted-zone-id "${hostedZoneId}" --change-batch '${changeBatch}'`,
+        `aws route53 change-resource-record-sets --hosted-zone-id "${hostedZoneId}" --change-batch '${changeBatch}'${profileArg}`,
         { timeout: 15000 },
         (err) => err ? reject(err) : resolve()
       );
