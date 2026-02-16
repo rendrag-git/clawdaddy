@@ -319,6 +319,9 @@ generate_user_data() {
     local customer_id_val="${10:-}"
     local ssh_pub_key="${11:-}"
     local ecr_image="${12:-}"
+    local dns_token="${13:-}"
+    local dns_username="${14:-}"
+    local control_plane_url="${15:-}"
 
     # ---- Header: bash re-exec guard, logging ----
     cat <<'USERDATA_HEADER'
@@ -423,6 +426,14 @@ USERDATA_TELEGRAM
         cat <<'USERDATA_PROXY_ENV'
 DOCKER_ARGS+=" -e ANTHROPIC_BASE_URL='http://172.17.0.1:3141'"
 USERDATA_PROXY_ENV
+    fi
+
+    if [[ -n "${dns_token}" && -n "${dns_username}" && -n "${control_plane_url}" ]]; then
+        cat <<USERDATA_DNS_ENV
+DOCKER_ARGS+=" -e DNS_TOKEN='${dns_token}'"
+DOCKER_ARGS+=" -e DNS_USERNAME='${dns_username}'"
+DOCKER_ARGS+=" -e CONTROL_PLANE_URL='${control_plane_url}'"
+USERDATA_DNS_ENV
     fi
 
     cat <<'USERDATA_DOCKER_RUN'
@@ -593,6 +604,7 @@ add_customer_record() {
     local stripe_subscription_id="${13:-}"
     local stripe_checkout_session_id="${14:-}"
     local username="${15:-}"
+    local dns_token="${16:-}"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -615,6 +627,7 @@ add_customer_record() {
        --arg stripe_subscription "${stripe_subscription_id}" \
        --arg stripe_checkout "${stripe_checkout_session_id}" \
        --arg username "${username}" \
+       --arg dns_token "${dns_token}" \
        --arg now "${now}" \
        '.customers += [{
             id: $id,
@@ -634,7 +647,8 @@ add_customer_record() {
             created_at: $now,
             updated_at: $now,
             destroy_scheduled_at: null,
-            username: (if $username == "" then null else $username end)
+            username: (if $username == "" then null else $username end),
+            dns_token: (if $dns_token == "" then null else $dns_token end)
         }]' "${CUSTOMERS_FILE}" > "${tmp_file}"
 
     mv "${tmp_file}" "${CUSTOMERS_FILE}"
@@ -773,6 +787,8 @@ main() {
     customer_id="$(generate_customer_id)"
     local vnc_password
     vnc_password="$(generate_vnc_password)"
+    local dns_token
+    dns_token="$(openssl rand -hex 32)"
     local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
 
     # ------------------------------------------------------------------
@@ -832,6 +848,9 @@ main() {
         "${customer_id}" \
         "${ssh_pub_key_contents}" \
         "${ECR_IMAGE}" \
+        "${dns_token}" \
+        "${ARG_USERNAME}" \
+        "${CONTROL_PLANE_URL:-http://3.230.7.207:3848}" \
         > "${userdata_file}"
 
     ok "User-data script generated ($(wc -c < "${userdata_file}") bytes)"
@@ -860,7 +879,8 @@ main() {
             "" "" "${ARG_REGION}" "${vnc_password}" "failed" \
             "${ARG_TIER}" "${budget_val}" "${model_val}" \
             "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
-            "${ARG_USERNAME}"
+            "${ARG_USERNAME}" \
+            "${dns_token}"
         die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
     fi
 
@@ -876,7 +896,8 @@ main() {
         "" "" "${ARG_REGION}" "${vnc_password}" "provisioning" \
         "${ARG_TIER}" "${budget_val}" "${model_val}" \
         "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
-        "${ARG_USERNAME}"
+        "${ARG_USERNAME}" \
+        "${dns_token}"
 
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
