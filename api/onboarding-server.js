@@ -6,6 +6,7 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
+const { spawnProvision } = require('./lib/provisioner');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
@@ -246,6 +247,45 @@ app.post('/api/onboarding', async (req, res) => {
 
     store.sessions[sessionId] = record;
     await saveStore(store);
+
+    // Fire-and-forget: spawn real provisioning in background
+    // Tech debt: saveStore() calls in the stage callback and .then() are not
+    // serialized. At low volume this is fine. At scale, use a write queue or
+    // per-session lock to prevent interleaved JSON writes.
+    void spawnProvision({
+      email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
+      username: record.username,
+      tier: 'managed',
+      stripeCustomerId: record.stripeCustomerId || '',
+      stripeCheckoutSessionId: sessionId,
+    }, (stage) => {
+      record.provisionStage = stage;
+      record.updatedAt = new Date().toISOString();
+      saveStore(store);
+    }).then(result => {
+      record.status = 'ready';
+      record.serverIp = result.serverIp;
+      record.sshKeyPath = result.sshKeyPath;
+      record.customerId = result.customerId;
+      record.vncPassword = result.vncPassword;
+      record.dnsHostname = result.dnsHostname;
+      record.provisionStage = 'complete';
+      record.readyAt = new Date().toISOString();
+      record.updatedAt = new Date().toISOString();
+      if (result.dnsHostname) {
+        record.webchatUrl = `https://${result.dnsHostname}`;
+      }
+      store.sessions[sessionId] = record;
+      saveStore(store);
+      console.log(`Provisioning complete for session ${sessionId}: ${result.serverIp}`);
+    }).catch(err => {
+      record.status = 'failed';
+      record.provisionError = err.message;
+      record.updatedAt = new Date().toISOString();
+      store.sessions[sessionId] = record;
+      saveStore(store);
+      console.error(`Provisioning failed for session ${sessionId}: ${err.message}`);
+    });
 
     console.log(`[${timestamp}] Onboarding submitted for session ${sessionId}`);
 
