@@ -40,7 +40,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 CUSTOMERS_FILE="${CUSTOMERS_FILE:-./customers.json}"
 DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
-ECR_IMAGE="${ECR_IMAGE:-087290014567.dkr.ecr.us-east-1.amazonaws.com/clawdaddy/openclaw:latest}"
+ECR_IMAGE="${ECR_IMAGE:-public.ecr.aws/b0x3t9x7/clawdaddy/openclaw:latest}"
 PROXY_BUNDLE_URL="${PROXY_BUNDLE_URL:-}"
 OPERATOR_API_KEY="${OPERATOR_API_KEY:-}"
 REPORT_WEBHOOK_URL="${REPORT_WEBHOOK_URL:-}"
@@ -357,23 +357,14 @@ USERDATA_SSHKEY
 # ---------------------------------------------------------------------------
 echo "Installing Docker and dependencies..."
 apt-get update -qq
-apt-get install -y -qq docker.io curl jq nodejs npm unzip > /dev/null
+apt-get install -y -qq docker.io curl jq nodejs npm > /dev/null
 systemctl enable docker
 systemctl start docker
-
-# Install AWS CLI v2 (not available via apt on Ubuntu 24.04)
-curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
-/tmp/aws-install/aws/install --update > /dev/null 2>&1
-rm -rf /tmp/awscliv2.zip /tmp/aws-install
-echo "Docker: \$(docker --version) | AWS: \$(aws --version)"
+echo "Docker installed: \$(docker --version)"
 
 # ---------------------------------------------------------------------------
-# Pull ClawDaddy Docker image from ECR
+# Pull ClawDaddy Docker image from ECR Public (no auth required)
 # ---------------------------------------------------------------------------
-echo "Authenticating with ECR..."
-aws ecr get-login-password --region ${ARG_REGION} | docker login --username AWS --password-stdin 087290014567.dkr.ecr.${ARG_REGION}.amazonaws.com 2>&1
-
 echo "Pulling Docker image: ${ecr_image}..."
 docker pull ${ecr_image} 2>&1
 docker tag ${ecr_image} clawdaddy/openclaw:latest
