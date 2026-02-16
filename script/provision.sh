@@ -642,6 +642,32 @@ systemctl enable openclaw-dns-update
 USERDATA_DNS
     fi
 
+    # ---- Caddy reverse proxy for HTTPS (auto-provisions Let's Encrypt cert) ----
+    if [[ -n "${dns_username}" ]]; then
+        cat <<USERDATA_CADDY
+
+# ---------------------------------------------------------------------------
+# Caddy Reverse Proxy (HTTPS termination for webchat)
+# ---------------------------------------------------------------------------
+echo "Installing Caddy..."
+apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https > /dev/null 2>&1
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -qq > /dev/null 2>&1
+apt-get install -y -qq caddy > /dev/null 2>&1
+
+cat > /etc/caddy/Caddyfile <<'CADDYEOF'
+${dns_username}.clawdaddy.sh {
+    reverse_proxy localhost:18789
+}
+CADDYEOF
+
+systemctl enable caddy
+systemctl restart caddy
+echo "Caddy installed: HTTPS on ${dns_username}.clawdaddy.sh -> localhost:18789"
+USERDATA_CADDY
+    fi
+
     # ---- Start health check + done ----
     cat <<'USERDATA_TAIL'
 
@@ -1076,6 +1102,8 @@ DNSEOF
         --instance-name "${instance_name}" \
         --port-infos \
             "fromPort=22,toPort=22,protocol=tcp" \
+            "fromPort=80,toPort=80,protocol=tcp" \
+            "fromPort=443,toPort=443,protocol=tcp" \
             "fromPort=5901,toPort=5901,protocol=tcp" \
             "fromPort=18789,toPort=18789,protocol=tcp" \
             "fromPort=${HEALTH_PORT},toPort=${HEALTH_PORT},protocol=tcp" \
