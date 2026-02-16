@@ -28,6 +28,18 @@ export async function handle_checkout_completed(session) {
 
   const tier = metadata.tier || 'byok';
 
+  // If this checkout was initiated via the onboarding flow, don't provision here.
+  // The onboarding server owns the provisioning lifecycle.
+  if (metadata.onboarding === 'true') {
+    console.log(`Onboarding checkout detected for ${customer_email} (session: ${checkout_session_id}). Sending welcome email only.`);
+    try {
+      await email.onboarding_welcome(customer_email, checkout_session_id);
+    } catch (err) {
+      console.error(`Failed to send onboarding welcome email to ${customer_email}: ${err.message}`);
+    }
+    return;
+  }
+
   if (!customer_email) {
     console.error(`checkout.session.completed missing customer email (session: ${checkout_session_id || 'unknown'})`);
     return;
