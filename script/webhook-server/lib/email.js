@@ -54,6 +54,24 @@ You'll receive another email with your connection details as soon as everything 
 -- OpenClaw`);
 }
 
+export async function onboarding_welcome(email, checkout_session_id) {
+  const onboarding_url = `https://clawdaddy.sh/onboarding/?session_id=${encodeURIComponent(checkout_session_id)}`;
+  await send(email, 'Welcome to ClawDaddy — set up your assistant', `Hi there,
+
+Thanks for subscribing to ClawDaddy!
+
+Click the link below to set up your personal AI assistant. You'll choose a name, take a quick personality quiz, and we'll configure everything for you.
+
+Set up your assistant:
+${onboarding_url}
+
+This link doesn't expire — you can come back to it anytime.
+
+If you have any questions, reply to this email.
+
+-- ClawDaddy`);
+}
+
 export async function provisioning_complete_managed(email, { ip, vnc_password, region }) {
   await send(email, 'Your OpenClaw assistant is ready!', `Hi there,
 

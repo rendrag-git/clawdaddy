@@ -6,6 +6,10 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
+const { spawnProvision } = require('./lib/provisioner');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const execFileAsync = promisify(execFile);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
@@ -13,9 +17,7 @@ const PORT = Number(process.env.PORT || 3848);
 const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
 const DATA_FILE = process.env.ONBOARDING_STORE_PATH || path.join(__dirname, 'onboarding-data.json');
 const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
-const QUEUED_TO_PROVISIONING_MS = Number(process.env.QUEUED_TO_PROVISIONING_MS || 15000);
-const PROVISIONING_TO_READY_MS = Number(process.env.PROVISIONING_TO_READY_MS || 45000);
-const AUTO_PROGRESS = process.env.ONBOARDING_AUTO_PROGRESS !== 'false';
+
 
 const allowedOrigins = new Set([
   'https://clawdaddy.sh',
@@ -67,6 +69,10 @@ function slugify(input) {
 }
 
 function buildWebchatUrl(record) {
+  if (record.dnsHostname) {
+    return `https://${record.dnsHostname}`;
+  }
+  // Fallback for pre-DNS customers
   const suffix = record.sessionId.slice(-8).toLowerCase();
   const slug = slugify(record.assistantName || record.displayName);
   return `${WEBCHAT_BASE_URL}/${slug}-${suffix}`;
@@ -191,36 +197,6 @@ async function saveStore(store) {
   await fs.rename(tmpPath, DATA_FILE);
 }
 
-function advanceStatus(record, nowMs) {
-  let changed = false;
-
-  if (record.status === 'queued') {
-    const queuedAtMs = Date.parse(record.queuedAt || record.createdAt || '');
-    if (Number.isFinite(queuedAtMs) && (nowMs - queuedAtMs) >= QUEUED_TO_PROVISIONING_MS) {
-      record.status = 'provisioning';
-      record.provisioningAt = new Date(nowMs).toISOString();
-      changed = true;
-    }
-  }
-
-  if (record.status === 'provisioning') {
-    const provisioningAtMs = Date.parse(record.provisioningAt || record.updatedAt || record.createdAt || '');
-    if (Number.isFinite(provisioningAtMs) && (nowMs - provisioningAtMs) >= PROVISIONING_TO_READY_MS) {
-      record.status = 'ready';
-      record.readyAt = new Date(nowMs).toISOString();
-      if (!record.webchatUrl) {
-        record.webchatUrl = buildWebchatUrl(record);
-      }
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    record.updatedAt = new Date(nowMs).toISOString();
-  }
-
-  return changed;
-}
 
 app.post('/api/onboarding', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -279,6 +255,45 @@ app.post('/api/onboarding', async (req, res) => {
     store.sessions[sessionId] = record;
     await saveStore(store);
 
+    // Fire-and-forget: spawn real provisioning in background
+    // Tech debt: saveStore() calls in the stage callback and .then() are not
+    // serialized. At low volume this is fine. At scale, use a write queue or
+    // per-session lock to prevent interleaved JSON writes.
+    void spawnProvision({
+      email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
+      username: record.username,
+      tier: 'managed',
+      stripeCustomerId: record.stripeCustomerId || '',
+      stripeCheckoutSessionId: sessionId,
+    }, (stage) => {
+      record.provisionStage = stage;
+      record.updatedAt = new Date().toISOString();
+      saveStore(store);
+    }).then(result => {
+      record.status = 'ready';
+      record.serverIp = result.serverIp;
+      record.sshKeyPath = result.sshKeyPath;
+      record.customerId = result.customerId;
+      record.vncPassword = result.vncPassword;
+      record.dnsHostname = result.dnsHostname;
+      record.provisionStage = 'complete';
+      record.readyAt = new Date().toISOString();
+      record.updatedAt = new Date().toISOString();
+      if (result.dnsHostname) {
+        record.webchatUrl = `https://${result.dnsHostname}`;
+      }
+      store.sessions[sessionId] = record;
+      saveStore(store);
+      console.log(`Provisioning complete for session ${sessionId}: ${result.serverIp}`);
+    }).catch(err => {
+      record.status = 'failed';
+      record.provisionError = err.message;
+      record.updatedAt = new Date().toISOString();
+      store.sessions[sessionId] = record;
+      saveStore(store);
+      console.error(`Provisioning failed for session ${sessionId}: ${err.message}`);
+    });
+
     console.log(`[${timestamp}] Onboarding submitted for session ${sessionId}`);
 
     return res.json({
@@ -312,17 +327,9 @@ app.get('/api/onboarding/status/:sessionId', async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Session not found.' });
     }
 
-    if (AUTO_PROGRESS) {
-      const nowMs = Date.now();
-      const changed = advanceStatus(record, nowMs);
-      if (changed) {
-        store.sessions[sessionId] = record;
-        await saveStore(store);
-      }
-    }
-
     return res.json({
       status: record.status,
+      provisionStage: record.provisionStage || null,
       webchatUrl: record.status === 'ready' ? record.webchatUrl : null
     });
   } catch (error) {
@@ -481,6 +488,10 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Profile not generated yet.' });
     }
 
+    if (record.status !== 'ready' || !record.serverIp || !record.sshKeyPath) {
+      return res.status(400).json({ ok: false, error: 'Instance not provisioned yet. Please wait for provisioning to complete.' });
+    }
+
     const username = record.username || slugify(record.displayName);
 
     // TODO: SSH to customer instance — for now, write to local directory
@@ -507,6 +518,42 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), bootstrapContent, 'utf8');
 
     record.filesWritten = true;
+
+    // Validate server IP and SSH key path before SCP
+    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!record.serverIp || !ipPattern.test(record.serverIp)) {
+      return res.status(400).json({ ok: false, error: 'Invalid server IP' });
+    }
+    const keyPathPattern = /^\/[\w\-/.]+$/;
+    if (!record.sshKeyPath || !keyPathPattern.test(record.sshKeyPath)) {
+      return res.status(400).json({ ok: false, error: 'Invalid SSH key path' });
+    }
+
+    // Deploy files to customer instance via SCP
+    let filesDeployed = false;
+    try {
+      // ConnectTimeout=30 because the health check only verifies HTTP :8080,
+      // not SSH readiness. SSH may need a few extra seconds after health passes.
+      const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
+      const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
+
+      for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md']) {
+        await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
+      }
+
+      await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${record.serverIp}`,
+        'chmod 644 /home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/BOOTSTRAP.md'
+      ]);
+
+      filesDeployed = true;
+      console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
+    } catch (scpErr) {
+      console.error(`SCP deployment failed for ${sessionId}: ${scpErr.message}`);
+    }
+
+    record.filesDeployed = filesDeployed;
     record.filesWrittenAt = new Date().toISOString();
     record.updatedAt = new Date().toISOString();
 
@@ -514,7 +561,11 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     await saveStore(store);
 
     console.log(`Files written for session ${sessionId} to ${outputDir}`);
-    return res.json({ ok: true, written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'] });
+    return res.json({
+      ok: true,
+      written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'],
+      deployed: filesDeployed
+    });
   } catch (error) {
     console.error(`File write failed for ${sessionId}:`, error.message);
     return res.status(500).json({ ok: false, error: 'Unable to write files.' });
@@ -598,15 +649,6 @@ app.get('/api/onboarding/ready/:sessionId', async (req, res) => {
 
     if (!record) {
       return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    // Advance status if auto-progress is on
-    if (AUTO_PROGRESS) {
-      const changed = advanceStatus(record, Date.now());
-      if (changed) {
-        store.sessions[sessionId] = record;
-        await saveStore(store);
-      }
     }
 
     const username = record.username || slugify(record.displayName);

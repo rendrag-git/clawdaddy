@@ -116,6 +116,7 @@ ARG_REGION="us-east-1"
 ARG_STRIPE_CUSTOMER_ID=""
 ARG_STRIPE_SUBSCRIPTION_ID=""
 ARG_STRIPE_CHECKOUT_SESSION_ID=""
+ARG_USERNAME=""
 
 usage() {
     cat <<EOF
@@ -138,6 +139,7 @@ ${BOLD}Optional:${RESET}
   --stripe-customer-id Stripe customer ID (optional)
   --stripe-subscription-id Stripe subscription ID (optional)
   --stripe-checkout-session-id Stripe checkout session ID (optional)
+  --username           Customer username for DNS and instance naming (3-20 chars, lowercase alphanumeric + hyphens)
   --help               Show this help message
 
 ${BOLD}Environment:${RESET}
@@ -148,6 +150,8 @@ ${BOLD}Environment:${RESET}
   REPORT_WEBHOOK_URL   Webhook URL for daily usage reporting (managed tier)
   DISCORD_OPS_WEBHOOK_URL  Discord webhook for ops notifications (managed tier)
   DEFAULT_BUDGET       Default monthly budget in USD (default: 40)
+  SSH_KEY_DIR          Persistent directory for SSH keys (default: ~/.ssh/customer-keys/)
+  ROUTE53_HOSTED_ZONE_ID  Route 53 hosted zone ID for clawdaddy.sh DNS
 EOF
 }
 
@@ -202,6 +206,10 @@ parse_args() {
                 ARG_STRIPE_CHECKOUT_SESSION_ID="${2:?--stripe-checkout-session-id requires a value}"
                 shift 2
                 ;;
+            --username)
+                ARG_USERNAME="${2:?--username requires a value}"
+                shift 2
+                ;;
             --help|-h)
                 usage
                 exit 0
@@ -237,6 +245,16 @@ parse_args() {
         fi
         if [[ -z "${PROXY_BUNDLE_URL}" ]]; then
             die "PROXY_BUNDLE_URL environment variable is required for managed tier"
+        fi
+    fi
+
+    # Validate --username if provided
+    if [[ -n "${ARG_USERNAME}" ]]; then
+        if [[ ${#ARG_USERNAME} -lt 3 || ${#ARG_USERNAME} -gt 20 ]]; then
+            die "--username must be 3-20 characters"
+        fi
+        if [[ ! "${ARG_USERNAME}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            die "--username must be lowercase alphanumeric with hyphens, no leading/trailing hyphens"
         fi
     fi
 }
@@ -292,6 +310,8 @@ generate_user_data() {
     local vnc_password="$7"
     local install_url="$8"
     local tier="${9:-byok}"
+    local customer_id_val="${10:-}"
+    local ssh_pub_key="${11:-}"
 
     cat <<'USERDATA_HEADER'
 #!/usr/bin/env bash
@@ -316,6 +336,20 @@ export CFG_TELEGRAM_CHAT='${telegram_chat}'
 export CFG_SIGNAL_PHONE='${signal_phone}'
 export CFG_VNC_PASSWORD='${vnc_password}'
 USERDATA_VARS
+
+    if [[ -n "${ssh_pub_key}" ]]; then
+        cat <<USERDATA_SSHKEY
+
+# ---------------------------------------------------------------------------
+# Add control plane SSH public key
+# ---------------------------------------------------------------------------
+mkdir -p /home/ubuntu/.ssh
+chmod 700 /home/ubuntu/.ssh
+echo '${ssh_pub_key}' >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+USERDATA_SSHKEY
+    fi
 
     cat <<'USERDATA_BODY'
 
@@ -589,6 +623,7 @@ add_customer_record() {
     local stripe_customer_id="${12:-}"
     local stripe_subscription_id="${13:-}"
     local stripe_checkout_session_id="${14:-}"
+    local username="${15:-}"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -610,6 +645,7 @@ add_customer_record() {
        --arg stripe_customer "${stripe_customer_id}" \
        --arg stripe_subscription "${stripe_subscription_id}" \
        --arg stripe_checkout "${stripe_checkout_session_id}" \
+       --arg username "${username}" \
        --arg now "${now}" \
        '.customers += [{
             id: $id,
@@ -628,7 +664,8 @@ add_customer_record() {
             model_tier: (if $model == "" then null else $model end),
             created_at: $now,
             updated_at: $now,
-            destroy_scheduled_at: null
+            destroy_scheduled_at: null,
+            username: (if $username == "" then null else $username end)
         }]' "${CUSTOMERS_FILE}" > "${tmp_file}"
 
     mv "${tmp_file}" "${CUSTOMERS_FILE}"
@@ -765,8 +802,27 @@ main() {
     customer_id="$(generate_customer_id)"
     local vnc_password
     vnc_password="$(generate_vnc_password)"
-    local instance_name="openclaw-${customer_id}"
-    local static_ip_name="openclaw-${customer_id}"
+    local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
+    local static_ip_name="openclaw-${ARG_USERNAME:-${customer_id}}"
+
+    # ------------------------------------------------------------------
+    # Step 0b: Generate SSH keypair for control plane access
+    # ------------------------------------------------------------------
+    local ssh_key_path=""
+    if [[ -n "${ARG_USERNAME}" ]]; then
+        local key_dir="${SSH_KEY_DIR:-${HOME}/.ssh/customer-keys}"
+        mkdir -p "${key_dir}" && chmod 700 "${key_dir}"
+        ssh_key_path="${key_dir}/openclaw-${ARG_USERNAME}"
+        if [[ -f "${ssh_key_path}" ]]; then
+            local backup="${ssh_key_path}.$(date +%s).bak"
+            warn "SSH key already exists, backing up to ${backup}"
+            mv "${ssh_key_path}" "${backup}"
+            mv "${ssh_key_path}.pub" "${backup}.pub" 2>/dev/null || true
+        fi
+        ssh-keygen -t ed25519 -f "${ssh_key_path}" -N "" -C "openclaw-${ARG_USERNAME}" >> "${LOG_FILE}" 2>&1
+        chmod 600 "${ssh_key_path}"
+        ok "SSH keypair generated: ${ssh_key_path}"
+    fi
 
     info "Customer ID:   ${customer_id}"
     info "Instance name: ${instance_name}"
@@ -788,6 +844,11 @@ main() {
         effective_api_key="sk-ant-proxy-managed"
     fi
 
+    local ssh_pub_key_contents=""
+    if [[ -n "${ssh_key_path}" && -f "${ssh_key_path}.pub" ]]; then
+        ssh_pub_key_contents="$(cat "${ssh_key_path}.pub")"
+    fi
+
     generate_user_data \
         "${effective_api_key}" \
         "${ARG_DISCORD_TOKEN}" \
@@ -799,6 +860,7 @@ main() {
         "${INSTALL_SCRIPT_URL}" \
         "${ARG_TIER}" \
         "${customer_id}" \
+        "${ssh_pub_key_contents}" \
         > "${userdata_file}"
 
     ok "User-data script generated ($(wc -c < "${userdata_file}") bytes)"
@@ -806,6 +868,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 2: Create Lightsail instance
     # ------------------------------------------------------------------
+    echo "STAGE=creating_instance"
     info "Creating Lightsail instance..."
 
     if ! aws lightsail create-instances \
@@ -825,7 +888,8 @@ main() {
             "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
             "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "failed" \
             "${ARG_TIER}" "${budget_val}" "${model_val}" \
-            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
+            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
+            "${ARG_USERNAME}"
         die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
     fi
 
@@ -840,11 +904,13 @@ main() {
         "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
         "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "provisioning" \
         "${ARG_TIER}" "${budget_val}" "${model_val}" \
-        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
+        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
+        "${ARG_USERNAME}"
 
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
     # ------------------------------------------------------------------
+    echo "STAGE=waiting_for_instance"
     if ! wait_for_instance "${instance_name}"; then
         update_customer_status "${customer_id}" "failed"
         die "Instance failed to start."
@@ -853,6 +919,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 4: Allocate and attach static IP
     # ------------------------------------------------------------------
+    echo "STAGE=allocating_ip"
     info "Allocating static IP '${static_ip_name}'..."
 
     if ! aws lightsail allocate-static-ip \
@@ -892,8 +959,46 @@ main() {
     update_customer_status "${customer_id}" "provisioning" "${static_ip}"
 
     # ------------------------------------------------------------------
+    # Step 4b: Create DNS record
+    # ------------------------------------------------------------------
+    local dns_created="false"
+    if [[ -n "${ARG_USERNAME}" && -n "${ROUTE53_HOSTED_ZONE_ID:-}" ]]; then
+        echo "STAGE=creating_dns"
+        info "Creating DNS record: ${ARG_USERNAME}.clawdaddy.sh -> ${static_ip}"
+
+        local dns_change
+        dns_change="$(cat <<DNSEOF
+{
+  "Changes": [{
+    "Action": "UPSERT",
+    "ResourceRecordSet": {
+      "Name": "${ARG_USERNAME}.clawdaddy.sh",
+      "Type": "A",
+      "TTL": 300,
+      "ResourceRecords": [{"Value": "${static_ip}"}]
+    }
+  }]
+}
+DNSEOF
+)"
+
+        if aws route53 change-resource-record-sets \
+            --hosted-zone-id "${ROUTE53_HOSTED_ZONE_ID}" \
+            --change-batch "${dns_change}" \
+            >> "${LOG_FILE}" 2>&1; then
+            ok "DNS record created: ${ARG_USERNAME}.clawdaddy.sh"
+            dns_created="true"
+        else
+            warn "DNS record creation failed (non-fatal)"
+        fi
+    elif [[ -n "${ARG_USERNAME}" && -z "${ROUTE53_HOSTED_ZONE_ID:-}" ]]; then
+        warn "ROUTE53_HOSTED_ZONE_ID not set, skipping DNS record creation"
+    fi
+
+    # ------------------------------------------------------------------
     # Step 5: Open required ports in Lightsail firewall
     # ------------------------------------------------------------------
+    echo "STAGE=configuring_firewall"
     info "Configuring Lightsail firewall ports..."
 
     aws lightsail put-instance-public-ports \
@@ -911,6 +1016,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 6: Wait for health endpoint
     # ------------------------------------------------------------------
+    echo "STAGE=waiting_for_health"
     if wait_for_health "${static_ip}"; then
         update_customer_status "${customer_id}" "active"
 
@@ -937,6 +1043,15 @@ main() {
         echo "SERVER_IP=${static_ip}"
         echo "VNC_PASSWORD=${vnc_password}"
         echo "TIER=${ARG_TIER}"
+        if [[ -n "${ARG_USERNAME}" ]]; then
+            echo "USERNAME=${ARG_USERNAME}"
+        fi
+        if [[ -n "${ssh_key_path}" ]]; then
+            echo "SSH_KEY_PATH=${ssh_key_path}"
+        fi
+        if [[ "${dns_created}" == "true" ]]; then
+            echo "DNS_HOSTNAME=${ARG_USERNAME}.clawdaddy.sh"
+        fi
 
         log "Provisioning completed successfully for ${customer_id}"
     else
