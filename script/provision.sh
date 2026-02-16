@@ -622,6 +622,7 @@ add_customer_record() {
     local stripe_customer_id="${12:-}"
     local stripe_subscription_id="${13:-}"
     local stripe_checkout_session_id="${14:-}"
+    local username="${15:-}"
 
     local now
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -643,6 +644,7 @@ add_customer_record() {
        --arg stripe_customer "${stripe_customer_id}" \
        --arg stripe_subscription "${stripe_subscription_id}" \
        --arg stripe_checkout "${stripe_checkout_session_id}" \
+       --arg username "${username}" \
        --arg now "${now}" \
        '.customers += [{
             id: $id,
@@ -661,7 +663,8 @@ add_customer_record() {
             model_tier: (if $model == "" then null else $model end),
             created_at: $now,
             updated_at: $now,
-            destroy_scheduled_at: null
+            destroy_scheduled_at: null,
+            username: (if $username == "" then null else $username end)
         }]' "${CUSTOMERS_FILE}" > "${tmp_file}"
 
     mv "${tmp_file}" "${CUSTOMERS_FILE}"
@@ -882,7 +885,8 @@ main() {
             "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
             "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "failed" \
             "${ARG_TIER}" "${budget_val}" "${model_val}" \
-            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
+            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
+            "${ARG_USERNAME}"
         die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
     fi
 
@@ -897,7 +901,8 @@ main() {
         "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
         "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "provisioning" \
         "${ARG_TIER}" "${budget_val}" "${model_val}" \
-        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}"
+        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
+        "${ARG_USERNAME}"
 
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
@@ -1035,6 +1040,15 @@ DNSEOF
         echo "SERVER_IP=${static_ip}"
         echo "VNC_PASSWORD=${vnc_password}"
         echo "TIER=${ARG_TIER}"
+        if [[ -n "${ARG_USERNAME}" ]]; then
+            echo "USERNAME=${ARG_USERNAME}"
+        fi
+        if [[ -n "${ssh_key_path}" ]]; then
+            echo "SSH_KEY_PATH=${ssh_key_path}"
+        fi
+        if [[ "${dns_created}" == "true" ]]; then
+            echo "DNS_HOSTNAME=${ARG_USERNAME}.clawdaddy.sh"
+        fi
 
         log "Provisioning completed successfully for ${customer_id}"
     else
