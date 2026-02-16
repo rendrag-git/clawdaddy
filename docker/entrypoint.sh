@@ -98,14 +98,12 @@ cat > "${CONFIG_DIR}/openclaw.json" <<CONF
       "dangerouslyDisableDeviceAuth": true
     }
   },
-  "devices": {
-    "dm": {
-      "policy": "open"
-    }
-  },
   "channels": ${CHANNELS}
 }
 CONF
+
+# Remove any unrecognized config keys that would cause openclaw to reject the config
+su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
 
 # Write auth-profiles.json (where the API key actually lives)
 mkdir -p "${CONFIG_DIR}/agents/main/agent"
