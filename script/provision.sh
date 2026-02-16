@@ -828,7 +828,7 @@ main() {
         --instance-names "${instance_name}" \
         --availability-zone "${ARG_REGION}a" \
         --blueprint-id "ubuntu_24_04" \
-        --bundle-id "nano_3_0" \
+        --bundle-id "small_3_0" \
         --user-data "file://${userdata_file}" \
         --region "${ARG_REGION}" \
         >> "${LOG_FILE}" 2>&1; then
