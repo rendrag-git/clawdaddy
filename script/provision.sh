@@ -893,16 +893,27 @@ main() {
     echo "STAGE=getting_ip"
     info "Retrieving public IP address..."
 
-    local public_ip
-    public_ip="$(aws lightsail get-instance \
-        --instance-name "${instance_name}" \
-        --query 'instance.publicIpAddress' \
-        --output text \
-        --region "${ARG_REGION}" 2>/dev/null)"
+    local public_ip=""
+    local ip_attempts=0
+    local max_ip_attempts=10
+
+    while [[ -z "${public_ip}" || "${public_ip}" == "None" ]] && (( ip_attempts < max_ip_attempts )); do
+        public_ip="$(aws lightsail get-instance \
+            --instance-name "${instance_name}" \
+            --query 'instance.publicIpAddress' \
+            --output text \
+            --region "${ARG_REGION}" 2>/dev/null || echo "")"
+
+        if [[ -z "${public_ip}" || "${public_ip}" == "None" ]]; then
+            ((ip_attempts++))
+            log "IP not yet assigned, attempt ${ip_attempts}/${max_ip_attempts}"
+            sleep 2
+        fi
+    done
 
     if [[ -z "${public_ip}" || "${public_ip}" == "None" ]]; then
         update_customer_status "${customer_id}" "failed"
-        die "Could not retrieve public IP for instance ${instance_name}"
+        die "Could not retrieve public IP for instance ${instance_name} (region: ${ARG_REGION})"
     fi
 
     ok "Public IP: ${public_ip}"

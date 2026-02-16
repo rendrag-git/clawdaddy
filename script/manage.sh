@@ -493,15 +493,10 @@ cmd_destroy() {
     info "Note: Snapshot retained in Lightsail for 7 days. Tag or export to S3 if longer retention needed."
 
     # Step 2: Release static IP (if assigned)
-    if [[ -n "${ip}" && "${ip}" != "null" && "${ip}" != "n/a" ]]; then
-        local static_ip_name
-        static_ip_name=$(echo "${customer}" | jq -r '.static_ip_name // empty')
+    local static_ip_name
+    static_ip_name=$(echo "${customer}" | jq -r '.static_ip_name // empty')
 
-        if [[ -z "${static_ip_name}" ]]; then
-            # Try to find the static IP by the instance attachment
-            static_ip_name="${instance_name}-ip"
-        fi
-
+    if [[ -n "${static_ip_name}" ]]; then
         info "Releasing static IP: ${static_ip_name}..."
         aws lightsail detach-static-ip \
             --static-ip-name "${static_ip_name}" \
@@ -510,6 +505,8 @@ cmd_destroy() {
             --static-ip-name "${static_ip_name}" \
             --region "${region}" 2>/dev/null || true
         ok "Static IP released."
+    else
+        info "Instance uses dynamic IP (no static IP cleanup needed)"
     fi
 
     # Step 3: Delete instance
