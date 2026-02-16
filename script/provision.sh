@@ -658,15 +658,91 @@ apt-get install -y -qq caddy > /dev/null 2>&1
 
 cat > /etc/caddy/Caddyfile <<'CADDYEOF'
 ${dns_username}.clawdaddy.sh {
-    reverse_proxy localhost:18789
+    handle /dashboard* {
+        reverse_proxy localhost:18789
+    }
+    handle /api/* {
+        reverse_proxy localhost:3847
+    }
+    handle {
+        root * /home/ubuntu/clawdaddy/portal/public
+        file_server
+        try_files {path} /index.html
+    }
 }
 CADDYEOF
 
 systemctl enable caddy
 systemctl restart caddy
-echo "Caddy installed: HTTPS on ${dns_username}.clawdaddy.sh -> localhost:18789"
+echo "Caddy installed: HTTPS on ${dns_username}.clawdaddy.sh (portal + dashboard + API)"
 USERDATA_CADDY
     fi
+
+    # ---- Customer Portal Setup ----
+    cat <<USERDATA_PORTAL
+
+# ---------------------------------------------------------------------------
+# ClawDaddy Customer Portal
+# ---------------------------------------------------------------------------
+echo "Setting up ClawDaddy portal..."
+mkdir -p /home/ubuntu/clawdaddy/portal/public
+mkdir -p /home/ubuntu/clawdaddy-portal
+
+# Generate portal token
+PORTAL_TOKEN=\$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
+
+# Read gateway token from Docker container
+GW_TOKEN=\$(docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo "")
+
+cat > /home/ubuntu/clawdaddy-portal/config.json <<PORTALCONF
+{
+  "username": "${dns_username}",
+  "botName": "Clawd",
+  "tier": "starter",
+  "portalToken": "\${PORTAL_TOKEN}",
+  "password": null,
+  "apiKeyConfigured": true,
+  "apiKeyMasked": "sk-ant-...configured",
+  "discordConnected": false,
+  "telegramConnected": false,
+  "instanceUrl": "https://${dns_username}.clawdaddy.sh",
+  "gatewayToken": "\${GW_TOKEN}"
+}
+PORTALCONF
+chmod 600 /home/ubuntu/clawdaddy-portal/config.json
+
+# Install Node.js for portal server (if not already available)
+which node > /dev/null 2>&1 || {
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y -qq nodejs > /dev/null 2>&1
+}
+
+# Portal systemd service
+cat > /etc/systemd/system/clawdaddy-portal.service <<'PORTALSVC'
+[Unit]
+Description=ClawDaddy Portal Server
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/ubuntu/clawdaddy/portal
+ExecStart=/usr/bin/node server.js
+Environment=PORT=3847
+Environment=PORTAL_CONFIG_PATH=/home/ubuntu/clawdaddy-portal/config.json
+Environment=SOUL_MD_PATH=/home/ubuntu/clawd/agents/main/SOUL.md
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+PORTALSVC
+
+systemctl daemon-reload
+systemctl enable clawdaddy-portal
+echo "Portal config generated. Token: \${PORTAL_TOKEN}"
+echo "PORTAL_TOKEN=\${PORTAL_TOKEN}"
+USERDATA_PORTAL
 
     # ---- Start health check + done ----
     cat <<'USERDATA_TAIL'

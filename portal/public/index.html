@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClawDaddy Portal</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Login View -->
+    <div id="view-login" class="view">
+      <div class="login-card">
+        <img src="/logo.svg" alt="ClawDaddy" class="login-logo">
+        <h1>Welcome back</h1>
+        <form id="login-form">
+          <input type="password" id="login-input" placeholder="Portal token or password" autocomplete="current-password" required>
+          <button type="submit" class="btn-primary">Sign In</button>
+          <div id="login-error" class="error-msg" hidden></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Home View -->
+    <div id="view-home" class="view" hidden>
+      <header class="portal-header">
+        <img src="/logo.svg" alt="ClawDaddy" class="header-logo">
+        <span id="header-url" class="header-url"></span>
+        <div class="header-actions">
+          <button id="btn-settings" class="btn-icon" title="Settings">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"/><path d="M16.5 10c0-.34-.03-.66-.07-.98l1.57-1.2-.75-1.3-1.84.56c-.5-.46-1.1-.82-1.76-1.03L13.25 4h-1.5l-.4 1.05c-.66.21-1.26.57-1.76 1.03l-1.84-.56-.75 1.3 1.57 1.2c-.04.32-.07.64-.07.98s.03.66.07.98l-1.57 1.2.75 1.3 1.84-.56c.5.46 1.1.82 1.76 1.03l.4 1.05h1.5l.4-1.05c.66-.21 1.26-.57 1.76-1.03l1.84.56.75-1.3-1.57-1.2c.04-.32.07-.64.07-.98z" stroke="currentColor" stroke-width="1.5"/></svg>
+          </button>
+          <button id="btn-logout" class="btn-text">Logout</button>
+        </div>
+      </header>
+      <main class="portal-main">
+        <div id="welcome-section">
+          <h2 id="welcome-title"></h2>
+          <div id="personality-card" class="card muted-card"></div>
+        </div>
+        <div id="tier-badge-container"></div>
+        <div class="quick-links">
+          <a id="link-dashboard" class="action-card">
+            <div class="action-icon">&#x1f4ca;</div>
+            <div class="action-label">Open AI Dashboard</div>
+          </a>
+          <a class="action-card" id="link-discord">
+            <div class="action-icon">&#x1f4ac;</div>
+            <div class="action-label">Discord Setup</div>
+          </a>
+          <button class="action-card" id="link-settings">
+            <div class="action-icon">&#x2699;&#xfe0f;</div>
+            <div class="action-label">Settings</div>
+          </button>
+        </div>
+        <div class="info-cards">
+          <div class="card" id="apikey-card">
+            <h3>API Key</h3>
+            <div id="apikey-status"></div>
+            <div id="apikey-masked" class="mono"></div>
+          </div>
+          <div class="card" id="health-card">
+            <h3>Instance Status</h3>
+            <div id="health-status"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Settings View -->
+    <div id="view-settings" class="view" hidden>
+      <header class="portal-header">
+        <button id="btn-back" class="btn-icon" title="Back">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13 4l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="settings-title">Settings</h2>
+        <div></div>
+      </header>
+      <main class="portal-main">
+        <div class="card settings-section">
+          <h3>Change Password</h3>
+          <form id="password-form">
+            <input type="password" id="current-password" placeholder="Current password" autocomplete="current-password">
+            <input type="password" id="new-password" placeholder="New password" required>
+            <input type="password" id="confirm-password" placeholder="Confirm new password" required>
+            <button type="submit" class="btn-primary">Update Password</button>
+            <div id="password-msg" class="feedback-msg" hidden></div>
+          </form>
+        </div>
+        <div class="card settings-section">
+          <h3>API Key</h3>
+          <div id="settings-apikey-current" class="mono"></div>
+          <form id="apikey-form">
+            <input type="text" id="new-apikey" placeholder="sk-ant-..." autocomplete="off" required>
+            <button type="submit" class="btn-primary">Update API Key</button>
+            <div id="apikey-msg" class="feedback-msg" hidden></div>
+          </form>
+        </div>
+        <div class="card settings-section">
+          <h3>Personality Quiz</h3>
+          <p class="text-muted">Want to change your bot's personality?</p>
+          <a href="https://clawdaddy.sh/onboarding" target="_blank" class="btn-secondary">Re-take Quiz</a>
+        </div>
+      </main>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
