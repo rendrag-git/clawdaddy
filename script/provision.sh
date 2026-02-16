@@ -951,6 +951,43 @@ main() {
     update_customer_status "${customer_id}" "provisioning" "${static_ip}"
 
     # ------------------------------------------------------------------
+    # Step 4b: Create DNS record
+    # ------------------------------------------------------------------
+    local dns_created="false"
+    if [[ -n "${ARG_USERNAME}" && -n "${ROUTE53_HOSTED_ZONE_ID:-}" ]]; then
+        echo "STAGE=creating_dns"
+        info "Creating DNS record: ${ARG_USERNAME}.clawdaddy.sh -> ${static_ip}"
+
+        local dns_change
+        dns_change="$(cat <<DNSEOF
+{
+  "Changes": [{
+    "Action": "UPSERT",
+    "ResourceRecordSet": {
+      "Name": "${ARG_USERNAME}.clawdaddy.sh",
+      "Type": "A",
+      "TTL": 300,
+      "ResourceRecords": [{"Value": "${static_ip}"}]
+    }
+  }]
+}
+DNSEOF
+)"
+
+        if aws route53 change-resource-record-sets \
+            --hosted-zone-id "${ROUTE53_HOSTED_ZONE_ID}" \
+            --change-batch "${dns_change}" \
+            >> "${LOG_FILE}" 2>&1; then
+            ok "DNS record created: ${ARG_USERNAME}.clawdaddy.sh"
+            dns_created="true"
+        else
+            warn "DNS record creation failed (non-fatal)"
+        fi
+    elif [[ -n "${ARG_USERNAME}" && -z "${ROUTE53_HOSTED_ZONE_ID:-}" ]]; then
+        warn "ROUTE53_HOSTED_ZONE_ID not set, skipping DNS record creation"
+    fi
+
+    # ------------------------------------------------------------------
     # Step 5: Open required ports in Lightsail firewall
     # ------------------------------------------------------------------
     echo "STAGE=configuring_firewall"
