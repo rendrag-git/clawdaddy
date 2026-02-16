@@ -1,12 +1,5 @@
 const fs = require('fs').promises;
-
-// Lazy-load Anthropic SDK — warn at startup if missing
-let Anthropic;
-try {
-  Anthropic = require('@anthropic-ai/sdk');
-} catch (_e) {
-  console.warn('Anthropic SDK not installed; Claude API generation will fall back to templates.');
-}
+const https = require('https');
 
 // Cached API key
 let cachedApiKey = null;
@@ -16,30 +9,73 @@ function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
-// Lazy load API key
+// Lazy load API key (OpenRouter)
 async function getApiKey() {
   if (cachedApiKey) return cachedApiKey;
 
   // Try environment variable first
+  if (process.env.OPENROUTER_API_KEY) {
+    cachedApiKey = process.env.OPENROUTER_API_KEY;
+    return cachedApiKey;
+  }
+
+  // Fallback to Anthropic key env/file
   if (process.env.ANTHROPIC_API_KEY) {
     cachedApiKey = process.env.ANTHROPIC_API_KEY;
     return cachedApiKey;
   }
 
-  // Try reading from file
   try {
-    cachedApiKey = (await fs.readFile('/home/ubuntu/clawd/.secrets/anthropic-onboarding-key', 'utf8')).trim();
+    cachedApiKey = (await fs.readFile('/home/ubuntu/clawd/.secrets/openrouter-key', 'utf8')).trim();
     return cachedApiKey;
   } catch (err) {
-    throw new Error('ANTHROPIC_API_KEY not found in environment or /home/ubuntu/clawd/.secrets/anthropic-onboarding-key');
+    throw new Error('OPENROUTER_API_KEY not found in environment or /home/ubuntu/clawd/.secrets/openrouter-key');
   }
 }
 
-// Generate profile using Claude API
+// Call OpenRouter API (OpenAI-compatible)
+function callOpenRouter(apiKey, model, messages, maxTokens) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model,
+      messages,
+      max_tokens: maxTokens
+    });
+
+    const req = https.request({
+      hostname: 'openrouter.ai',
+      path: '/api/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://clawdaddy.sh',
+        'X-Title': 'ClawDaddy Onboarding'
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
+          resolve(parsed.choices[0].message.content);
+        } catch (e) {
+          reject(new Error(`Failed to parse OpenRouter response: ${data.slice(0, 200)}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(60000, () => { req.destroy(); reject(new Error('OpenRouter request timed out')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// Generate profile using OpenRouter API
 async function generateWithClaude(quizResults, username, botName) {
-  if (!Anthropic) throw new Error('Anthropic SDK not available');
   const apiKey = await getApiKey();
-  const client = new Anthropic({ apiKey, timeout: 30000 });
 
   const scores = quizResults.dimensionScores || {};
   const traits = quizResults.traits || {};
@@ -132,16 +168,12 @@ Output the three files separated by these exact markers:
 
 Generate the files now, making them personal, specific, and useful.`;
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
-    messages: [{
-      role: 'user',
-      content: prompt
-    }]
-  });
-
-  const responseText = message.content[0].text;
+  const responseText = await callOpenRouter(
+    apiKey,
+    'anthropic/claude-sonnet-4',
+    [{ role: 'user', content: prompt }],
+    4000
+  );
 
   // Parse the response
   const soulMatch = responseText.match(/---SOUL\.MD---([\s\S]*?)---USER\.MD---/);

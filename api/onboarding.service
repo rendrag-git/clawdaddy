@@ -16,6 +16,9 @@ SyslogIdentifier=clawdaddy-onboarding
 Environment=NODE_ENV=production
 Environment=PORT=3848
 Environment=PATH=/usr/bin:/usr/local/bin
+Environment=ROUTE53_HOSTED_ZONE_ID=Z02919613KESOD3UW0BNK
+Environment=DISCORD_OPS_WEBHOOK_URL=https://discord.com/api/webhooks/1472970106089898016/hl88EjM5QcO7NpDCtTc17NbYcvyNXFvv3cb0CckcxS8zBj6uV0-KleMQBSGTsbm2-c7V
+Environment=PROVISION_SCRIPT=../script/provision.sh
 
 [Install]
 WantedBy=multi-user.target

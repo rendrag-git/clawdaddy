@@ -25,7 +25,8 @@ const allowedOrigins = new Set([
   'https://getclawdaddy.com',
   'https://www.getclawdaddy.com',
   'http://localhost',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://18.209.163.24:3848'
 ]);
 
 const SESSION_ID_REGEX = /^cs_[a-zA-Z0-9_]+$/;
@@ -57,6 +58,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Serve onboarding UI
+app.use(express.static(path.join(__dirname, '..', 'onboarding')));
 
 function normalizeName(value) {
   if (typeof value !== 'string') return '';
