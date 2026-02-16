@@ -519,6 +519,16 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
 
     record.filesWritten = true;
 
+    // Validate server IP and SSH key path before SCP
+    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!record.serverIp || !ipPattern.test(record.serverIp)) {
+      return res.status(400).json({ ok: false, error: 'Invalid server IP' });
+    }
+    const keyPathPattern = /^\/[\w\-/.]+$/;
+    if (!record.sshKeyPath || !keyPathPattern.test(record.sshKeyPath)) {
+      return res.status(400).json({ ok: false, error: 'Invalid SSH key path' });
+    }
+
     // Deploy files to customer instance via SCP
     let filesDeployed = false;
     try {

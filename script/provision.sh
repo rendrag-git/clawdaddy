@@ -310,6 +310,7 @@ generate_user_data() {
     local vnc_password="$7"
     local install_url="$8"
     local tier="${9:-byok}"
+    local customer_id_val="${10:-}"
     local ssh_pub_key="${11:-}"
 
     cat <<'USERDATA_HEADER'
@@ -813,12 +814,14 @@ main() {
         mkdir -p "${key_dir}" && chmod 700 "${key_dir}"
         ssh_key_path="${key_dir}/openclaw-${ARG_USERNAME}"
         if [[ -f "${ssh_key_path}" ]]; then
-            warn "SSH key already exists at ${ssh_key_path}, reusing"
-        else
-            ssh-keygen -t ed25519 -f "${ssh_key_path}" -N "" -C "openclaw-${ARG_USERNAME}" >> "${LOG_FILE}" 2>&1
-            chmod 600 "${ssh_key_path}"
-            ok "SSH keypair generated: ${ssh_key_path}"
+            local backup="${ssh_key_path}.$(date +%s).bak"
+            warn "SSH key already exists, backing up to ${backup}"
+            mv "${ssh_key_path}" "${backup}"
+            mv "${ssh_key_path}.pub" "${backup}.pub" 2>/dev/null || true
         fi
+        ssh-keygen -t ed25519 -f "${ssh_key_path}" -N "" -C "openclaw-${ARG_USERNAME}" >> "${LOG_FILE}" 2>&1
+        chmod 600 "${ssh_key_path}"
+        ok "SSH keypair generated: ${ssh_key_path}"
     fi
 
     info "Customer ID:   ${customer_id}"
