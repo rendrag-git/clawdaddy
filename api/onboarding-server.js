@@ -7,6 +7,9 @@ const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
 const { spawnProvision } = require('./lib/provisioner');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const execFileAsync = promisify(execFile);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
@@ -485,6 +488,10 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Profile not generated yet.' });
     }
 
+    if (record.status !== 'ready' || !record.serverIp || !record.sshKeyPath) {
+      return res.status(400).json({ ok: false, error: 'Instance not provisioned yet. Please wait for provisioning to complete.' });
+    }
+
     const username = record.username || slugify(record.displayName);
 
     // TODO: SSH to customer instance — for now, write to local directory
@@ -511,6 +518,32 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), bootstrapContent, 'utf8');
 
     record.filesWritten = true;
+
+    // Deploy files to customer instance via SCP
+    let filesDeployed = false;
+    try {
+      // ConnectTimeout=30 because the health check only verifies HTTP :8080,
+      // not SSH readiness. SSH may need a few extra seconds after health passes.
+      const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
+      const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
+
+      for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md']) {
+        await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
+      }
+
+      await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${record.serverIp}`,
+        'chmod 644 /home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/BOOTSTRAP.md'
+      ]);
+
+      filesDeployed = true;
+      console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
+    } catch (scpErr) {
+      console.error(`SCP deployment failed for ${sessionId}: ${scpErr.message}`);
+    }
+
+    record.filesDeployed = filesDeployed;
     record.filesWrittenAt = new Date().toISOString();
     record.updatedAt = new Date().toISOString();
 
@@ -518,7 +551,11 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     await saveStore(store);
 
     console.log(`Files written for session ${sessionId} to ${outputDir}`);
-    return res.json({ ok: true, written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'] });
+    return res.json({
+      ok: true,
+      written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'],
+      deployed: filesDeployed
+    });
   } catch (error) {
     console.error(`File write failed for ${sessionId}:`, error.message);
     return res.status(500).json({ ok: false, error: 'Unable to write files.' });
