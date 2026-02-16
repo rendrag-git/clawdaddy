@@ -1,0 +1,57 @@
+{
+  "traits": {
+    "organized": 2.5,
+    "spontaneous": 1.5,
+    "formal": 1.0,
+    "casual": 2.0,
+    "proactive": 2.8,
+    "reactive": 0.5,
+    "detailed": 2.0,
+    "big_picture": 1.5,
+    "serious": 1.0,
+    "playful": 2.5,
+    "independent": 2.2,
+    "collaborative": 1.3
+  },
+  "dimensionScores": {
+    "organized_vs_spontaneous": 0.625,
+    "formal_vs_casual": 0.333,
+    "proactive_vs_reactive": 0.848,
+    "detailed_vs_big_picture": 0.571,
+    "serious_vs_playful": 0.286,
+    "independent_vs_collaborative": 0.629
+  },
+  "tags": [
+    "personal:calendar",
+    "personal:health",
+    "personal:finance",
+    "work:project_management",
+    "work:writing",
+    "usage:high"
+  ],
+  "freeText": {
+    "user.role": "Software engineer",
+    "user.preferred_name": "TestUser",
+    "anything_else": "I prefer concise answers with code examples. Don't over-explain."
+  },
+  "answers": {
+    "A1": "A1a",
+    "A2": "A2c",
+    "A3": "A3b",
+    "A4": "A4a",
+    "A5": "A5b",
+    "A6": "A6a",
+    "A7": "A7c",
+    "A8": "A8b",
+    "A9": "A9a",
+    "A10": "A10c",
+    "A11": "A11b",
+    "B1": ["B1_calendar", "B1_health", "B1_finance"],
+    "B3": "B3b",
+    "B4": "Software engineer",
+    "B5": "TestUser",
+    "FINAL_SCREEN": "I prefer concise answers with code examples. Don't over-explain."
+  },
+  "perQuestionContext": {},
+  "submittedAt": "2026-02-16T12:00:00.000Z"
+}
