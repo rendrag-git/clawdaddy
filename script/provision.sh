@@ -803,7 +803,7 @@ main() {
     local vnc_password
     vnc_password="$(generate_vnc_password)"
     local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
-    local static_ip_name="openclaw-${ARG_USERNAME:-${customer_id}}"
+    local static_ip_name="ip-openclaw-${ARG_USERNAME:-${customer_id}}"
 
     # ------------------------------------------------------------------
     # Step 0b: Generate SSH keypair for control plane access
