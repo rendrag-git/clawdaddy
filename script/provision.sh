@@ -310,6 +310,7 @@ generate_user_data() {
     local vnc_password="$7"
     local install_url="$8"
     local tier="${9:-byok}"
+    local ssh_pub_key="${11:-}"
 
     cat <<'USERDATA_HEADER'
 #!/usr/bin/env bash
@@ -334,6 +335,20 @@ export CFG_TELEGRAM_CHAT='${telegram_chat}'
 export CFG_SIGNAL_PHONE='${signal_phone}'
 export CFG_VNC_PASSWORD='${vnc_password}'
 USERDATA_VARS
+
+    if [[ -n "${ssh_pub_key}" ]]; then
+        cat <<USERDATA_SSHKEY
+
+# ---------------------------------------------------------------------------
+# Add control plane SSH public key
+# ---------------------------------------------------------------------------
+mkdir -p /home/ubuntu/.ssh
+chmod 700 /home/ubuntu/.ssh
+echo '${ssh_pub_key}' >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+USERDATA_SSHKEY
+    fi
 
     cat <<'USERDATA_BODY'
 
@@ -786,6 +801,23 @@ main() {
     local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
     local static_ip_name="openclaw-${ARG_USERNAME:-${customer_id}}"
 
+    # ------------------------------------------------------------------
+    # Step 0b: Generate SSH keypair for control plane access
+    # ------------------------------------------------------------------
+    local ssh_key_path=""
+    if [[ -n "${ARG_USERNAME}" ]]; then
+        local key_dir="${SSH_KEY_DIR:-${HOME}/.ssh/customer-keys}"
+        mkdir -p "${key_dir}" && chmod 700 "${key_dir}"
+        ssh_key_path="${key_dir}/openclaw-${ARG_USERNAME}"
+        if [[ -f "${ssh_key_path}" ]]; then
+            warn "SSH key already exists at ${ssh_key_path}, reusing"
+        else
+            ssh-keygen -t ed25519 -f "${ssh_key_path}" -N "" -C "openclaw-${ARG_USERNAME}" >> "${LOG_FILE}" 2>&1
+            chmod 600 "${ssh_key_path}"
+            ok "SSH keypair generated: ${ssh_key_path}"
+        fi
+    fi
+
     info "Customer ID:   ${customer_id}"
     info "Instance name: ${instance_name}"
     info "Tier:          ${ARG_TIER}"
@@ -806,6 +838,11 @@ main() {
         effective_api_key="sk-ant-proxy-managed"
     fi
 
+    local ssh_pub_key_contents=""
+    if [[ -n "${ssh_key_path}" && -f "${ssh_key_path}.pub" ]]; then
+        ssh_pub_key_contents="$(cat "${ssh_key_path}.pub")"
+    fi
+
     generate_user_data \
         "${effective_api_key}" \
         "${ARG_DISCORD_TOKEN}" \
@@ -817,6 +854,7 @@ main() {
         "${INSTALL_SCRIPT_URL}" \
         "${ARG_TIER}" \
         "${customer_id}" \
+        "${ssh_pub_key_contents}" \
         > "${userdata_file}"
 
     ok "User-data script generated ($(wc -c < "${userdata_file}") bytes)"
