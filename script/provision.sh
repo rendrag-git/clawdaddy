@@ -315,6 +315,11 @@ generate_user_data() {
 
     cat <<'USERDATA_HEADER'
 #!/bin/bash
+# Lightsail cloud-init prepends its own #!/bin/sh script, so our shebang
+# is ignored and everything runs under dash. Re-exec under bash explicitly.
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec /bin/bash "$0" "$@"
+fi
 set -eu
 
 exec > /var/log/openclaw-userdata.log 2>&1
