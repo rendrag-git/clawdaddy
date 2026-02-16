@@ -40,13 +40,14 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 CUSTOMERS_FILE="${CUSTOMERS_FILE:-./customers.json}"
 DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
+ECR_IMAGE="${ECR_IMAGE:-087290014567.dkr.ecr.us-east-1.amazonaws.com/clawdaddy/openclaw:latest}"
 PROXY_BUNDLE_URL="${PROXY_BUNDLE_URL:-}"
 OPERATOR_API_KEY="${OPERATOR_API_KEY:-}"
 REPORT_WEBHOOK_URL="${REPORT_WEBHOOK_URL:-}"
 DISCORD_OPS_WEBHOOK_URL="${DISCORD_OPS_WEBHOOK_URL:-}"
 DEFAULT_BUDGET="${DEFAULT_BUDGET:-40}"
 HEALTH_PORT=8080
-HEALTH_TIMEOUT=900    # 15 minutes (Docker build + proxy install can take 10+ min)
+HEALTH_TIMEOUT=600    # 10 minutes
 HEALTH_INTERVAL=15    # seconds
 INSTANCE_TIMEOUT=300  # 5 minutes
 INSTANCE_INTERVAL=10  # seconds
@@ -317,6 +318,7 @@ generate_user_data() {
     local tier="${9:-byok}"
     local customer_id_val="${10:-}"
     local ssh_pub_key="${11:-}"
+    local ecr_image="${12:-}"
 
     # ---- Header: bash re-exec guard, logging ----
     cat <<'USERDATA_HEADER'
@@ -355,24 +357,28 @@ USERDATA_SSHKEY
 # ---------------------------------------------------------------------------
 echo "Installing Docker..."
 apt-get update -qq
-apt-get install -y -qq docker.io curl jq nodejs npm > /dev/null
+apt-get install -y -qq docker.io curl jq nodejs npm awscli > /dev/null
 systemctl enable docker
 systemctl start docker
 echo "Docker installed: \$(docker --version)"
 
 # ---------------------------------------------------------------------------
-# Download and build ClawDaddy Docker image
+# Pull ClawDaddy Docker image from ECR
 # ---------------------------------------------------------------------------
-echo "Downloading Docker bundle from ${docker_bundle_url}..."
-mkdir -p /opt/clawdaddy-docker
-curl -fsSL '${docker_bundle_url}' -o /tmp/clawdaddy-docker.tar.gz
-tar -xzf /tmp/clawdaddy-docker.tar.gz -C /opt/clawdaddy-docker --strip-components=1
-rm -f /tmp/clawdaddy-docker.tar.gz
+echo "Authenticating with ECR..."
+aws ecr get-login-password --region ${ARG_REGION} | docker login --username AWS --password-stdin 087290014567.dkr.ecr.${ARG_REGION}.amazonaws.com 2>&1
 
-echo "Building Docker image (this may take several minutes on nano instances)..."
-cd /opt/clawdaddy-docker
-docker build -t clawdaddy/openclaw . 2>&1
-echo "Docker image built successfully"
+echo "Pulling Docker image: ${ecr_image}..."
+docker pull ${ecr_image} 2>&1
+docker tag ${ecr_image} clawdaddy/openclaw:latest
+echo "Docker image pulled successfully"
+
+# Download workspace defaults (SOUL.md, USER.md, etc.)
+echo "Downloading workspace defaults..."
+mkdir -p /opt/clawdaddy-docker/files
+curl -fsSL '${docker_bundle_url}' -o /tmp/clawdaddy-docker.tar.gz
+tar -xzf /tmp/clawdaddy-docker.tar.gz -C /opt/clawdaddy-docker --strip-components=1 2>/dev/null || true
+rm -f /tmp/clawdaddy-docker.tar.gz
 
 # ---------------------------------------------------------------------------
 # Create persistent volume and run OpenClaw container
@@ -827,6 +833,7 @@ main() {
         "${ARG_TIER}" \
         "${customer_id}" \
         "${ssh_pub_key_contents}" \
+        "${ECR_IMAGE}" \
         > "${userdata_file}"
 
     ok "User-data script generated ($(wc -c < "${userdata_file}") bytes)"
@@ -841,7 +848,7 @@ main() {
         --instance-names "${instance_name}" \
         --availability-zone "${ARG_REGION}a" \
         --blueprint-id "ubuntu_24_04" \
-        --bundle-id "xlarge_3_0" \
+        --bundle-id "small_3_0" \
         --user-data "file://${userdata_file}" \
         --region "${ARG_REGION}" \
         >> "${LOG_FILE}" 2>&1; then
