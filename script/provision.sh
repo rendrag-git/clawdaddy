@@ -46,7 +46,7 @@ REPORT_WEBHOOK_URL="${REPORT_WEBHOOK_URL:-}"
 DISCORD_OPS_WEBHOOK_URL="${DISCORD_OPS_WEBHOOK_URL:-}"
 DEFAULT_BUDGET="${DEFAULT_BUDGET:-40}"
 HEALTH_PORT=8080
-HEALTH_TIMEOUT=600    # 10 minutes
+HEALTH_TIMEOUT=900    # 15 minutes (Docker build + proxy install can take 10+ min)
 HEALTH_INTERVAL=15    # seconds
 INSTANCE_TIMEOUT=300  # 5 minutes
 INSTANCE_INTERVAL=10  # seconds
@@ -832,7 +832,7 @@ main() {
         --instance-names "${instance_name}" \
         --availability-zone "${ARG_REGION}a" \
         --blueprint-id "ubuntu_24_04" \
-        --bundle-id "small_3_0" \
+        --bundle-id "medium_3_0" \
         --user-data "file://${userdata_file}" \
         --region "${ARG_REGION}" \
         >> "${LOG_FILE}" 2>&1; then
