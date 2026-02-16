@@ -382,38 +382,42 @@ docker volume create openclaw-data
 USERDATA_DOCKER
 
     # ---- Docker run command with env vars ----
-    # Build docker run flags based on tier
-    local docker_env_flags=""
-    docker_env_flags+="  -e ANTHROPIC_API_KEY='${api_key}' \\\\\n"
-    docker_env_flags+="  -e CUSTOMER_ID='${customer_id_val}' \\\\\n"
-    docker_env_flags+="  -e VNC_PASSWORD='${vnc_password}' \\\\\n"
-
-    if [[ -n "${discord_token}" ]]; then
-        docker_env_flags+="  -e DISCORD_TOKEN='${discord_token}' \\\\\n"
-        docker_env_flags+="  -e DISCORD_CHANNEL='${discord_channel}' \\\\\n"
-    fi
-    if [[ -n "${telegram_token}" ]]; then
-        docker_env_flags+="  -e TELEGRAM_TOKEN='${telegram_token}' \\\\\n"
-        docker_env_flags+="  -e TELEGRAM_CHAT='${telegram_chat}' \\\\\n"
-    fi
-
-    # For managed tier: point at host proxy, use placeholder key
-    if [[ "${tier}" == "managed" ]]; then
-        docker_env_flags+="  -e ANTHROPIC_BASE_URL='http://172.17.0.1:3141' \\\\\n"
-    fi
-
+    # Build the docker run command as a shell array to avoid heredoc escaping issues
     cat <<USERDATA_RUN
 echo "Starting OpenClaw container..."
-docker run -d \\
-  --name openclaw \\
-  --restart unless-stopped \\
-  -p 18789:18789 \\
-  -p 5901:5901 \\
-  -v openclaw-data:/home/clawd/.openclaw \\
-$(echo -e "${docker_env_flags}")  clawdaddy/openclaw
-
-echo "Container started: \$(docker ps --filter name=openclaw --format '{{.ID}} {{.Status}}')"
+DOCKER_ARGS="-d --name openclaw --restart unless-stopped"
+DOCKER_ARGS+=" -p 18789:18789 -p 5901:5901"
+DOCKER_ARGS+=" -v openclaw-data:/home/clawd/.openclaw"
+DOCKER_ARGS+=" -e ANTHROPIC_API_KEY='${api_key}'"
+DOCKER_ARGS+=" -e CUSTOMER_ID='${customer_id_val}'"
+DOCKER_ARGS+=" -e VNC_PASSWORD='${vnc_password}'"
 USERDATA_RUN
+
+    if [[ -n "${discord_token}" ]]; then
+        cat <<USERDATA_DISCORD
+DOCKER_ARGS+=" -e DISCORD_TOKEN='${discord_token}'"
+DOCKER_ARGS+=" -e DISCORD_CHANNEL='${discord_channel}'"
+USERDATA_DISCORD
+    fi
+
+    if [[ -n "${telegram_token}" ]]; then
+        cat <<USERDATA_TELEGRAM
+DOCKER_ARGS+=" -e TELEGRAM_TOKEN='${telegram_token}'"
+DOCKER_ARGS+=" -e TELEGRAM_CHAT='${telegram_chat}'"
+USERDATA_TELEGRAM
+    fi
+
+    if [[ "${tier}" == "managed" ]]; then
+        cat <<'USERDATA_PROXY_ENV'
+DOCKER_ARGS+=" -e ANTHROPIC_BASE_URL='http://172.17.0.1:3141'"
+USERDATA_PROXY_ENV
+    fi
+
+    cat <<'USERDATA_DOCKER_RUN'
+eval docker run $DOCKER_ARGS clawdaddy/openclaw
+
+echo "Container started: $(docker ps --filter name=openclaw --format '{{.ID}} {{.Status}}')"
+USERDATA_DOCKER_RUN
 
     # ---- Health check endpoint (checks Docker container status) ----
     cat <<'USERDATA_HEALTH'
