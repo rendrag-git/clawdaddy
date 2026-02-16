@@ -862,6 +862,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 2: Create Lightsail instance
     # ------------------------------------------------------------------
+    echo "STAGE=creating_instance"
     info "Creating Lightsail instance..."
 
     if ! aws lightsail create-instances \
@@ -901,6 +902,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
     # ------------------------------------------------------------------
+    echo "STAGE=waiting_for_instance"
     if ! wait_for_instance "${instance_name}"; then
         update_customer_status "${customer_id}" "failed"
         die "Instance failed to start."
@@ -909,6 +911,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 4: Allocate and attach static IP
     # ------------------------------------------------------------------
+    echo "STAGE=allocating_ip"
     info "Allocating static IP '${static_ip_name}'..."
 
     if ! aws lightsail allocate-static-ip \
@@ -950,6 +953,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 5: Open required ports in Lightsail firewall
     # ------------------------------------------------------------------
+    echo "STAGE=configuring_firewall"
     info "Configuring Lightsail firewall ports..."
 
     aws lightsail put-instance-public-ports \
@@ -967,6 +971,7 @@ main() {
     # ------------------------------------------------------------------
     # Step 6: Wait for health endpoint
     # ------------------------------------------------------------------
+    echo "STAGE=waiting_for_health"
     if wait_for_health "${static_ip}"; then
         update_customer_status "${customer_id}" "active"
 
