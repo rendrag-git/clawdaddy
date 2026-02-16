@@ -384,10 +384,19 @@ USERDATA_DOCKER
     # ---- Docker run command with env vars ----
     # Build the docker run command as a shell array to avoid heredoc escaping issues
     cat <<USERDATA_RUN
+# Create host workspace dir and seed with defaults from Docker image
+# SCP file push from onboarding server will overwrite these with personalized files
+mkdir -p /home/ubuntu/clawd
+cp /opt/clawdaddy-docker/files/SOUL.md /home/ubuntu/clawd/ 2>/dev/null || true
+cp /opt/clawdaddy-docker/files/USER.md /home/ubuntu/clawd/ 2>/dev/null || true
+cp /opt/clawdaddy-docker/files/AGENTS.md /home/ubuntu/clawd/ 2>/dev/null || true
+chown -R 1000:1000 /home/ubuntu/clawd
+
 echo "Starting OpenClaw container..."
 DOCKER_ARGS="-d --name openclaw --restart unless-stopped"
 DOCKER_ARGS+=" -p 18789:18789 -p 5901:5901"
 DOCKER_ARGS+=" -v openclaw-data:/home/clawd/.openclaw"
+DOCKER_ARGS+=" -v /home/ubuntu/clawd:/home/clawd/clawd"
 DOCKER_ARGS+=" -e ANTHROPIC_API_KEY='${api_key}'"
 DOCKER_ARGS+=" -e CUSTOMER_ID='${customer_id_val}'"
 DOCKER_ARGS+=" -e VNC_PASSWORD='${vnc_password}'"
