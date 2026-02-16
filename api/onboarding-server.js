@@ -13,9 +13,7 @@ const PORT = Number(process.env.PORT || 3848);
 const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
 const DATA_FILE = process.env.ONBOARDING_STORE_PATH || path.join(__dirname, 'onboarding-data.json');
 const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
-const QUEUED_TO_PROVISIONING_MS = Number(process.env.QUEUED_TO_PROVISIONING_MS || 15000);
-const PROVISIONING_TO_READY_MS = Number(process.env.PROVISIONING_TO_READY_MS || 45000);
-const AUTO_PROGRESS = process.env.ONBOARDING_AUTO_PROGRESS !== 'false';
+
 
 const allowedOrigins = new Set([
   'https://clawdaddy.sh',
@@ -191,36 +189,6 @@ async function saveStore(store) {
   await fs.rename(tmpPath, DATA_FILE);
 }
 
-function advanceStatus(record, nowMs) {
-  let changed = false;
-
-  if (record.status === 'queued') {
-    const queuedAtMs = Date.parse(record.queuedAt || record.createdAt || '');
-    if (Number.isFinite(queuedAtMs) && (nowMs - queuedAtMs) >= QUEUED_TO_PROVISIONING_MS) {
-      record.status = 'provisioning';
-      record.provisioningAt = new Date(nowMs).toISOString();
-      changed = true;
-    }
-  }
-
-  if (record.status === 'provisioning') {
-    const provisioningAtMs = Date.parse(record.provisioningAt || record.updatedAt || record.createdAt || '');
-    if (Number.isFinite(provisioningAtMs) && (nowMs - provisioningAtMs) >= PROVISIONING_TO_READY_MS) {
-      record.status = 'ready';
-      record.readyAt = new Date(nowMs).toISOString();
-      if (!record.webchatUrl) {
-        record.webchatUrl = buildWebchatUrl(record);
-      }
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    record.updatedAt = new Date(nowMs).toISOString();
-  }
-
-  return changed;
-}
 
 app.post('/api/onboarding', async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -312,17 +280,9 @@ app.get('/api/onboarding/status/:sessionId', async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Session not found.' });
     }
 
-    if (AUTO_PROGRESS) {
-      const nowMs = Date.now();
-      const changed = advanceStatus(record, nowMs);
-      if (changed) {
-        store.sessions[sessionId] = record;
-        await saveStore(store);
-      }
-    }
-
     return res.json({
       status: record.status,
+      provisionStage: record.provisionStage || null,
       webchatUrl: record.status === 'ready' ? record.webchatUrl : null
     });
   } catch (error) {
@@ -598,15 +558,6 @@ app.get('/api/onboarding/ready/:sessionId', async (req, res) => {
 
     if (!record) {
       return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    // Advance status if auto-progress is on
-    if (AUTO_PROGRESS) {
-      const changed = advanceStatus(record, Date.now());
-      if (changed) {
-        store.sessions[sessionId] = record;
-        await saveStore(store);
-      }
     }
 
     const username = record.username || slugify(record.displayName);
