@@ -66,6 +66,10 @@ function slugify(input) {
 }
 
 function buildWebchatUrl(record) {
+  if (record.dnsHostname) {
+    return `https://${record.dnsHostname}`;
+  }
+  // Fallback for pre-DNS customers
   const suffix = record.sessionId.slice(-8).toLowerCase();
   const slug = slugify(record.assistantName || record.displayName);
   return `${WEBCHAT_BASE_URL}/${slug}-${suffix}`;
