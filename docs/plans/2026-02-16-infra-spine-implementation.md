@@ -159,6 +159,8 @@ In the `main()` function, after the vnc_password generation (after line 769, aft
 
 **Step 2: Add public key parameter to generate_user_data**
 
+> **Tech debt:** `generate_user_data()` is now at 11 positional args. Before adding a 12th, refactor to named args or an associative array. Not blocking this sprint.
+
 The `generate_user_data()` function currently accepts 10 positional args (lines 285-295). Add an 11th. Change:
 
 ```bash
@@ -426,6 +428,10 @@ const path = require('node:path');
 const PROVISION_SCRIPT = path.resolve(process.env.PROVISION_SCRIPT || path.join(__dirname, '..', '..', 'script', 'provision.sh'));
 const DISCORD_OPS_WEBHOOK_URL = process.env.DISCORD_OPS_WEBHOOK_URL;
 
+// Note: global fetch requires Node 18+. The onboarding server runs on the
+// control plane server where we control the Node version. If this ever runs
+// on older Node, add: const fetch = require('node-fetch');
+
 function logAppend(logFile, msg) {
   const stream = createWriteStream(logFile, { flags: 'a' });
   stream.write(`[${new Date().toISOString()}] ${msg}\n`);
@@ -642,6 +648,9 @@ The handler currently creates the record and returns. After `await saveStore(sto
 
 ```js
     // Fire-and-forget: spawn real provisioning in background
+    // Tech debt: saveStore() calls in the stage callback and .then() are not
+    // serialized. At low volume this is fine. At scale, use a write queue or
+    // per-session lock to prevent interleaved JSON writes.
     void spawnProvision({
       email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
       username: record.username,
@@ -771,7 +780,9 @@ After the existing `record.filesWritten = true` line (line 509), add:
     // Deploy files to customer instance via SCP
     let filesDeployed = false;
     try {
-      const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10'];
+      // ConnectTimeout=30 because the health check only verifies HTTP :8080,
+      // not SSH readiness. SSH may need a few extra seconds after health passes.
+      const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
       const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
 
       for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md']) {
@@ -886,13 +897,23 @@ At the top of `handle_checkout_completed`, after `const tier = metadata.tier || 
 
 **Step 4: Verify syntax**
 
-Run: `node -c script/webhook-server/lib/email.js` (will fail because ESM — use `node --input-type=module -e "import('./script/webhook-server/lib/email.js')"` or just check syntax manually)
+ESM modules can't use `node -c`. Verify by importing:
 
-Run: `node -c script/webhook-server/lib/stripe-handlers.js` (same ESM caveat)
+Run: `node --input-type=module -e "import('./script/webhook-server/lib/stripe-handlers.js')"`
 
-Alternative: `npx acorn --ecma2022 --module script/webhook-server/lib/stripe-handlers.js` if available, or just check with `node --check` on the server entry point.
+If that fails due to missing deps, skip the check — it'll be validated when the webhook server restarts.
 
-**Step 5: Commit**
+**Step 5: Verify URL format consistency**
+
+The onboarding frontend expects `session_id` in the query string at `/onboarding/?session_id=cs_...` (with trailing slash before `?`). Confirm the welcome email template uses the same format:
+
+```
+https://clawdaddy.sh/onboarding/?session_id=${encodeURIComponent(checkout_session_id)}
+```
+
+The trailing slash matters — both must match.
+
+**Step 6: Commit**
 
 ```bash
 git add script/webhook-server/lib/email.js script/webhook-server/lib/stripe-handlers.js
@@ -910,7 +931,7 @@ This task adds a "Thanks for subscribing — ready to set up?" landing screen be
 
 **Step 1: Identify the current entry point**
 
-In `onboarding/index.html`, the script at line 803 validates the session and immediately starts the wizard. We need to insert a welcome screen between session validation (line 819) and the quiz data initialization (line 821).
+In `onboarding/index.html`, the script at line 803 validates the session_id format and redirects to error.html if invalid (lines 809-816). This validation stays — it runs BEFORE the buffer page is shown. Only after a valid session_id is confirmed does the welcome screen appear. This prevents users with bogus URLs from seeing a nice page and then getting an error on click.
 
 **Step 2: Add buffer page HTML**
 
@@ -988,3 +1009,36 @@ After all code tasks are complete:
    - `PROVISION_SCRIPT` — path to provision.sh from onboarding server's working directory
 3. **Create SSH key directory:** `mkdir -p ~/.ssh/customer-keys && chmod 700 ~/.ssh/customer-keys`
 4. **Restart onboarding server** to pick up new code
+
+---
+
+## Integration Smoke Test
+
+After all code and manual steps are complete, run through this checklist with a real (or test) Stripe checkout:
+
+1. **Create a test checkout session** via Stripe Dashboard or Payment Link with `onboarding: true` metadata
+2. **Verify webhook server** receives `checkout.session.completed`, logs "Onboarding checkout detected," sends welcome email, does NOT spawn provision.sh
+3. **Open the onboarding URL** (`/onboarding/?session_id=cs_...`) — verify the buffer welcome page appears
+4. **Click Start Setup** — verify the wizard appears
+5. **Complete wizard** (choose username, bot name) — verify POST `/api/onboarding` returns `{ ok: true, status: 'queued' }`
+6. **Poll status endpoint** — verify `provisionStage` progresses through: `creating_instance` → `waiting_for_instance` → `allocating_ip` → `creating_dns` → `configuring_firewall` → `waiting_for_health`
+7. **Verify DNS** — `dig <username>.clawdaddy.sh` returns the instance IP
+8. **Verify SSH key** — `ls ~/.ssh/customer-keys/openclaw-<username>` exists with mode 600
+9. **Verify customers.json** — customer record has `username` field populated
+10. **Complete quiz + profile generation** — verify files are generated
+11. **Trigger file push** — POST `/api/onboarding/write-files/:sessionId` returns `{ deployed: true }`
+12. **Verify files on instance** — `ssh -i ~/.ssh/customer-keys/openclaw-<username> ubuntu@<ip> "ls -la /home/ubuntu/clawd/SOUL.md"`
+13. **Verify webchat URL** — status endpoint returns `webchatUrl: "https://<username>.clawdaddy.sh"`
+
+**Edge cases to test:**
+- Invalid session_id → error.html redirect (not the welcome page)
+- Provision failure (e.g., bad region) → status shows `failed` with `provisionError`
+- SCP failure (e.g., wrong key) → response shows `deployed: false`, local files still written
+
+---
+
+## Known Tech Debt
+
+- `generate_user_data()` at 11 positional args — refactor to named args before adding #12
+- `saveStore()` race condition on concurrent onboarding — add write queue or per-session lock at scale
+- Health check only verifies HTTP :8080, not SSH readiness — SCP timeout bumped to 30s as workaround
