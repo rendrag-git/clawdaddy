@@ -314,8 +314,8 @@ generate_user_data() {
     local ssh_pub_key="${11:-}"
 
     cat <<'USERDATA_HEADER'
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -eu
 
 exec > /var/log/openclaw-userdata.log 2>&1
 echo "=== OpenClaw user-data script started at $(date -Iseconds) ==="
