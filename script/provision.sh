@@ -684,6 +684,7 @@ update_customer_status() {
 # ---------------------------------------------------------------------------
 wait_for_instance() {
     local instance_name="$1"
+    local region="${2:-us-east-1}"
     local elapsed=0
 
     info "Waiting for instance '${instance_name}' to reach 'running' state..."
@@ -692,6 +693,7 @@ wait_for_instance() {
         local state
         state="$(aws lightsail get-instance \
             --instance-name "${instance_name}" \
+            --region "${region}" \
             --query 'instance.state.name' \
             --output text 2>/dev/null || echo "unknown")"
 
@@ -772,7 +774,6 @@ main() {
     local vnc_password
     vnc_password="$(generate_vnc_password)"
     local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
-    local static_ip_name="ip-openclaw-${ARG_USERNAME:-${customer_id}}"
 
     # ------------------------------------------------------------------
     # Step 0b: Generate SSH keypair for control plane access
@@ -856,7 +857,7 @@ main() {
         [[ "${ARG_TIER}" == "managed" ]] && model_val="sonnet"
         add_customer_record \
             "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
-            "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "failed" \
+            "" "" "${ARG_REGION}" "${vnc_password}" "failed" \
             "${ARG_TIER}" "${budget_val}" "${model_val}" \
             "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
             "${ARG_USERNAME}"
@@ -872,7 +873,7 @@ main() {
     [[ "${ARG_TIER}" == "managed" ]] && model_val="sonnet"
     add_customer_record \
         "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
-        "" "${static_ip_name}" "${ARG_REGION}" "${vnc_password}" "provisioning" \
+        "" "" "${ARG_REGION}" "${vnc_password}" "provisioning" \
         "${ARG_TIER}" "${budget_val}" "${model_val}" \
         "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
         "${ARG_USERNAME}"
@@ -881,52 +882,33 @@ main() {
     # Step 3: Wait for instance to be running
     # ------------------------------------------------------------------
     echo "STAGE=waiting_for_instance"
-    if ! wait_for_instance "${instance_name}"; then
+    if ! wait_for_instance "${instance_name}" "${ARG_REGION}"; then
         update_customer_status "${customer_id}" "failed"
         die "Instance failed to start."
     fi
 
     # ------------------------------------------------------------------
-    # Step 4: Allocate and attach static IP
+    # Step 4: Get instance public IP
     # ------------------------------------------------------------------
-    echo "STAGE=allocating_ip"
-    info "Allocating static IP '${static_ip_name}'..."
+    echo "STAGE=getting_ip"
+    info "Retrieving public IP address..."
 
-    if ! aws lightsail allocate-static-ip \
-        --static-ip-name "${static_ip_name}" \
-        --region "${ARG_REGION}" \
-        >> "${LOG_FILE}" 2>&1; then
-        update_customer_status "${customer_id}" "failed"
-        die "Failed to allocate static IP."
-    fi
-
-    ok "Static IP allocated"
-
-    info "Attaching static IP to instance..."
-
-    if ! aws lightsail attach-static-ip \
-        --static-ip-name "${static_ip_name}" \
+    local public_ip
+    public_ip="$(aws lightsail get-instance \
         --instance-name "${instance_name}" \
-        --region "${ARG_REGION}" \
-        >> "${LOG_FILE}" 2>&1; then
-        update_customer_status "${customer_id}" "failed"
-        die "Failed to attach static IP."
-    fi
-
-    ok "Static IP attached"
-
-    # Retrieve the actual IP address
-    local static_ip
-    static_ip="$(aws lightsail get-static-ip \
-        --static-ip-name "${static_ip_name}" \
-        --query 'staticIp.ipAddress' \
+        --query 'instance.publicIpAddress' \
         --output text \
         --region "${ARG_REGION}" 2>/dev/null)"
 
-    ok "Static IP: ${static_ip}"
+    if [[ -z "${public_ip}" || "${public_ip}" == "None" ]]; then
+        update_customer_status "${customer_id}" "failed"
+        die "Could not retrieve public IP for instance ${instance_name}"
+    fi
+
+    ok "Public IP: ${public_ip}"
 
     # Update record with IP
-    update_customer_status "${customer_id}" "provisioning" "${static_ip}"
+    update_customer_status "${customer_id}" "provisioning" "${public_ip}"
 
     # ------------------------------------------------------------------
     # Step 4b: Create DNS record
@@ -934,7 +916,7 @@ main() {
     local dns_created="false"
     if [[ -n "${ARG_USERNAME}" && -n "${ROUTE53_HOSTED_ZONE_ID:-}" ]]; then
         echo "STAGE=creating_dns"
-        info "Creating DNS record: ${ARG_USERNAME}.clawdaddy.sh -> ${static_ip}"
+        info "Creating DNS record: ${ARG_USERNAME}.clawdaddy.sh -> ${public_ip}"
 
         local dns_change
         dns_change="$(cat <<DNSEOF
@@ -945,7 +927,7 @@ main() {
       "Name": "${ARG_USERNAME}.clawdaddy.sh",
       "Type": "A",
       "TTL": 300,
-      "ResourceRecords": [{"Value": "${static_ip}"}]
+      "ResourceRecords": [{"Value": "${public_ip}"}]
     }
   }]
 }
@@ -988,7 +970,7 @@ DNSEOF
     # Step 6: Wait for health endpoint
     # ------------------------------------------------------------------
     echo "STAGE=waiting_for_health"
-    if wait_for_health "${static_ip}"; then
+    if wait_for_health "${public_ip}"; then
         update_customer_status "${customer_id}" "active"
 
         echo ""
@@ -1001,8 +983,8 @@ DNSEOF
         echo -e "  ${BOLD}Tier:${RESET}           ${ARG_TIER}"
         echo -e "  ${BOLD}Instance:${RESET}       ${instance_name}"
         echo -e "  ${BOLD}Region:${RESET}         ${ARG_REGION}"
-        echo -e "  ${BOLD}Static IP:${RESET}      ${static_ip}"
-        echo -e "  ${BOLD}VNC:${RESET}            ${static_ip}:5901"
+        echo -e "  ${BOLD}Public IP:${RESET}      ${public_ip}"
+        echo -e "  ${BOLD}VNC:${RESET}            ${public_ip}:5901"
         echo -e "  ${BOLD}VNC Password:${RESET}   ${vnc_password}"
         echo -e "  ${BOLD}Status:${RESET}         ${GREEN}active${RESET}"
         echo ""
@@ -1011,7 +993,7 @@ DNSEOF
 
         # Machine-readable output for automated callers (webhook provisioner)
         echo "CUSTOMER_ID=${customer_id}"
-        echo "SERVER_IP=${static_ip}"
+        echo "SERVER_IP=${public_ip}"
         echo "VNC_PASSWORD=${vnc_password}"
         echo "TIER=${ARG_TIER}"
         if [[ -n "${ARG_USERNAME}" ]]; then
@@ -1035,12 +1017,12 @@ DNSEOF
         echo ""
         echo -e "  ${BOLD}Customer ID:${RESET}    ${customer_id}"
         echo -e "  ${BOLD}Instance:${RESET}       ${instance_name}"
-        echo -e "  ${BOLD}Static IP:${RESET}      ${static_ip}"
+        echo -e "  ${BOLD}Public IP:${RESET}      ${public_ip}"
         echo -e "  ${BOLD}Status:${RESET}         ${RED}failed${RESET}"
         echo ""
         echo -e "  The instance was created but the health check did not pass."
         echo -e "  SSH into the instance to debug:"
-        echo -e "    ${CYAN}ssh ubuntu@${static_ip}${RESET}"
+        echo -e "    ${CYAN}ssh ubuntu@${public_ip}${RESET}"
         echo -e "    ${CYAN}cat /var/log/openclaw-userdata.log${RESET}"
         echo -e "    ${CYAN}cat /var/log/openclaw-install.log${RESET}"
         echo ""
