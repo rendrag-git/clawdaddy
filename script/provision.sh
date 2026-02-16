@@ -39,7 +39,7 @@ set -euo pipefail
 # Configuration defaults
 # ---------------------------------------------------------------------------
 CUSTOMERS_FILE="${CUSTOMERS_FILE:-./customers.json}"
-INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/openclaw/openclaw/main/install-openclaw.sh}"
+DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
 PROXY_BUNDLE_URL="${PROXY_BUNDLE_URL:-}"
 OPERATOR_API_KEY="${OPERATOR_API_KEY:-}"
 REPORT_WEBHOOK_URL="${REPORT_WEBHOOK_URL:-}"
@@ -144,7 +144,7 @@ ${BOLD}Optional:${RESET}
 
 ${BOLD}Environment:${RESET}
   CUSTOMERS_FILE       Path to customers.json (default: ./customers.json)
-  INSTALL_SCRIPT_URL   URL to install-openclaw.sh
+  DOCKER_BUNDLE_URL    URL to ClawDaddy Docker bundle tarball (required)
   OPERATOR_API_KEY     Your Anthropic API key (required for managed tier)
   PROXY_BUNDLE_URL     URL to download the API proxy tarball (managed tier)
   REPORT_WEBHOOK_URL   Webhook URL for daily usage reporting (managed tier)
@@ -248,6 +248,11 @@ parse_args() {
         fi
     fi
 
+    # Validate DOCKER_BUNDLE_URL
+    if [[ -z "${DOCKER_BUNDLE_URL}" ]]; then
+        die "DOCKER_BUNDLE_URL environment variable is required"
+    fi
+
     # Validate --username if provided
     if [[ -n "${ARG_USERNAME}" ]]; then
         if [[ ${#ARG_USERNAME} -lt 3 || ${#ARG_USERNAME} -gt 20 ]]; then
@@ -308,11 +313,12 @@ generate_user_data() {
     local telegram_chat="$5"
     local signal_phone="$6"
     local vnc_password="$7"
-    local install_url="$8"
+    local docker_bundle_url="$8"
     local tier="${9:-byok}"
     local customer_id_val="${10:-}"
     local ssh_pub_key="${11:-}"
 
+    # ---- Header: bash re-exec guard, logging ----
     cat <<'USERDATA_HEADER'
 #!/bin/bash
 # Lightsail cloud-init prepends its own #!/bin/sh script, so our shebang
@@ -324,24 +330,9 @@ set -eu
 
 exec > /var/log/openclaw-userdata.log 2>&1
 echo "=== OpenClaw user-data script started at $(date -Iseconds) ==="
-
-# ---------------------------------------------------------------------------
-# Export configuration for non-interactive install
-# ---------------------------------------------------------------------------
-export OPENCLAW_NONINTERACTIVE=1
 USERDATA_HEADER
 
-    # Emit the variable exports (these contain secrets so we use the runtime values)
-    cat <<USERDATA_VARS
-export CFG_ANTHROPIC_KEY='${api_key}'
-export CFG_DISCORD_TOKEN='${discord_token}'
-export CFG_DISCORD_CHANNEL='${discord_channel}'
-export CFG_TELEGRAM_TOKEN='${telegram_token}'
-export CFG_TELEGRAM_CHAT='${telegram_chat}'
-export CFG_SIGNAL_PHONE='${signal_phone}'
-export CFG_VNC_PASSWORD='${vnc_password}'
-USERDATA_VARS
-
+    # ---- SSH key injection (for control plane SCP access) ----
     if [[ -n "${ssh_pub_key}" ]]; then
         cat <<USERDATA_SSHKEY
 
@@ -356,93 +347,79 @@ chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 USERDATA_SSHKEY
     fi
 
-    cat <<'USERDATA_BODY'
+    # ---- Install Docker + build + run OpenClaw container ----
+    cat <<USERDATA_DOCKER
 
 # ---------------------------------------------------------------------------
-# Download install script
+# Install Docker
 # ---------------------------------------------------------------------------
-USERDATA_BODY
-
-    cat <<USERDATA_URL
-INSTALL_URL='${install_url}'
-USERDATA_URL
-
-    cat <<'USERDATA_INSTALL'
-INSTALL_PATH="/tmp/install-openclaw.sh"
-
-echo "Downloading install script from ${INSTALL_URL}..."
-curl -fsSL "${INSTALL_URL}" -o "${INSTALL_PATH}"
-chmod +x "${INSTALL_PATH}"
+echo "Installing Docker..."
+apt-get update -qq
+apt-get install -y -qq docker.io curl jq nodejs npm > /dev/null
+systemctl enable docker
+systemctl start docker
+echo "Docker installed: \$(docker --version)"
 
 # ---------------------------------------------------------------------------
-# Patch the install script for non-interactive mode
+# Download and build ClawDaddy Docker image
 # ---------------------------------------------------------------------------
-# Replace the prompt_value function: when OPENCLAW_NONINTERACTIVE=1,
-# use the pre-exported CFG_ variable value instead of reading from stdin.
-# The original prompt_value signature is:
-#   prompt_value VARNAME "prompt text" "default" "required" "secret"
-# We replace it so it reads from the environment variable matching VARNAME.
-# ---------------------------------------------------------------------------
-sed -i '/^prompt_value() {$/,/^}$/c\
-prompt_value() {\
-    local varname="$1"\
-    local prompt_text="$2"\
-    local default="${3:-}"\
-    local required="${4:-false}"\
-    local secret="${5:-false}"\
-    if [[ "${OPENCLAW_NONINTERACTIVE:-0}" == "1" ]]; then\
-        local env_val="${!varname:-${default}}"\
-        if [[ "${required}" == "true" && -z "${env_val}" ]]; then\
-            echo "ERROR: Required variable ${varname} is not set." >&2\
-            exit 1\
-        fi\
-        eval "${varname}=\\x27${env_val}\\x27"\
-        return 0\
-    fi\
-    local value\
-    if [[ -n "${default}" ]]; then\
-        prompt_text="${prompt_text} [${default}]"\
-    fi\
-    prompt_text="${prompt_text}: "\
-    while true; do\
-        if [[ "${secret}" == "true" ]]; then\
-            read -r -s -p "$(echo -e "${prompt_text}")" value\
-            echo ""\
-        else\
-            read -r -p "$(echo -e "${prompt_text}")" value\
-        fi\
-        value="${value:-${default}}"\
-        if [[ "${required}" == "true" && -z "${value}" ]]; then\
-            echo "This field is required. Please enter a value." >&2\
-            continue\
-        fi\
-        break\
-    done\
-    eval "${varname}=\\x27${value}\\x27"\
-}' "${INSTALL_PATH}"
+echo "Downloading Docker bundle from ${docker_bundle_url}..."
+mkdir -p /opt/clawdaddy-docker
+curl -fsSL '${docker_bundle_url}' -o /tmp/clawdaddy-docker.tar.gz
+tar -xzf /tmp/clawdaddy-docker.tar.gz -C /opt/clawdaddy-docker --strip-components=1
+rm -f /tmp/clawdaddy-docker.tar.gz
 
-# Replace the confirm function to always return true in non-interactive mode
-sed -i '/^confirm() {$/,/^}$/c\
-confirm() {\
-    if [[ "${OPENCLAW_NONINTERACTIVE:-0}" == "1" ]]; then\
-        return 0\
-    fi\
-    local prompt="$1"\
-    local default="${2:-y}"\
-    local answer\
-    if [[ "${default}" == "y" ]]; then\
-        prompt="${prompt} [Y/n]: "\
-    else\
-        prompt="${prompt} [y/N]: "\
-    fi\
-    read -r -p "$(echo -e "${prompt}")" answer\
-    answer="${answer:-${default}}"\
-    [[ "${answer}" =~ ^[Yy]$ ]]\
-}' "${INSTALL_PATH}"
+echo "Building Docker image (this may take several minutes on nano instances)..."
+cd /opt/clawdaddy-docker
+docker build -t clawdaddy/openclaw . 2>&1
+echo "Docker image built successfully"
 
 # ---------------------------------------------------------------------------
-# Set up a health check endpoint (simple Node.js HTTP server on port 8080)
-# This will be started after installation completes.
+# Create persistent volume and run OpenClaw container
+# ---------------------------------------------------------------------------
+docker volume create openclaw-data
+
+USERDATA_DOCKER
+
+    # ---- Docker run command with env vars ----
+    # Build docker run flags based on tier
+    local docker_env_flags=""
+    docker_env_flags+="  -e ANTHROPIC_API_KEY='${api_key}' \\\\\n"
+    docker_env_flags+="  -e CUSTOMER_ID='${customer_id_val}' \\\\\n"
+    docker_env_flags+="  -e VNC_PASSWORD='${vnc_password}' \\\\\n"
+
+    if [[ -n "${discord_token}" ]]; then
+        docker_env_flags+="  -e DISCORD_TOKEN='${discord_token}' \\\\\n"
+        docker_env_flags+="  -e DISCORD_CHANNEL='${discord_channel}' \\\\\n"
+    fi
+    if [[ -n "${telegram_token}" ]]; then
+        docker_env_flags+="  -e TELEGRAM_TOKEN='${telegram_token}' \\\\\n"
+        docker_env_flags+="  -e TELEGRAM_CHAT='${telegram_chat}' \\\\\n"
+    fi
+
+    # For managed tier: point at host proxy, use placeholder key
+    if [[ "${tier}" == "managed" ]]; then
+        docker_env_flags+="  -e ANTHROPIC_BASE_URL='http://172.17.0.1:3141' \\\\\n"
+    fi
+
+    cat <<USERDATA_RUN
+echo "Starting OpenClaw container..."
+docker run -d \\
+  --name openclaw \\
+  --restart unless-stopped \\
+  -p 18789:18789 \\
+  -p 5901:5901 \\
+  -v openclaw-data:/home/clawd/.openclaw \\
+$(echo -e "${docker_env_flags}")  clawdaddy/openclaw
+
+echo "Container started: \$(docker ps --filter name=openclaw --format '{{.ID}} {{.Status}}')"
+USERDATA_RUN
+
+    # ---- Health check endpoint (checks Docker container status) ----
+    cat <<'USERDATA_HEALTH'
+
+# ---------------------------------------------------------------------------
+# Health check endpoint (port 8080) — checks Docker container
 # ---------------------------------------------------------------------------
 HEALTH_SCRIPT="/opt/openclaw-health.js"
 cat > "${HEALTH_SCRIPT}" <<'HEALTHEOF'
@@ -451,15 +428,18 @@ const { execSync } = require("child_process");
 
 const server = http.createServer((req, res) => {
     if (req.url === "/health" && req.method === "GET") {
-        let serviceActive = false;
+        let containerReady = false;
         try {
-            execSync("systemctl is-active --quiet openclaw", { timeout: 5000 });
-            serviceActive = true;
+            const status = execSync(
+                "docker inspect -f '{{.State.Status}}' openclaw 2>/dev/null",
+                { timeout: 5000 }
+            ).toString().trim();
+            containerReady = (status === "running");
         } catch (_) {
-            serviceActive = false;
+            containerReady = false;
         }
-        const status = serviceActive ? "ok" : "starting";
-        const code = serviceActive ? 200 : 503;
+        const status = containerReady ? "ok" : "starting";
+        const code = containerReady ? 200 : 503;
         res.writeHead(code, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ status, timestamp: new Date().toISOString() }));
     } else {
@@ -473,11 +453,10 @@ server.listen(8080, "0.0.0.0", () => {
 });
 HEALTHEOF
 
-# Create systemd unit for health check
 cat > /etc/systemd/system/openclaw-health.service <<'HEALTHSVCEOF'
 [Unit]
 Description=OpenClaw Health Check Endpoint
-After=network.target
+After=network.target docker.service
 
 [Service]
 Type=simple
@@ -489,37 +468,23 @@ RestartSec=3
 WantedBy=multi-user.target
 HEALTHSVCEOF
 
-# ---------------------------------------------------------------------------
-# Allow health check port through UFW
-# ---------------------------------------------------------------------------
 ufw allow 8080/tcp 2>/dev/null || true
+USERDATA_HEALTH
 
-# ---------------------------------------------------------------------------
-# Run the install script
-# ---------------------------------------------------------------------------
-echo "Running install script..."
-bash "${INSTALL_PATH}"
-
-USERDATA_INSTALL
-
-    # -- Managed tier: install API proxy --
+    # ---- Managed tier: install API proxy on host ----
     if [[ "${tier}" == "managed" ]]; then
         local operator_key="${OPERATOR_API_KEY}"
         local proxy_bundle="${PROXY_BUNDLE_URL}"
         local budget="${DEFAULT_BUDGET}"
         local billing_day
         billing_day="$(date +%-d)"
-        local customer_id_val
-        # Extract customer_id from the install_url or pass it through
-        # We'll use a dedicated variable passed via the user-data
-        customer_id_val="${10:-unknown}"
         local ops_webhook="${DISCORD_OPS_WEBHOOK_URL}"
         local report_webhook="${REPORT_WEBHOOK_URL}"
 
         cat <<USERDATA_PROXY
 
 # ---------------------------------------------------------------------------
-# Managed Tier: Install API Proxy
+# Managed Tier: Install API Proxy (runs on host, Docker container connects)
 # ---------------------------------------------------------------------------
 echo "Installing API proxy for managed tier..."
 
@@ -534,7 +499,6 @@ rm -f /tmp/openclaw-proxy.tar.gz
 cd /opt/openclaw-proxy
 npm install --production
 
-# Write proxy environment configuration
 cat > /opt/openclaw-proxy/.env <<'PROXYENVEOF'
 ANTHROPIC_API_KEY=${operator_key}
 PROXY_PORT=3141
@@ -545,7 +509,6 @@ DISCORD_OPS_WEBHOOK_URL=${ops_webhook}
 REPORT_WEBHOOK_URL=${report_webhook}
 PROXYENVEOF
 
-# Create systemd service for the proxy
 cat > /etc/systemd/system/openclaw-proxy.service <<'PROXYSVCEOF'
 [Unit]
 Description=OpenClaw API Proxy
@@ -566,30 +529,15 @@ PROXYSVCEOF
 systemctl daemon-reload
 systemctl enable openclaw-proxy
 systemctl start openclaw-proxy
-
-# ---------------------------------------------------------------------------
-# Managed Tier: Point OpenClaw to the local proxy
-# ---------------------------------------------------------------------------
-echo "Configuring OpenClaw to use local API proxy..."
-OPENCLAW_ENV="/opt/openclaw/openclaw.env"
-if [[ -f "\${OPENCLAW_ENV}" ]]; then
-    echo "ANTHROPIC_BASE_URL=http://localhost:3141" >> "\${OPENCLAW_ENV}"
-fi
-
-# Override the API key to a placeholder (proxy handles the real key)
-sed -i 's|^CFG_ANTHROPIC_KEY=.*|CFG_ANTHROPIC_KEY=sk-ant-proxy-managed|' "\${OPENCLAW_ENV}" 2>/dev/null || true
-
-# Restart OpenClaw to pick up proxy config
-systemctl restart openclaw 2>/dev/null || true
-
-echo "API proxy installed and configured."
+echo "API proxy installed. Docker container reaches it at 172.17.0.1:3141"
 USERDATA_PROXY
     fi
 
+    # ---- Start health check + done ----
     cat <<'USERDATA_TAIL'
 
 # ---------------------------------------------------------------------------
-# Start health check endpoint (Node.js should be available after install)
+# Start health check endpoint
 # ---------------------------------------------------------------------------
 systemctl daemon-reload
 systemctl enable openclaw-health
@@ -862,7 +810,7 @@ main() {
         "${ARG_TELEGRAM_CHAT}" \
         "${ARG_SIGNAL_PHONE}" \
         "${vnc_password}" \
-        "${INSTALL_SCRIPT_URL}" \
+        "${DOCKER_BUNDLE_URL}" \
         "${ARG_TIER}" \
         "${customer_id}" \
         "${ssh_pub_key_contents}" \
@@ -1011,6 +959,7 @@ DNSEOF
         --port-infos \
             "fromPort=22,toPort=22,protocol=tcp" \
             "fromPort=5901,toPort=5901,protocol=tcp" \
+            "fromPort=18789,toPort=18789,protocol=tcp" \
             "fromPort=${HEALTH_PORT},toPort=${HEALTH_PORT},protocol=tcp" \
         --region "${ARG_REGION}" \
         >> "${LOG_FILE}" 2>&1 || warn "Could not configure firewall ports (non-fatal)"
