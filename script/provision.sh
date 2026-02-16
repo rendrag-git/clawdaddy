@@ -560,6 +560,86 @@ echo "API proxy installed. Docker container reaches it at 172.17.0.1:3141"
 USERDATA_PROXY
     fi
 
+    # ---- DNS update on boot (calls control plane to update Route 53) ----
+    if [[ -n "${dns_token}" && -n "${dns_username}" && -n "${control_plane_url}" ]]; then
+        cat <<'USERDATA_DNS'
+
+# ---------------------------------------------------------------------------
+# DNS Update on Boot (calls control plane to update Route 53 A record)
+# ---------------------------------------------------------------------------
+DNS_SCRIPT="/opt/openclaw-dns-update.sh"
+cat > "${DNS_SCRIPT}" <<'DNSEOF'
+#!/bin/bash
+set -eu
+
+MAX_RETRIES=3
+RETRY_DELAY=5
+
+# Read env vars from Docker container
+DNS_TOKEN=$(docker exec openclaw printenv DNS_TOKEN 2>/dev/null || echo "")
+DNS_USERNAME=$(docker exec openclaw printenv DNS_USERNAME 2>/dev/null || echo "")
+CONTROL_PLANE_URL=$(docker exec openclaw printenv CONTROL_PLANE_URL 2>/dev/null || echo "")
+
+if [[ -z "${DNS_TOKEN}" || -z "${DNS_USERNAME}" || -z "${CONTROL_PLANE_URL}" ]]; then
+    echo "DNS update skipped: missing env vars"
+    exit 0
+fi
+
+# Get public IP from instance metadata
+PUBLIC_IP=$(curl -sf --connect-timeout 5 http://169.254.169.254/latest/meta-data/public-ipv4 || echo "")
+if [[ -z "${PUBLIC_IP}" ]]; then
+    echo "DNS update failed: could not get public IP from metadata"
+    exit 1
+fi
+
+echo "Updating DNS: ${DNS_USERNAME}.clawdaddy.sh -> ${PUBLIC_IP}"
+
+for attempt in $(seq 1 ${MAX_RETRIES}); do
+    HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' \
+        --connect-timeout 10 --max-time 15 \
+        -X POST "${CONTROL_PLANE_URL}/api/dns-update" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"${DNS_USERNAME}\",\"ip\":\"${PUBLIC_IP}\",\"token\":\"${DNS_TOKEN}\"}" \
+        2>/dev/null || echo "000")
+
+    if [[ "${HTTP_CODE}" == "200" ]]; then
+        echo "DNS updated successfully (attempt ${attempt})"
+        exit 0
+    fi
+
+    echo "DNS update attempt ${attempt}/${MAX_RETRIES} failed (HTTP ${HTTP_CODE})"
+    if [[ ${attempt} -lt ${MAX_RETRIES} ]]; then
+        sleep ${RETRY_DELAY}
+    fi
+done
+
+echo "DNS update failed after ${MAX_RETRIES} attempts (non-fatal)"
+exit 0
+DNSEOF
+chmod +x "${DNS_SCRIPT}"
+
+cat > /etc/systemd/system/openclaw-dns-update.service <<'DNSSVCEOF'
+[Unit]
+Description=OpenClaw DNS Update (calls control plane on boot)
+After=network-online.target docker.service openclaw-health.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do docker inspect -f "{{.State.Status}}" openclaw 2>/dev/null | grep -q running && exit 0; sleep 2; done; exit 1'
+ExecStart=/opt/openclaw-dns-update.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+DNSSVCEOF
+
+systemctl daemon-reload
+systemctl enable openclaw-dns-update
+USERDATA_DNS
+    fi
+
     # ---- Start health check + done ----
     cat <<'USERDATA_TAIL'
 
@@ -569,6 +649,7 @@ USERDATA_PROXY
 systemctl daemon-reload
 systemctl enable openclaw-health
 systemctl start openclaw-health
+systemctl start openclaw-dns-update 2>/dev/null || true
 
 echo "=== OpenClaw user-data script completed at $(date -Iseconds) ==="
 USERDATA_TAIL
