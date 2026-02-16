@@ -859,19 +859,19 @@
             id: 'A1', section: 'A', type: 'single_select',
             prompt: 'Your brain is a browser with 37 tabs open. A surprise meeting starts in 10 minutes. What do you do?',
             options: [
-              { id: 'A1a', label: 'Make a tiny checklist, pick the top 3 tabs, and close the rest like a hero.', weights: { organized: 0.9, proactive: 0.7, detailed: 0.4, serious: 0.2 } },
+              { id: 'A1a', label: 'Make a tiny checklist, pick the top 3 tabs, and close the rest like a hero.', weights: { organized: 0.9, proactive: 0.7, detailed: 0.4, serious: 0.2, practical: 0.4 } },
               { id: 'A1b', label: 'Improvise. The meeting can\'t hurt you if you pretend it\'s a podcast.', weights: { spontaneous: 0.9, casual: 0.6, playful: 0.4, big_picture: 0.5 } },
               { id: 'A1c', label: 'Message someone: "Give me the one thing I must know." Then roll in with confidence.', weights: { collaborative: 0.8, reactive: 0.5, big_picture: 0.6, casual: 0.4 } },
-              { id: 'A1d', label: 'Open a doc and write a crisp 5-line brief (problem, goal, plan, risks, next step).', weights: { organized: 0.7, formal: 0.5, proactive: 0.6, detailed: 0.7, serious: 0.4 } }
+              { id: 'A1d', label: 'Open a doc and write a crisp 5-line brief (problem, goal, plan, risks, next step).', weights: { organized: 0.7, formal: 0.5, proactive: 0.6, detailed: 0.7, serious: 0.4, analytical: 0.3 } }
             ]
           },
           {
             id: 'A2', section: 'A', type: 'single_select',
             prompt: 'You buy a new gadget. There is no setup wizard. Your move?',
             options: [
-              { id: 'A2a', label: 'Read the manual. Yes, cover-to-cover. Like a bedtime story.', weights: { organized: 0.6, detailed: 0.8, serious: 0.4, independent: 0.5 } },
-              { id: 'A2b', label: 'Press buttons until it works. If it sparks, that\'s feedback.', weights: { spontaneous: 0.8, playful: 0.4, independent: 0.6, big_picture: 0.4 } },
-              { id: 'A2c', label: 'Search "best settings" and steal wisdom from the internet hive-mind.', weights: { proactive: 0.6, big_picture: 0.6, independent: 0.4, detailed: 0.3 } },
+              { id: 'A2a', label: 'Read the manual. Yes, cover-to-cover. Like a bedtime story.', weights: { organized: 0.6, detailed: 0.8, serious: 0.4, independent: 0.5, analytical: 0.4 } },
+              { id: 'A2b', label: 'Press buttons until it works. If it sparks, that\'s feedback.', weights: { spontaneous: 0.8, playful: 0.4, independent: 0.6, big_picture: 0.4, exploratory: 0.4 } },
+              { id: 'A2c', label: 'Search "best settings" and steal wisdom from the internet hive-mind.', weights: { proactive: 0.6, big_picture: 0.6, independent: 0.4, detailed: 0.3, practical: 0.3 } },
               { id: 'A2d', label: 'Ask a friend who\'s into this stuff and let them do the first run.', weights: { collaborative: 0.8, casual: 0.5, reactive: 0.4 } }
             ]
           },
@@ -899,9 +899,9 @@
             id: 'A5', section: 'A', type: 'single_select',
             prompt: 'Pick your assistant\'s vibe in a movie scene:',
             options: [
-              { id: 'A5a', label: 'Polished concierge: crisp, calm, and always one step ahead.', weights: { formal: 0.8, organized: 0.5, proactive: 0.6, serious: 0.5 } },
+              { id: 'A5a', label: 'Polished concierge: crisp, calm, and always one step ahead.', weights: { formal: 0.8, organized: 0.5, proactive: 0.6, serious: 0.5, practical: 0.3 } },
               { id: 'A5b', label: 'Friendly co-pilot: warm, plainspoken, and low-drama.', weights: { casual: 0.7, collaborative: 0.6, serious: 0.2, proactive: 0.3 } },
-              { id: 'A5c', label: 'Witty sidekick: helpful, fast, and occasionally unhinged (in a safe way).', weights: { playful: 0.8, casual: 0.6, proactive: 0.4, big_picture: 0.3 } },
+              { id: 'A5c', label: 'Witty sidekick: helpful, fast, and occasionally unhinged (in a safe way).', weights: { playful: 0.8, casual: 0.6, proactive: 0.4, big_picture: 0.3, exploratory: 0.3 } },
               { id: 'A5d', label: 'Zen minimalist: fewer words, more results.', weights: { serious: 0.4, big_picture: 0.6, independent: 0.5, formal: 0.3 } }
             ]
           },
@@ -909,40 +909,40 @@
             id: 'A6', section: 'A', type: 'single_select',
             prompt: 'If the assistant thinks you\'re about to do something suboptimal (but not dangerous), it should…',
             options: [
-              { id: 'A6a', label: 'Gently push back with evidence and a better option.', weights: { proactive: 0.6, serious: 0.4, detailed: 0.5, independent: 0.3 } },
-              { id: 'A6b', label: 'Ask 1-2 clarifying questions before suggesting anything.', weights: { collaborative: 0.7, detailed: 0.6, organized: 0.3 } },
-              { id: 'A6c', label: 'Show quick pros/cons, then let me decide immediately.', weights: { big_picture: 0.7, casual: 0.4, independent: 0.5 } },
-              { id: 'A6d', label: 'Default to what I asked, unless I explicitly say "challenge me."', weights: { reactive: 0.6, casual: 0.3, independent: 0.4 } }
+              { id: 'A6a', label: 'Gently push back with evidence and a better option.', weights: { proactive: 0.6, serious: 0.4, detailed: 0.5, independent: 0.3, challenging: 0.7, analytical: 0.3 } },
+              { id: 'A6b', label: 'Ask 1-2 clarifying questions before suggesting anything.', weights: { collaborative: 0.7, detailed: 0.6, organized: 0.3, supportive: 0.4, empathetic: 0.3 } },
+              { id: 'A6c', label: 'Show quick pros/cons, then let me decide immediately.', weights: { big_picture: 0.7, casual: 0.4, independent: 0.5, practical: 0.4 } },
+              { id: 'A6d', label: 'Default to what I asked, unless I explicitly say "challenge me."', weights: { reactive: 0.6, casual: 0.3, independent: 0.4, supportive: 0.5 } }
             ]
           },
           {
             id: 'A7', section: 'A', type: 'single_select',
-            prompt: 'You\'re hosting dinner for friends. What\'s your cooking style?',
+            prompt: 'You bring the assistant a half-baked idea. What should it do?',
             options: [
-              { id: 'A7a', label: 'Mise en place. Timers. Spreadsheet energy. Everything is labeled.', weights: { organized: 0.9, detailed: 0.6, serious: 0.3 } },
-              { id: 'A7b', label: 'Vibes only. I cook like jazz and hope everyone likes jazz.', weights: { spontaneous: 0.8, playful: 0.5, casual: 0.4 } },
-              { id: 'A7c', label: 'I turn it into a group activity. Someone chop, someone stir, someone taste-test.', weights: { collaborative: 0.9, casual: 0.5, playful: 0.3 } },
-              { id: 'A7d', label: 'I optimize: one impressive main, two easy sides, and a backup plan.', weights: { organized: 0.6, big_picture: 0.6, proactive: 0.5 } }
+              { id: 'A7a', label: 'Poke holes in it. Show me where the logic breaks before I get attached.', weights: { challenging: 0.9, analytical: 0.7, proactive: 0.5 } },
+              { id: 'A7b', label: 'Build on it. Add possibilities I haven\'t thought of yet.', weights: { exploratory: 0.8, supportive: 0.5, playful: 0.3 } },
+              { id: 'A7c', label: 'Organize it. Turn the mess into a structured plan with clear next steps.', weights: { practical: 0.8, organized: 0.6, analytical: 0.3 } },
+              { id: 'A7d', label: 'Get excited about it. Help me feel good enough to keep going.', weights: { supportive: 0.9, empathetic: 0.6, casual: 0.3 } }
             ]
           },
           {
             id: 'A8', section: 'A', type: 'single_select',
             prompt: 'When the assistant is working on something (research, planning, drafting), how should it update you?',
             options: [
-              { id: 'A8a', label: 'Frequent check-ins. I like to steer the ship in real time.', weights: { collaborative: 0.6, detailed: 0.5, proactive: 0.4 } },
+              { id: 'A8a', label: 'Frequent check-ins. I like to steer the ship in real time.', weights: { collaborative: 0.6, detailed: 0.5, proactive: 0.4, supportive: 0.3, empathetic: 0.2 } },
               { id: 'A8b', label: 'Only at milestones: "Here\'s where I am, here\'s what\'s next."', weights: { organized: 0.6, big_picture: 0.6, serious: 0.2 } },
-              { id: 'A8c', label: 'Only if blocked or if a decision is needed.', weights: { independent: 0.6, big_picture: 0.5, proactive: 0.3 } },
+              { id: 'A8c', label: 'Only if blocked or if a decision is needed.', weights: { independent: 0.6, big_picture: 0.5, proactive: 0.3, analytical: 0.2 } },
               { id: 'A8d', label: 'No updates—just deliver the finished thing (with a quick recap).', weights: { independent: 0.8, organized: 0.4, serious: 0.3 } }
             ]
           },
           {
             id: 'A9', section: 'A', type: 'single_select',
-            prompt: 'You\'re starting something new (project, hobby, business idea). Your first hour looks like…',
+            prompt: 'You\'re stuck on something and slightly annoyed about it. What should the assistant do?',
             options: [
-              { id: 'A9a', label: 'Define goals + constraints, then map the steps. I love a clean runway.', weights: { organized: 0.8, proactive: 0.6, big_picture: 0.4 } },
-              { id: 'A9b', label: 'Build a scrappy prototype immediately. Learning-by-doing is the point.', weights: { spontaneous: 0.7, proactive: 0.4, independent: 0.5 } },
-              { id: 'A9c', label: 'Brainstorm with people. The best ideas appear mid-conversation.', weights: { collaborative: 0.8, big_picture: 0.5, playful: 0.3 } },
-              { id: 'A9d', label: 'Research the landscape first: examples, pitfalls, and best practices.', weights: { detailed: 0.6, proactive: 0.5, serious: 0.3, organized: 0.4 } }
+              { id: 'A9a', label: 'Break it into smaller pieces. Show me the one thing I can do right now.', weights: { analytical: 0.7, practical: 0.8, organized: 0.4 } },
+              { id: 'A9b', label: 'Acknowledge the frustration in one line, then pivot to solutions.', weights: { empathetic: 0.7, practical: 0.5, supportive: 0.4 } },
+              { id: 'A9c', label: 'Challenge my approach. Maybe I\'m stuck because I\'m thinking about it wrong.', weights: { challenging: 0.8, exploratory: 0.5, proactive: 0.4 } },
+              { id: 'A9d', label: 'Suggest a completely different angle. Lateral thinking gets me unstuck.', weights: { exploratory: 0.9, playful: 0.3, big_picture: 0.4 } }
             ]
           },
           {
@@ -959,10 +959,20 @@
             id: 'A11', section: 'A', type: 'single_select',
             prompt: 'The assistant makes a pun. Your reaction is…',
             options: [
-              { id: 'A11a', label: 'MORE. If it\'s not slightly ridiculous, what are we even doing.', weights: { playful: 0.9, casual: 0.6 } },
+              { id: 'A11a', label: 'MORE. If it\'s not slightly ridiculous, what are we even doing.', weights: { playful: 0.9, casual: 0.6, exploratory: 0.3 } },
               { id: 'A11b', label: 'Occasional jokes are great—just don\'t derail the task.', weights: { playful: 0.6, organized: 0.3, big_picture: 0.3 } },
-              { id: 'A11c', label: 'Keep it straightforward. I\'m here to get things done.', weights: { serious: 0.8, formal: 0.3, organized: 0.3 } },
+              { id: 'A11c', label: 'Keep it straightforward. I\'m here to get things done.', weights: { serious: 0.8, formal: 0.3, organized: 0.3, practical: 0.3, analytical: 0.2 } },
               { id: 'A11d', label: 'Only joke when I do. Mirror my energy like a pro.', weights: { collaborative: 0.5, reactive: 0.5, casual: 0.4 } }
+            ]
+          },
+          {
+            id: 'A12', section: 'A', type: 'single_select',
+            prompt: 'Big decision time — career move, major purchase, life change. You want the assistant to…',
+            options: [
+              { id: 'A12a', label: 'Run the numbers. Pros, cons, probabilities, expected outcomes.', weights: { analytical: 0.9, practical: 0.6, detailed: 0.5, serious: 0.3 } },
+              { id: 'A12b', label: 'Play devil\'s advocate. Challenge my leaning so I\'m sure it holds up.', weights: { challenging: 0.8, analytical: 0.5, independent: 0.3 } },
+              { id: 'A12c', label: 'Explore wild options I haven\'t considered. What if there\'s a door 3?', weights: { exploratory: 0.8, playful: 0.4, big_picture: 0.5 } },
+              { id: 'A12d', label: 'Help me figure out what I actually want. The answer is usually in the gut feeling.', weights: { empathetic: 0.8, supportive: 0.6, collaborative: 0.4 } }
             ]
           },
           {
@@ -1633,7 +1643,9 @@
           const traits = {
             organized: 0, spontaneous: 0, formal: 0, casual: 0,
             proactive: 0, reactive: 0, detailed: 0, big_picture: 0,
-            serious: 0, playful: 0, independent: 0, collaborative: 0
+            serious: 0, playful: 0, independent: 0, collaborative: 0,
+            supportive: 0, challenging: 0, practical: 0, exploratory: 0,
+            analytical: 0, empathetic: 0
           };
           const tags = [];
           const freeText = {};
@@ -1673,7 +1685,10 @@
             proactive_vs_reactive: ['proactive', 'reactive'],
             detailed_vs_big_picture: ['detailed', 'big_picture'],
             serious_vs_playful: ['serious', 'playful'],
-            independent_vs_collaborative: ['independent', 'collaborative']
+            independent_vs_collaborative: ['independent', 'collaborative'],
+            supportive_vs_challenging: ['supportive', 'challenging'],
+            practical_vs_exploratory: ['practical', 'exploratory'],
+            analytical_vs_empathetic: ['analytical', 'empathetic']
           };
 
           const dimensionScores = {};
