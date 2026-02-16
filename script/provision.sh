@@ -355,12 +355,18 @@ USERDATA_SSHKEY
 # ---------------------------------------------------------------------------
 # Install Docker
 # ---------------------------------------------------------------------------
-echo "Installing Docker..."
+echo "Installing Docker and dependencies..."
 apt-get update -qq
-apt-get install -y -qq docker.io curl jq nodejs npm awscli > /dev/null
+apt-get install -y -qq docker.io curl jq nodejs npm unzip > /dev/null
 systemctl enable docker
 systemctl start docker
-echo "Docker installed: \$(docker --version)"
+
+# Install AWS CLI v2 (not available via apt on Ubuntu 24.04)
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
+/tmp/aws-install/aws/install --update > /dev/null 2>&1
+rm -rf /tmp/awscliv2.zip /tmp/aws-install
+echo "Docker: \$(docker --version) | AWS: \$(aws --version)"
 
 # ---------------------------------------------------------------------------
 # Pull ClawDaddy Docker image from ECR
