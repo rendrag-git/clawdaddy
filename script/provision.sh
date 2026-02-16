@@ -116,6 +116,7 @@ ARG_REGION="us-east-1"
 ARG_STRIPE_CUSTOMER_ID=""
 ARG_STRIPE_SUBSCRIPTION_ID=""
 ARG_STRIPE_CHECKOUT_SESSION_ID=""
+ARG_USERNAME=""
 
 usage() {
     cat <<EOF
@@ -138,6 +139,7 @@ ${BOLD}Optional:${RESET}
   --stripe-customer-id Stripe customer ID (optional)
   --stripe-subscription-id Stripe subscription ID (optional)
   --stripe-checkout-session-id Stripe checkout session ID (optional)
+  --username           Customer username for DNS and instance naming (3-20 chars, lowercase alphanumeric + hyphens)
   --help               Show this help message
 
 ${BOLD}Environment:${RESET}
@@ -148,6 +150,8 @@ ${BOLD}Environment:${RESET}
   REPORT_WEBHOOK_URL   Webhook URL for daily usage reporting (managed tier)
   DISCORD_OPS_WEBHOOK_URL  Discord webhook for ops notifications (managed tier)
   DEFAULT_BUDGET       Default monthly budget in USD (default: 40)
+  SSH_KEY_DIR          Persistent directory for SSH keys (default: ~/.ssh/customer-keys/)
+  ROUTE53_HOSTED_ZONE_ID  Route 53 hosted zone ID for clawdaddy.sh DNS
 EOF
 }
 
@@ -202,6 +206,10 @@ parse_args() {
                 ARG_STRIPE_CHECKOUT_SESSION_ID="${2:?--stripe-checkout-session-id requires a value}"
                 shift 2
                 ;;
+            --username)
+                ARG_USERNAME="${2:?--username requires a value}"
+                shift 2
+                ;;
             --help|-h)
                 usage
                 exit 0
@@ -237,6 +245,16 @@ parse_args() {
         fi
         if [[ -z "${PROXY_BUNDLE_URL}" ]]; then
             die "PROXY_BUNDLE_URL environment variable is required for managed tier"
+        fi
+    fi
+
+    # Validate --username if provided
+    if [[ -n "${ARG_USERNAME}" ]]; then
+        if [[ ${#ARG_USERNAME} -lt 3 || ${#ARG_USERNAME} -gt 20 ]]; then
+            die "--username must be 3-20 characters"
+        fi
+        if [[ ! "${ARG_USERNAME}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            die "--username must be lowercase alphanumeric with hyphens, no leading/trailing hyphens"
         fi
     fi
 }
@@ -765,8 +783,8 @@ main() {
     customer_id="$(generate_customer_id)"
     local vnc_password
     vnc_password="$(generate_vnc_password)"
-    local instance_name="openclaw-${customer_id}"
-    local static_ip_name="openclaw-${customer_id}"
+    local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
+    local static_ip_name="openclaw-${ARG_USERNAME:-${customer_id}}"
 
     info "Customer ID:   ${customer_id}"
     info "Instance name: ${instance_name}"
