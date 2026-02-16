@@ -35,6 +35,12 @@ function isValidIPv4(ip) {
     ip.split('.').every(n => parseInt(n, 10) <= 255);
 }
 
+const VALID_REGIONS = new Set([
+  'us-east-1', 'us-east-2', 'us-west-2', 'ca-central-1',
+  'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
+  'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1'
+]);
+
 const dnsUpdateLastCall = new Map(); // username -> timestamp
 
 let cachedStripeKey = null;
@@ -213,6 +219,11 @@ app.post('/api/onboarding', async (req, res) => {
     const assistantName = normalizeName(req.body?.assistantName);
     const sessionId = parseSessionId(req.body?.sessionId || req.body?.session_id || req.body?.stripeSessionId);
 
+    const region = req.body?.region || 'us-east-1';
+    if (!VALID_REGIONS.has(region)) {
+      return res.status(400).json({ ok: false, error: 'Invalid region.' });
+    }
+
     if (!displayName || displayName.length < 2 || displayName.length > 80) {
       return res.status(400).json({ ok: false, error: 'Display name must be 2-80 characters.' });
     }
@@ -258,6 +269,7 @@ app.post('/api/onboarding', async (req, res) => {
     }
 
     record.username = slugify(displayName);
+    record.region = region;
 
     store.sessions[sessionId] = record;
     await saveStore(store);
@@ -270,6 +282,7 @@ app.post('/api/onboarding', async (req, res) => {
       email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
       username: record.username,
       tier: 'managed',
+      region,
       stripeCustomerId: record.stripeCustomerId || '',
       stripeCheckoutSessionId: sessionId,
     }, (stage) => {
