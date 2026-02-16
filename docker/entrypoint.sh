@@ -95,7 +95,8 @@ cat > "${CONFIG_DIR}/openclaw.json" <<CONF
       "token": "${GW_TOKEN}"
     },
     "controlUi": {
-      "dangerouslyDisableDeviceAuth": true
+      "dangerouslyDisableDeviceAuth": true,
+      "allowInsecureAuth": true
     }
   },
   "channels": ${CHANNELS}
