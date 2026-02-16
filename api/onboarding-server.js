@@ -30,6 +30,13 @@ const allowedOrigins = new Set([
 
 const SESSION_ID_REGEX = /^cs_[a-zA-Z0-9_]+$/;
 
+function isValidIPv4(ip) {
+  return /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) &&
+    ip.split('.').every(n => parseInt(n, 10) <= 255);
+}
+
+const dnsUpdateLastCall = new Map(); // username -> timestamp
+
 let cachedStripeKey = null;
 
 app.use(cors({
@@ -309,6 +316,73 @@ app.post('/api/onboarding', async (req, res) => {
     }
 
     return res.status(500).json({ ok: false, error: 'Unable to process onboarding request.' });
+  }
+});
+
+app.post('/api/dns-update', async (req, res) => {
+  try {
+    const { username, ip, token } = req.body || {};
+
+    if (!username || !ip || !token) {
+      return res.status(400).json({ ok: false, error: 'Missing username, ip, or token.' });
+    }
+
+    if (!isValidIPv4(ip)) {
+      return res.status(400).json({ ok: false, error: 'Invalid IPv4 address.' });
+    }
+
+    // Rate limit: 1 call per username per 60 seconds
+    const lastCall = dnsUpdateLastCall.get(username);
+    if (lastCall && Date.now() - lastCall < 60_000) {
+      return res.status(429).json({ ok: false, error: 'Rate limited. Try again in 60 seconds.' });
+    }
+
+    // Validate token against customers.json
+    const customersPath = process.env.CUSTOMERS_FILE || path.join(__dirname, '..', 'customers.json');
+    const customersRaw = await fs.readFile(customersPath, 'utf8');
+    const customers = JSON.parse(customersRaw);
+    const customer = customers.customers.find(
+      c => c.username === username && c.dns_token === token
+    );
+
+    if (!customer) {
+      return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
+    }
+
+    // Update Route 53
+    const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
+    if (!hostedZoneId) {
+      return res.status(502).json({ ok: false, error: 'DNS not configured on server.' });
+    }
+
+    const changeBatch = JSON.stringify({
+      Changes: [{
+        Action: 'UPSERT',
+        ResourceRecordSet: {
+          Name: `${username}.clawdaddy.sh`,
+          Type: 'A',
+          TTL: 300,
+          ResourceRecords: [{ Value: ip }]
+        }
+      }]
+    });
+
+    const { exec } = require('node:child_process');
+    await new Promise((resolve, reject) => {
+      exec(
+        `aws route53 change-resource-record-sets --hosted-zone-id "${hostedZoneId}" --change-batch '${changeBatch}'`,
+        { timeout: 15000 },
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    dnsUpdateLastCall.set(username, Date.now());
+
+    console.log(`DNS updated: ${username}.clawdaddy.sh -> ${ip}`);
+    return res.json({ ok: true, hostname: `${username}.clawdaddy.sh` });
+  } catch (err) {
+    console.error('DNS update failed:', err.message);
+    return res.status(502).json({ ok: false, error: 'DNS update failed.' });
   }
 });
 
