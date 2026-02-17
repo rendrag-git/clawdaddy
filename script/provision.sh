@@ -685,8 +685,17 @@ USERDATA_CADDY
 # ClawDaddy Customer Portal
 # ---------------------------------------------------------------------------
 echo "Setting up ClawDaddy portal..."
-mkdir -p /home/ubuntu/clawdaddy/portal/public
+mkdir -p /home/ubuntu/clawdaddy/portal
 mkdir -p /home/ubuntu/clawdaddy-portal
+
+# Download portal bundle from S3
+PORTAL_BUNDLE_URL=\${PORTAL_BUNDLE_URL:-https://clawdaddy-releases.s3.amazonaws.com/portal-v1.tar.gz}
+echo "Downloading portal bundle..."
+curl -fsSL "\${PORTAL_BUNDLE_URL}" -o /tmp/portal-v1.tar.gz
+tar xzf /tmp/portal-v1.tar.gz -C /home/ubuntu/clawdaddy/portal --strip-components=1
+cd /home/ubuntu/clawdaddy/portal && npm install --production
+chown -R ubuntu:ubuntu /home/ubuntu/clawdaddy/portal
+rm -f /tmp/portal-v1.tar.gz
 
 # Generate portal token
 PORTAL_TOKEN=\$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
