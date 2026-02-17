@@ -40,8 +40,12 @@
     }
   }
 
-  async function login(credential) {
-    return api('POST', '/api/auth/login', { token: credential, password: credential });
+  async function loginWithToken(token) {
+    return api('POST', '/api/auth/login', { token });
+  }
+
+  async function loginWithPassword(password) {
+    return api('POST', '/api/auth/login', { password });
   }
 
   async function logout() {
@@ -63,6 +67,14 @@
     document.getElementById('header-url').textContent = profile.username + '.clawdaddy.sh';
     document.getElementById('welcome-title').textContent = 'Welcome, ' + profile.botName + '!';
     document.getElementById('personality-card').textContent = profile.personality || 'No personality configured yet.';
+
+    // "Set a password" banner
+    var banner = document.getElementById('set-password-banner');
+    if (!profile.hasPassword) {
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
 
     // Tier badge
     const tierContainer = document.getElementById('tier-badge-container');
@@ -153,7 +165,7 @@
       const err = document.getElementById('login-error');
       err.hidden = true;
 
-      const result = await login(input.value);
+      const result = await loginWithPassword(input.value);
       if (result.ok) {
         await loadProfile();
         showView('home');
@@ -173,6 +185,34 @@
       toast('Discord setup coming soon');
     });
 
+    // "Set a password" inline form on home view
+    document.getElementById('set-password-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      var msg = document.getElementById('set-password-msg');
+      var pw = document.getElementById('set-password-input').value;
+      var confirm = document.getElementById('set-password-confirm').value;
+      msg.hidden = true;
+
+      if (pw !== confirm) {
+        msg.textContent = 'Passwords do not match';
+        msg.className = 'feedback-msg feedback-error';
+        msg.hidden = false;
+        return;
+      }
+
+      var data = await api('POST', '/api/portal/settings/password', { newPassword: pw });
+      if (data.ok) {
+        toast('Password set successfully');
+        document.getElementById('set-password-banner').hidden = true;
+        e.target.reset();
+        profile.hasPassword = true;
+      } else {
+        msg.textContent = data.error || 'Failed to set password';
+        msg.className = 'feedback-msg feedback-error';
+        msg.hidden = false;
+      }
+    });
+
     // Settings forms
     document.getElementById('password-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -183,6 +223,21 @@
       e.preventDefault();
       updateApiKey(e.target);
     });
+
+    // Auto-login from ?token= URL param
+    var params = new URLSearchParams(window.location.search);
+    var urlToken = params.get('token');
+    if (urlToken) {
+      // Strip token from URL immediately
+      window.history.replaceState({}, '', window.location.pathname);
+      var result = await loginWithToken(urlToken);
+      if (result.ok) {
+        await loadProfile();
+        showView('home');
+        return;
+      }
+      // Token invalid — fall through to normal auth check
+    }
 
     // Check auth on load
     const authed = await checkAuth();

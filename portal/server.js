@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -127,8 +128,15 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const tokenMatch = token && config.portalToken && token === config.portalToken;
-  const passwordMatch =
-    password && config.password !== null && password === config.password;
+  let passwordMatch = false;
+  if (password && config.password) {
+    // Support both bcrypt hashes and legacy plaintext passwords
+    if (config.password.startsWith('$2')) {
+      passwordMatch = await bcrypt.compare(password, config.password);
+    } else {
+      passwordMatch = password === config.password;
+    }
+  }
 
   if (!tokenMatch && !passwordMatch) {
     return res.status(401).json({ ok: false, error: 'Invalid credentials' });
@@ -193,6 +201,7 @@ app.get('/api/portal/profile', requireAuth, async (_req, res) => {
       instanceHealthy,
       dashboardUrl: '/dashboard',
       gatewayToken: config.gatewayToken,
+      hasPassword: config.password !== null && config.password !== undefined,
     });
   } catch (err) {
     console.error('Failed to load profile:', err.message);
@@ -203,10 +212,10 @@ app.get('/api/portal/profile', requireAuth, async (_req, res) => {
 app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
 
-  if (!newPassword || typeof newPassword !== 'string') {
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
     return res
       .status(400)
-      .json({ ok: false, error: 'New password is required' });
+      .json({ ok: false, error: 'Password must be at least 6 characters' });
   }
 
   let config;
@@ -221,14 +230,22 @@ app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
 
   // If a password already exists, verify currentPassword matches
   if (config.password !== null && config.password !== undefined) {
-    if (!currentPassword || currentPassword !== config.password) {
+    let currentMatch = false;
+    if (currentPassword) {
+      if (config.password.startsWith('$2')) {
+        currentMatch = await bcrypt.compare(currentPassword, config.password);
+      } else {
+        currentMatch = currentPassword === config.password;
+      }
+    }
+    if (!currentMatch) {
       return res
         .status(401)
         .json({ ok: false, error: 'Current password is incorrect' });
     }
   }
 
-  config.password = newPassword;
+  config.password = await bcrypt.hash(newPassword, 10);
 
   try {
     await writeConfig(config);
