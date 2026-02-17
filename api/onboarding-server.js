@@ -141,7 +141,7 @@ async function sendReadyEmail(record) {
   const username = record.username;
   const instanceUrl = `https://${username}.clawdaddy.sh`;
   const portalToken = record.portalToken || '';
-  const loginUrl = portalToken ? `${instanceUrl}?token=${encodeURIComponent(portalToken)}` : instanceUrl;
+  const portalLoginUrl = portalToken ? `${instanceUrl}?token=${encodeURIComponent(portalToken)}` : instanceUrl;
   const botName = record.assistantName || 'your assistant';
 
   const htmlBody = `
@@ -152,12 +152,12 @@ async function sendReadyEmail(record) {
   <div style="padding:24px;">
     <p style="font-size:16px;line-height:1.6;color:#c9d4ff;">Hey! <strong>${escapeHtml(botName)}</strong> is set up and ready to go at:</p>
     <p style="text-align:center;margin:20px 0;">
-      <a href="${loginUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
+      <a href="${portalLoginUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
     </p>
     <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
     <h2 style="font-size:18px;color:#e6ecff;margin:0 0 12px;">Quick start</h2>
     <ol style="font-size:14px;color:#c9d4ff;line-height:1.8;padding-left:20px;margin:0;">
-      <li>Open <a href="${loginUrl}" style="color:#3ee7ff;">${username}.clawdaddy.sh</a> to access your portal (you'll be logged in automatically)</li>
+      <li>Open <a href="${portalLoginUrl}" style="color:#3ee7ff;">${username}.clawdaddy.sh</a> to log in and manage your assistant</li>
       <li>Use the webchat to talk to ${escapeHtml(botName)} directly in your browser</li>
       <li>Connect Discord: add a bot token in the dashboard settings to chat from your server</li>
     </ol>
@@ -362,7 +362,7 @@ async function tryAutoWriteFiles(sessionId) {
         sendReadyEmail({
           ...freshRecord,
           gatewayToken: result.gatewayToken || freshRecord.gatewayToken,
-          portalToken: result.portalToken || freshRecord.portalToken,
+          portalToken: result.portalToken || freshRecord.portalToken
         }).catch(err => console.error(`Ready email failed for ${sessionId}: ${err.message}`));
       }
     }

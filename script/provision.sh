@@ -40,6 +40,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 CUSTOMERS_FILE="${CUSTOMERS_FILE:-./customers.json}"
 DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
+PORTAL_BUNDLE_URL="${PORTAL_BUNDLE_URL:-https://clawdaddy-releases.s3.amazonaws.com/portal-v1.tar.gz}"
 ECR_IMAGE="${ECR_IMAGE:-public.ecr.aws/b0x3t9x7/clawdaddy/openclaw:latest}"
 PROXY_BUNDLE_URL="${PROXY_BUNDLE_URL:-}"
 OPERATOR_API_KEY="${OPERATOR_API_KEY:-}"
@@ -688,14 +689,16 @@ echo "Setting up ClawDaddy portal..."
 mkdir -p /home/ubuntu/clawdaddy/portal
 mkdir -p /home/ubuntu/clawdaddy-portal
 
-# Download portal bundle from S3
-PORTAL_BUNDLE_URL=\${PORTAL_BUNDLE_URL:-https://clawdaddy-releases.s3.amazonaws.com/portal-v1.tar.gz}
-echo "Downloading portal bundle..."
-curl -fsSL "\${PORTAL_BUNDLE_URL}" -o /tmp/portal-v1.tar.gz
-tar xzf /tmp/portal-v1.tar.gz -C /home/ubuntu/clawdaddy/portal --strip-components=1
+# Download and extract portal bundle from S3
+echo "Downloading portal bundle from ${PORTAL_BUNDLE_URL}..."
+curl -fsSL '${PORTAL_BUNDLE_URL}' -o /tmp/portal-bundle.tar.gz
+tar -xzf /tmp/portal-bundle.tar.gz -C /home/ubuntu/clawdaddy/portal --strip-components=1
+rm -f /tmp/portal-bundle.tar.gz
+chown -R root:root /home/ubuntu/clawdaddy/portal
+chmod o+x /home/ubuntu
+
 cd /home/ubuntu/clawdaddy/portal && npm install --production
-chown -R ubuntu:ubuntu /home/ubuntu/clawdaddy/portal
-rm -f /tmp/portal-v1.tar.gz
+echo "Portal dependencies installed"
 
 # Generate portal token
 PORTAL_TOKEN=\$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
@@ -738,6 +741,7 @@ User=root
 WorkingDirectory=/home/ubuntu/clawdaddy/portal
 ExecStart=/usr/bin/node server.js
 Environment=PORT=3847
+Environment=NODE_ENV=production
 Environment=PORTAL_CONFIG_PATH=/home/ubuntu/clawdaddy-portal/config.json
 Environment=SOUL_MD_PATH=/home/ubuntu/clawd/agents/main/SOUL.md
 Restart=always
@@ -749,7 +753,8 @@ PORTALSVC
 
 systemctl daemon-reload
 systemctl enable clawdaddy-portal
-echo "Portal config generated. Token: \${PORTAL_TOKEN}"
+systemctl start clawdaddy-portal
+echo "Portal config generated and service started. Token: \${PORTAL_TOKEN}"
 echo "PORTAL_TOKEN=\${PORTAL_TOKEN}"
 USERDATA_PORTAL
 

@@ -128,7 +128,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const tokenMatch = token && config.portalToken && token === config.portalToken;
-
   let passwordMatch = false;
   if (password && config.password) {
     // Support both bcrypt hashes and legacy plaintext passwords
@@ -213,10 +212,10 @@ app.get('/api/portal/profile', requireAuth, async (_req, res) => {
 app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
 
-  if (!newPassword || typeof newPassword !== 'string') {
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
     return res
       .status(400)
-      .json({ ok: false, error: 'New password is required' });
+      .json({ ok: false, error: 'Password must be at least 6 characters' });
   }
 
   let config;
@@ -231,19 +230,15 @@ app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
 
   // If a password already exists, verify currentPassword matches
   if (config.password !== null && config.password !== undefined) {
-    if (!currentPassword) {
-      return res
-        .status(401)
-        .json({ ok: false, error: 'Current password is incorrect' });
+    let currentMatch = false;
+    if (currentPassword) {
+      if (config.password.startsWith('$2')) {
+        currentMatch = await bcrypt.compare(currentPassword, config.password);
+      } else {
+        currentMatch = currentPassword === config.password;
+      }
     }
-    // Support both bcrypt hashes and legacy plaintext
-    let matches = false;
-    if (config.password.startsWith('$2')) {
-      matches = await bcrypt.compare(currentPassword, config.password);
-    } else {
-      matches = currentPassword === config.password;
-    }
-    if (!matches) {
+    if (!currentMatch) {
       return res
         .status(401)
         .json({ ok: false, error: 'Current password is incorrect' });
