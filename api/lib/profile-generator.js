@@ -33,6 +33,18 @@ async function getApiKey() {
   }
 }
 
+// Sub-agent definitions mapped to use-case tags
+const AGENT_MAP = {
+  'work:email': { name: 'dispatch', displayName: 'Dispatch', emoji: '\u{1F4CB}', focus: 'email triage, inbox management, drafting replies, calendar ops, meeting notes, reminders' },
+  'work:research': { name: 'scout', displayName: 'Scout', emoji: '\u{1F50D}', focus: 'research, competitive intel, market analysis, content summaries, trend spotting' },
+  'work:data_analysis': { name: 'abacus', displayName: 'Abacus', emoji: '\u{1F4CA}', focus: 'data analysis, spreadsheets, SQL, dashboards, metrics, anomaly detection' },
+  'work:writing': { name: 'scribe', displayName: 'Scribe', emoji: '\u270D\uFE0F', focus: 'writing, docs, proposals, briefs, editing, content creation' },
+  'work:project_management': { name: 'taskmaster', displayName: 'Taskmaster', emoji: '\u{1F3AF}', focus: 'project management, task tracking, standups, deadline management' },
+  'work:coding': { name: 'forge', displayName: 'Forge', emoji: '\u2692\uFE0F', focus: 'coding, debugging, code review, architecture, technical decisions' },
+  'personal:finance': { name: 'ledger', displayName: 'Ledger', emoji: '\u{1F4B0}', focus: 'budgeting, personal finance tracking, bill reminders, investment monitoring' },
+  'personal:health': { name: 'pulse', displayName: 'Pulse', emoji: '\u{1F4AA}', focus: 'health tracking, medication reminders, fitness nudges, wellness check-ins' }
+};
+
 // Call OpenRouter API (OpenAI-compatible)
 function callOpenRouter(apiKey, model, messages, maxTokens) {
   return new Promise((resolve, reject) => {
@@ -529,16 +541,139 @@ After delivering the welcome message:
   return { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd };
 }
 
+// Generate behavioral rules for a specific sub-agent type
+function generateAgentBehaviors(agent) {
+  const behaviors = {
+    'work:email': `- Scan inbox: categorize as urgent / draft-ready / FYI / archive
+- Draft routine replies. Flag judgment calls with one-line context.
+- Track follow-up items from sent emails.`,
+    'work:research': `- Produce structured briefs: findings, sources, implications, recommended action.
+- Surface material competitor changes proactively.
+- Include "So what?" section \u2014 what the user should DO with this info.`,
+    'work:data_analysis': `- Start with the answer, then the method, then the caveats.
+- Default to charts when they tell the story better than text.
+- Flag anomalies (>2\u03C3 from trend) with possible causes.`,
+    'work:writing': `- Match the user's voice and tone.
+- First draft fast, polish on request.
+- For editing: suggest, don't rewrite (unless asked).`,
+    'work:project_management': `- Track tasks, deadlines, and blockers.
+- Surface overdue items and upcoming milestones.
+- Generate standup summaries and action item lists.`,
+    'work:coding': `- Write clean, well-commented code.
+- Explain approach before implementation.
+- Suggest tests and edge cases proactively.`,
+    'personal:finance': `- Track spending against budget categories.
+- Surface upcoming bills and payment reminders.
+- Flag unusual charges or budget deviations.`,
+    'personal:health': `- Gentle reminders for medications, supplements, exercise.
+- Don't nag. One reminder, then log it.
+- Track streaks and celebrate consistency.`
+  };
+  return behaviors[agent.tag] || '- Operate within domain expertise.\n- Report status to main agent.';
+}
+
+// Generate sub-agent SOUL.md files from quiz use-case tags
+function generateSubAgents(quizResults, botName) {
+  const tags = quizResults.tags || [];
+  const scores = quizResults.dimensionScores || {};
+
+  // Find matching agents from tags
+  const matchedAgents = [];
+  for (const tag of tags) {
+    if (AGENT_MAP[tag]) {
+      matchedAgents.push({ tag, ...AGENT_MAP[tag] });
+    }
+  }
+
+  // Cap at 3 sub-agents (most impactful \u2014 work tags first, then personal)
+  const workAgents = matchedAgents.filter(a => a.tag.startsWith('work:'));
+  const personalAgents = matchedAgents.filter(a => a.tag.startsWith('personal:'));
+  const selected = [...workAgents, ...personalAgents].slice(0, 3);
+
+  if (selected.length === 0) return { agents: [], multiAgentMd: '' };
+
+  // Derive personality traits to inherit
+  const casualness = clamp(1 - (scores.formal_vs_casual || 0.5), 0, 1);
+  const humor = clamp(1 - (scores.serious_vs_playful || 0.5), 0, 1);
+  const toneLabel = casualness < 0.45 ? 'formal' : casualness > 0.55 ? 'casual' : 'neutral';
+
+  const agents = selected.map(agent => {
+    // Validate agent name: alphanumeric + hyphen only (prevent path injection)
+    const safeName = agent.name.replace(/[^a-zA-Z0-9-]/g, '');
+    if (!safeName || safeName !== agent.name) {
+      throw new Error(`Invalid agent name: ${agent.name}`);
+    }
+
+    const soulMd = `# SOUL.md \u2014 ${agent.displayName} ${agent.emoji}
+
+## Role
+I'm a specialized sub-agent of ${botName}, focused on: ${agent.focus}.
+
+I operate under ${botName}'s direction. I handle tasks in my domain so ${botName} can focus on the big picture.
+
+## Personality (inherited from main agent)
+- Tone: ${toneLabel}
+- Humor: ${humor > 0.6 ? 'matches main agent energy' : 'minimal \u2014 focused on the task'}
+- Communication: ${casualness > 0.55 ? 'direct and informal' : 'professional and clear'}
+
+## Core Behaviors
+${generateAgentBehaviors(agent)}
+
+## What I Don't Do
+- Tasks outside my domain \u2014 route back to main agent
+- Direct user interaction \u2014 all communication goes through main agent
+- Decision-making beyond my scope \u2014 escalate with context
+`;
+
+    return {
+      name: safeName,
+      displayName: agent.displayName,
+      emoji: agent.emoji,
+      tag: agent.tag,
+      soulMd
+    };
+  });
+
+  // Generate MULTI-AGENT.md summary
+  const multiAgentMd = `# Multi-Agent Team
+
+> Generated from ClawDaddy onboarding quiz
+> ${selected.length} sub-agent${selected.length > 1 ? 's' : ''} configured
+
+## Team Structure
+
+**Main Agent (${botName})** \u2014 Primary interface, delegates to specialists.
+
+${agents.map(a => `### ${a.displayName} ${a.emoji}
+- **Domain:** ${AGENT_MAP[a.tag].focus}
+- **Directory:** agents/${a.name}/`).join('\n\n')}
+
+## Delegation Protocol
+1. User interacts with main agent only
+2. Main agent delegates domain tasks to sub-agents
+3. Sub-agents return results to main agent
+4. Main agent synthesizes and delivers to user
+`;
+
+  return { agents, multiAgentMd };
+}
+
 // Main export
 async function generateProfile(quizResults, username, botName) {
+  let result;
   try {
     // Try Claude API first
-    return await generateWithClaude(quizResults, username, botName);
+    result = await generateWithClaude(quizResults, username, botName);
   } catch (err) {
     // Log error and fall back to template
     console.error('Claude API generation failed, using fallback:', err.message);
-    return generateFallback(quizResults, username, botName);
+    result = generateFallback(quizResults, username, botName);
   }
+
+  // Generate sub-agents from use-case tags
+  const { agents, multiAgentMd } = generateSubAgents(quizResults, botName);
+
+  return { ...result, agents, multiAgentMd };
 }
 
 module.exports = { generateProfile };

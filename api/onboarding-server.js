@@ -540,21 +540,29 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
     const username = record.username || slugify(record.displayName);
     const botName = record.assistantName || 'Assistant';
 
-    const { soulMd, userMd, identityMd } = await generateProfile(
+    const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agents, multiAgentMd } = await generateProfile(
       record.quizResults,
       username,
       botName
     );
 
-    record.generatedFiles = { soulMd, userMd, identityMd };
+    record.generatedFiles = { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agents, multiAgentMd };
     record.profileGeneratedAt = new Date().toISOString();
     record.updatedAt = new Date().toISOString();
 
     store.sessions[sessionId] = record;
     await saveStore(store);
 
-    console.log(`Profile generated for session ${sessionId}`);
-    return res.json({ ok: true, files: ['SOUL.md', 'USER.md', 'IDENTITY.md'] });
+    const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+    if (agents && agents.length > 0) {
+      fileList.push('MULTI-AGENT.md');
+      for (const agent of agents) {
+        fileList.push(`agents/${agent.name}/SOUL.md`);
+      }
+    }
+
+    console.log(`Profile generated for session ${sessionId} (${agents ? agents.length : 0} sub-agents)`);
+    return res.json({ ok: true, files: fileList });
   } catch (error) {
     console.error(`Profile generation failed for ${sessionId}:`, error.message);
     return res.status(500).json({ ok: false, error: 'Unable to generate profile.' });
@@ -598,16 +606,22 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     await fs.writeFile(path.join(outputDir, 'SOUL.md'), record.generatedFiles.soulMd, 'utf8');
     await fs.writeFile(path.join(outputDir, 'USER.md'), record.generatedFiles.userMd, 'utf8');
     await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), record.generatedFiles.identityMd, 'utf8');
+    await fs.writeFile(path.join(outputDir, 'HEARTBEAT.md'), record.generatedFiles.heartbeatMd || '', 'utf8');
+    await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), record.generatedFiles.bootstrapMd || '', 'utf8');
 
-    // Write BOOTSTRAP.md template
-    const bootstrapPath = path.join(__dirname, '..', 'templates', 'BOOTSTRAP.md');
-    let bootstrapContent;
-    try {
-      bootstrapContent = await fs.readFile(bootstrapPath, 'utf8');
-    } catch (_err) {
-      bootstrapContent = '# Welcome\nBootstrap template not found.';
+    // Write MULTI-AGENT.md
+    if (record.generatedFiles.multiAgentMd) {
+      await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), record.generatedFiles.multiAgentMd, 'utf8');
     }
-    await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), bootstrapContent, 'utf8');
+
+    // Write sub-agent SOUL.md files
+    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+      for (const agent of record.generatedFiles.agents) {
+        const agentDir = path.join(outputDir, 'agents', agent.name);
+        await fs.mkdir(agentDir, { recursive: true });
+        await fs.writeFile(path.join(agentDir, 'SOUL.md'), agent.soulMd, 'utf8');
+      }
+    }
 
     record.filesWritten = true;
 
@@ -629,14 +643,46 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
       const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
       const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
 
-      for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md']) {
+      for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md']) {
         await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
+      }
+
+      // SCP MULTI-AGENT.md
+      if (record.generatedFiles.multiAgentMd) {
+        await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'MULTI-AGENT.md'), `${remoteBase}/MULTI-AGENT.md`]);
+      }
+
+      // SCP sub-agent directories
+      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+        // Create agents directories on remote
+        await execFileAsync('ssh', [
+          '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+          `ubuntu@${record.serverIp}`,
+          'mkdir -p ' + record.generatedFiles.agents.map(a => `/home/ubuntu/clawd/agents/${a.name}`).join(' ')
+        ]);
+
+        // SCP each agent's SOUL.md
+        for (const agent of record.generatedFiles.agents) {
+          const localPath = path.join(outputDir, 'agents', agent.name, 'SOUL.md');
+          await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/SOUL.md`]);
+        }
+      }
+
+      // chmod all deployed files
+      let chmodPaths = '/home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/HEARTBEAT.md /home/ubuntu/clawd/BOOTSTRAP.md';
+      if (record.generatedFiles.multiAgentMd) {
+        chmodPaths += ' /home/ubuntu/clawd/MULTI-AGENT.md';
+      }
+      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+        for (const agent of record.generatedFiles.agents) {
+          chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/SOUL.md`;
+        }
       }
 
       await execFileAsync('ssh', [
         '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
         `ubuntu@${record.serverIp}`,
-        'chmod 644 /home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/BOOTSTRAP.md'
+        `chmod 644 ${chmodPaths}`
       ]);
 
       filesDeployed = true;
@@ -652,10 +698,20 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
     store.sessions[sessionId] = record;
     await saveStore(store);
 
+    const writtenFiles = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+    if (record.generatedFiles.multiAgentMd) {
+      writtenFiles.push('MULTI-AGENT.md');
+    }
+    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+      for (const agent of record.generatedFiles.agents) {
+        writtenFiles.push(`agents/${agent.name}/SOUL.md`);
+      }
+    }
+
     console.log(`Files written for session ${sessionId} to ${outputDir}`);
     return res.json({
       ok: true,
-      written: ['SOUL.md', 'USER.md', 'IDENTITY.md', 'BOOTSTRAP.md'],
+      written: writtenFiles,
       deployed: filesDeployed
     });
   } catch (error) {
