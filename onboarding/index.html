@@ -1239,7 +1239,7 @@
           step1Submit.disabled = true;
 
           try {
-            const response = await fetch(`${API_BASE}/api/onboarding`, {
+            const response = await fetch(`${API_BASE}/api/onboarding/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
               body: JSON.stringify({ displayName: username, assistantName: botName, sessionId, region: document.getElementById('region').value })
