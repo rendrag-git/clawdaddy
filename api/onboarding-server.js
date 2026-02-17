@@ -311,7 +311,7 @@ async function deployFilesToInstance(sessionId) {
       const { stdout } = await execFileAsync('ssh', [
         '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
         `ubuntu@${record.serverIp}`,
-        'docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo ""'
+        'sudo docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo ""'
       ]);
       gatewayToken = stdout.trim();
     } catch (err) {
