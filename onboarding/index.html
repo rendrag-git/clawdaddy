@@ -1628,15 +1628,9 @@
             });
             if (!profileRes.ok) throw new Error('Failed to generate profile.');
 
-            // Write files to instance — non-blocking. If instance isn't ready yet,
-            // files will be written when provisioning completes (or on retry).
-            fetch(`${API_BASE}/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
-              method: 'POST',
-              headers: { Accept: 'application/json' }
-            }).catch(() => {}); // fire-and-forget
-
-            showStep(3);
-            renderStep3();
+            // Server handles write-files automatically when provisioning completes.
+            showStep(4);
+            renderSetupComplete();
           } catch (error) {
             quizQuestionArea.innerHTML = `
               <div class="waiting-state">
@@ -1789,7 +1783,45 @@
           }
         }
 
-        // ======== Step 4: Success ========
+        // ======== Step 4: Setup Complete (post-quiz) ========
+        function renderSetupComplete() {
+          const url = `https://${state.username}.clawdaddy.sh`;
+          state.webchatUrl = url;
+
+          const step4 = document.getElementById('step-4');
+          step4.querySelector('.success-state').innerHTML = `
+            <span class="success-check">\u2728</span>
+            <h2 class="success-title">Your AI assistant is being set up!</h2>
+            <p style="color: var(--text-muted); font-size: 1.05rem; line-height: 1.6; margin: 1rem 0;">
+              It'll be live at <strong style="color: var(--accent-2); font-family: monospace;">${escapeHtml(url)}</strong> in about 3 minutes.
+            </p>
+            <p style="color: var(--text-muted); font-size: 1rem; margin: 0.5rem 0 1.5rem;">
+              We'll email you when it's ready with your login details and quick-start steps.
+            </p>
+            <button class="copy-btn" id="copy-url-btn-setup">
+              <span>\u{1F4CB}</span> <span>Copy URL</span>
+            </button>
+            <p class="bookmark-text">Bookmark this \u2014 it's your assistant's home</p>
+          `;
+
+          const copyBtn = document.getElementById('copy-url-btn-setup');
+          if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                  copyBtn.innerHTML = '<span>\u2713</span> <span>Copied!</span>';
+                  copyBtn.classList.add('copied');
+                  setTimeout(() => {
+                    copyBtn.innerHTML = '<span>\u{1F4CB}</span> <span>Copy URL</span>';
+                    copyBtn.classList.remove('copied');
+                  }, 2000);
+                }).catch(() => {});
+              }
+            });
+          }
+        }
+
+        // ======== Step 4: Success (original) ========
         function renderStep4() {
           const url = `https://${state.username}.clawdaddy.sh`;
           state.webchatUrl = url;

@@ -17,6 +17,8 @@ const PORT = Number(process.env.PORT || 3848);
 const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
 const DATA_FILE = process.env.ONBOARDING_STORE_PATH || path.join(__dirname, 'onboarding-data.json');
 const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
+const ZEPTOMAIL_KEY_PATH = process.env.ZEPTOMAIL_KEY_PATH || '/home/ubuntu/clawdaddy/.secrets/zeptomail-key';
+let cachedZeptoMailKey = null;
 
 
 const allowedOrigins = new Set([
@@ -109,6 +111,250 @@ async function getStripeSecretKey() {
 
   cachedStripeKey = key;
   return cachedStripeKey;
+}
+
+async function getZeptoMailKey() {
+  if (cachedZeptoMailKey) return cachedZeptoMailKey;
+  try {
+    const raw = await fs.readFile(ZEPTOMAIL_KEY_PATH, 'utf8');
+    cachedZeptoMailKey = raw.trim();
+    return cachedZeptoMailKey;
+  } catch (err) {
+    console.error(`ZeptoMail key not found at ${ZEPTOMAIL_KEY_PATH}: ${err.message}`);
+    return null;
+  }
+}
+
+async function sendReadyEmail(record) {
+  const apiKey = await getZeptoMailKey();
+  if (!apiKey) {
+    console.error(`Cannot send ready email for ${record.username}: ZeptoMail key not available`);
+    return;
+  }
+
+  const email = record.stripeCustomerEmail;
+  if (!email) {
+    console.error(`Cannot send ready email for ${record.username}: no customer email`);
+    return;
+  }
+
+  const username = record.username;
+  const instanceUrl = `https://${username}.clawdaddy.sh`;
+  const dashboardUrl = `${instanceUrl}/dashboard`;
+  const gatewayToken = record.gatewayToken || '';
+  const tokenParam = gatewayToken ? `?token=${encodeURIComponent(gatewayToken)}` : '';
+  const botName = record.assistantName || 'your assistant';
+
+  const htmlBody = `
+<div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6ecff;background:#0b1024;border-radius:16px;overflow:hidden;">
+  <div style="background:linear-gradient(110deg,#7c8cff,#3ee7ff);padding:32px 24px;text-align:center;">
+    <h1 style="margin:0;font-size:24px;color:#020512;font-weight:800;">Your AI assistant is live!</h1>
+  </div>
+  <div style="padding:24px;">
+    <p style="font-size:16px;line-height:1.6;color:#c9d4ff;">Hey! <strong>${escapeHtml(botName)}</strong> is set up and ready to go at:</p>
+    <p style="text-align:center;margin:20px 0;">
+      <a href="${instanceUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
+    </p>
+    ${gatewayToken ? `<p style="font-size:14px;color:#a7b3d8;text-align:center;">Gateway token: <code style="background:rgba(124,140,255,0.15);padding:2px 8px;border-radius:4px;color:#7c8cff;">${escapeHtml(gatewayToken)}</code></p>` : ''}
+    <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
+    <h2 style="font-size:18px;color:#e6ecff;margin:0 0 12px;">Quick start</h2>
+    <ol style="font-size:14px;color:#c9d4ff;line-height:1.8;padding-left:20px;margin:0;">
+      <li>Open <a href="${dashboardUrl}${tokenParam}" style="color:#3ee7ff;">${username}.clawdaddy.sh/dashboard</a> to access the control panel</li>
+      <li>Use the webchat to talk to ${escapeHtml(botName)} directly in your browser</li>
+      <li>Connect Discord: add a bot token in the dashboard settings to chat from your server</li>
+    </ol>
+    <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
+    <p style="font-size:13px;color:#7a82a8;text-align:center;">Questions? Reply to this email or reach us at <a href="mailto:hello@clawdaddy.sh" style="color:#3ee7ff;">hello@clawdaddy.sh</a></p>
+  </div>
+</div>`;
+
+  const payload = JSON.stringify({
+    from: { address: 'support@clawdaddy.sh', name: 'ClawDaddy' },
+    to: [{ email_address: { address: email } }],
+    subject: `${botName} is ready — ${username}.clawdaddy.sh`,
+    htmlbody: htmlBody
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.zeptomail.com',
+      path: '/v1.1/email',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': apiKey,
+        'Accept': 'application/json'
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`Ready email sent to ${email} for ${username}`);
+        } else {
+          console.error(`ZeptoMail error (${res.statusCode}) for ${username}: ${body.slice(0, 300)}`);
+        }
+        resolve();
+      });
+    });
+    req.on('error', (err) => {
+      console.error(`ZeptoMail request failed for ${username}: ${err.message}`);
+      resolve(); // Don't throw — email is non-blocking
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function deployFilesToInstance(sessionId) {
+  const store = await loadStore();
+  const record = store.sessions[sessionId];
+
+  if (!record) return { ok: false, error: 'Session not found.' };
+  if (!record.generatedFiles) return { ok: false, error: 'Profile not generated yet.' };
+  if (record.status !== 'ready' || !record.serverIp || !record.sshKeyPath) {
+    return { ok: false, error: 'Instance not provisioned yet.' };
+  }
+  if (record.filesDeployed) return { ok: true, deployed: true, skipped: true };
+
+  const username = record.username || slugify(record.displayName);
+
+  const baseDir = path.join(__dirname, 'generated');
+  const outputDir = path.resolve(baseDir, username);
+  if (!outputDir.startsWith(baseDir)) {
+    return { ok: false, error: 'Invalid username for file path.' };
+  }
+  await fs.mkdir(outputDir, { recursive: true });
+
+  await fs.writeFile(path.join(outputDir, 'SOUL.md'), record.generatedFiles.soulMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'USER.md'), record.generatedFiles.userMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), record.generatedFiles.identityMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'HEARTBEAT.md'), record.generatedFiles.heartbeatMd || '', 'utf8');
+  await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), record.generatedFiles.bootstrapMd || '', 'utf8');
+
+  if (record.generatedFiles.multiAgentMd) {
+    await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), record.generatedFiles.multiAgentMd, 'utf8');
+  }
+
+  if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+    for (const agent of record.generatedFiles.agents) {
+      const agentDir = path.join(outputDir, 'agents', agent.name);
+      await fs.mkdir(agentDir, { recursive: true });
+      await fs.writeFile(path.join(agentDir, 'SOUL.md'), agent.soulMd, 'utf8');
+    }
+  }
+
+  const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!record.serverIp || !ipPattern.test(record.serverIp)) {
+    return { ok: false, error: 'Invalid server IP.' };
+  }
+  const keyPathPattern = /^\/[\w\-/.]+$/;
+  if (!record.sshKeyPath || !keyPathPattern.test(record.sshKeyPath)) {
+    return { ok: false, error: 'Invalid SSH key path.' };
+  }
+
+  let filesDeployed = false;
+  try {
+    const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
+    const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
+
+    for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md']) {
+      await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
+    }
+
+    if (record.generatedFiles.multiAgentMd) {
+      await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'MULTI-AGENT.md'), `${remoteBase}/MULTI-AGENT.md`]);
+    }
+
+    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+      await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${record.serverIp}`,
+        'mkdir -p ' + record.generatedFiles.agents.map(a => `/home/ubuntu/clawd/agents/${a.name}`).join(' ')
+      ]);
+
+      for (const agent of record.generatedFiles.agents) {
+        const localPath = path.join(outputDir, 'agents', agent.name, 'SOUL.md');
+        await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/SOUL.md`]);
+      }
+    }
+
+    let chmodPaths = '/home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/HEARTBEAT.md /home/ubuntu/clawd/BOOTSTRAP.md';
+    if (record.generatedFiles.multiAgentMd) {
+      chmodPaths += ' /home/ubuntu/clawd/MULTI-AGENT.md';
+    }
+    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+      for (const agent of record.generatedFiles.agents) {
+        chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/SOUL.md`;
+      }
+    }
+
+    await execFileAsync('ssh', [
+      '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+      `ubuntu@${record.serverIp}`,
+      `chmod 644 ${chmodPaths}`
+    ]);
+
+    filesDeployed = true;
+    console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
+  } catch (scpErr) {
+    console.error(`SCP deployment failed for ${sessionId}: ${scpErr.message}`);
+  }
+
+  let gatewayToken = '';
+  if (filesDeployed) {
+    try {
+      const { stdout } = await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+        `ubuntu@${record.serverIp}`,
+        'docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo ""'
+      ]);
+      gatewayToken = stdout.trim();
+    } catch (err) {
+      console.error(`Gateway token read failed for ${sessionId}: ${err.message}`);
+    }
+  }
+
+  await updateSession(sessionId, (rec) => {
+    rec.filesWritten = true;
+    rec.filesDeployed = filesDeployed;
+    rec.filesWrittenAt = new Date().toISOString();
+    rec.updatedAt = new Date().toISOString();
+    if (gatewayToken) rec.gatewayToken = gatewayToken;
+  });
+
+  return { ok: true, deployed: filesDeployed, gatewayToken };
+}
+
+async function tryAutoWriteFiles(sessionId) {
+  const store = await loadStore();
+  const record = store.sessions[sessionId];
+
+  if (!record) return;
+  if (record.filesDeployed) return;
+  if (record.status !== 'ready') return;
+  if (!record.generatedFiles) return;
+
+  console.log(`Auto-write-files triggered for session ${sessionId}`);
+
+  try {
+    const result = await deployFilesToInstance(sessionId);
+
+    if (result.ok && result.deployed && !result.skipped) {
+      const freshStore = await loadStore();
+      const freshRecord = freshStore.sessions[sessionId];
+      if (freshRecord) {
+        sendReadyEmail({ ...freshRecord, gatewayToken: result.gatewayToken || freshRecord.gatewayToken })
+          .catch(err => console.error(`Ready email failed for ${sessionId}: ${err.message}`));
+      }
+    }
+  } catch (err) {
+    console.error(`Auto-write-files failed for ${sessionId}: ${err.message}`);
+  }
 }
 
 function stripeGet(pathname, secretKey) {
@@ -334,7 +580,7 @@ app.post('/api/onboarding', async (req, res) => {
         if (result.dnsHostname) {
           rec.webchatUrl = `https://${result.dnsHostname}`;
         }
-      });
+      }).then(() => tryAutoWriteFiles(sessionId));
       console.log(`Provisioning complete for session ${sessionId}: ${result.serverIp}`);
     }).catch(err => {
       updateSession(sessionId, (rec) => {
@@ -593,6 +839,9 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
     store.sessions[sessionId] = record;
     await saveStore(store);
 
+    // Try auto-write-files (in case provisioning already completed)
+    void tryAutoWriteFiles(sessionId);
+
     const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
     if (agents && agents.length > 0) {
       fileList.push('MULTI-AGENT.md');
@@ -617,143 +866,13 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
     }
 
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
+    const result = await deployFilesToInstance(sessionId);
 
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, error: result.error });
     }
 
-    if (!record.generatedFiles) {
-      return res.status(400).json({ ok: false, error: 'Profile not generated yet.' });
-    }
-
-    if (record.status !== 'ready' || !record.serverIp || !record.sshKeyPath) {
-      return res.status(400).json({ ok: false, error: 'Instance not provisioned yet. Please wait for provisioning to complete.' });
-    }
-
-    const username = record.username || slugify(record.displayName);
-
-    // TODO: SSH to customer instance — for now, write to local directory
-    const baseDir = path.join(__dirname, 'generated');
-    const outputDir = path.resolve(baseDir, username);
-    if (!outputDir.startsWith(baseDir)) {
-      return res.status(400).json({ ok: false, error: 'Invalid username for file path.' });
-    }
-    await fs.mkdir(outputDir, { recursive: true });
-
-    // Write generated files
-    await fs.writeFile(path.join(outputDir, 'SOUL.md'), record.generatedFiles.soulMd, 'utf8');
-    await fs.writeFile(path.join(outputDir, 'USER.md'), record.generatedFiles.userMd, 'utf8');
-    await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), record.generatedFiles.identityMd, 'utf8');
-    await fs.writeFile(path.join(outputDir, 'HEARTBEAT.md'), record.generatedFiles.heartbeatMd || '', 'utf8');
-    await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), record.generatedFiles.bootstrapMd || '', 'utf8');
-
-    // Write MULTI-AGENT.md
-    if (record.generatedFiles.multiAgentMd) {
-      await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), record.generatedFiles.multiAgentMd, 'utf8');
-    }
-
-    // Write sub-agent SOUL.md files
-    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-      for (const agent of record.generatedFiles.agents) {
-        const agentDir = path.join(outputDir, 'agents', agent.name);
-        await fs.mkdir(agentDir, { recursive: true });
-        await fs.writeFile(path.join(agentDir, 'SOUL.md'), agent.soulMd, 'utf8');
-      }
-    }
-
-    record.filesWritten = true;
-
-    // Validate server IP and SSH key path before SCP
-    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (!record.serverIp || !ipPattern.test(record.serverIp)) {
-      return res.status(400).json({ ok: false, error: 'Invalid server IP' });
-    }
-    const keyPathPattern = /^\/[\w\-/.]+$/;
-    if (!record.sshKeyPath || !keyPathPattern.test(record.sshKeyPath)) {
-      return res.status(400).json({ ok: false, error: 'Invalid SSH key path' });
-    }
-
-    // Deploy files to customer instance via SCP
-    let filesDeployed = false;
-    try {
-      // ConnectTimeout=30 because the health check only verifies HTTP :8080,
-      // not SSH readiness. SSH may need a few extra seconds after health passes.
-      const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
-      const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
-
-      for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md']) {
-        await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
-      }
-
-      // SCP MULTI-AGENT.md
-      if (record.generatedFiles.multiAgentMd) {
-        await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'MULTI-AGENT.md'), `${remoteBase}/MULTI-AGENT.md`]);
-      }
-
-      // SCP sub-agent directories
-      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-        // Create agents directories on remote
-        await execFileAsync('ssh', [
-          '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
-          `ubuntu@${record.serverIp}`,
-          'mkdir -p ' + record.generatedFiles.agents.map(a => `/home/ubuntu/clawd/agents/${a.name}`).join(' ')
-        ]);
-
-        // SCP each agent's SOUL.md
-        for (const agent of record.generatedFiles.agents) {
-          const localPath = path.join(outputDir, 'agents', agent.name, 'SOUL.md');
-          await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/SOUL.md`]);
-        }
-      }
-
-      // chmod all deployed files
-      let chmodPaths = '/home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/HEARTBEAT.md /home/ubuntu/clawd/BOOTSTRAP.md';
-      if (record.generatedFiles.multiAgentMd) {
-        chmodPaths += ' /home/ubuntu/clawd/MULTI-AGENT.md';
-      }
-      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-        for (const agent of record.generatedFiles.agents) {
-          chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/SOUL.md`;
-        }
-      }
-
-      await execFileAsync('ssh', [
-        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
-        `ubuntu@${record.serverIp}`,
-        `chmod 644 ${chmodPaths}`
-      ]);
-
-      filesDeployed = true;
-      console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
-    } catch (scpErr) {
-      console.error(`SCP deployment failed for ${sessionId}: ${scpErr.message}`);
-    }
-
-    record.filesDeployed = filesDeployed;
-    record.filesWrittenAt = new Date().toISOString();
-    record.updatedAt = new Date().toISOString();
-
-    store.sessions[sessionId] = record;
-    await saveStore(store);
-
-    const writtenFiles = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
-    if (record.generatedFiles.multiAgentMd) {
-      writtenFiles.push('MULTI-AGENT.md');
-    }
-    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-      for (const agent of record.generatedFiles.agents) {
-        writtenFiles.push(`agents/${agent.name}/SOUL.md`);
-      }
-    }
-
-    console.log(`Files written for session ${sessionId} to ${outputDir}`);
-    return res.json({
-      ok: true,
-      written: writtenFiles,
-      deployed: filesDeployed
-    });
+    return res.json({ ok: true, deployed: result.deployed });
   } catch (error) {
     console.error(`File write failed for ${sessionId}:`, error.message);
     return res.status(500).json({ ok: false, error: 'Unable to write files.' });
@@ -862,4 +981,5 @@ app.listen(PORT, () => {
   console.log(`ClawDaddy onboarding API listening on port ${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
   console.log(`Stripe key path: ${STRIPE_KEY_PATH}`);
+  console.log(`ZeptoMail key path: ${ZEPTOMAIL_KEY_PATH}`);
 });
