@@ -26,10 +26,10 @@ async function getApiKey() {
   }
 
   try {
-    cachedApiKey = (await fs.readFile('/home/ubuntu/clawd/.secrets/openrouter-key', 'utf8')).trim();
+    cachedApiKey = (await fs.readFile('/home/ubuntu/clawdaddy/.secrets/openrouter-key', 'utf8')).trim();
     return cachedApiKey;
   } catch (err) {
-    throw new Error('OPENROUTER_API_KEY not found in environment or /home/ubuntu/clawd/.secrets/openrouter-key');
+    throw new Error('OPENROUTER_API_KEY not found in environment or /home/ubuntu/clawdaddy/.secrets/openrouter-key');
   }
 }
 
@@ -262,7 +262,7 @@ Generate all five files now. Make them deeply personal, specific, and immediatel
 
   const responseText = await callOpenRouter(
     apiKey,
-    'anthropic/claude-sonnet-4',
+    'anthropic/claude-opus-4.6',
     [{ role: 'user', content: prompt }],
     8000
   );

@@ -831,6 +831,13 @@
 
     <script>
       (function () {
+        // ======== API Base URL ========
+        // CloudFront serves the static site at clawdaddy.sh, but API lives on the EC2 control plane.
+        // Use relative paths when served from the control plane, absolute URL when on CloudFront.
+        const API_BASE = window.location.hostname === 'clawdaddy.sh' || window.location.hostname === 'www.clawdaddy.sh'
+          ? 'https://api.clawdaddy.sh'
+          : '';
+
         // ======== Session Validation ========
         const params = new URLSearchParams(window.location.search);
         const sessionId = (params.get('session_id') || '').trim();
@@ -1131,7 +1138,7 @@
           }
 
           try {
-            const response = await fetch(`/api/onboarding/check-username/${encodeURIComponent(username)}`);
+            const response = await fetch(`${API_BASE}/api/onboarding/check-username/${encodeURIComponent(username)}`);
             const payload = await readJson(response);
 
             if (!response.ok) {
@@ -1267,7 +1274,7 @@
           pollInFlight = true;
 
           try {
-            const response = await fetch(`/api/onboarding/status/${encodeURIComponent(sessionId)}?t=${Date.now()}`, {
+            const response = await fetch(`${API_BASE}/api/onboarding/status/${encodeURIComponent(sessionId)}?t=${Date.now()}`, {
               method: 'GET',
               headers: { Accept: 'application/json' }
             });
@@ -1601,7 +1608,7 @@
           `;
 
           try {
-            const quizRes = await fetch(`/api/onboarding/quiz/${encodeURIComponent(sessionId)}`, {
+            const quizRes = await fetch(`${API_BASE}/api/onboarding/quiz/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
               body: JSON.stringify({
@@ -1615,13 +1622,13 @@
             });
             if (!quizRes.ok) throw new Error('Failed to save quiz results.');
 
-            const profileRes = await fetch(`/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
+            const profileRes = await fetch(`${API_BASE}/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { Accept: 'application/json' }
             });
             if (!profileRes.ok) throw new Error('Failed to generate profile.');
 
-            const writeRes = await fetch(`/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
+            const writeRes = await fetch(`${API_BASE}/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { Accept: 'application/json' }
             });
@@ -1748,7 +1755,7 @@
 
         async function selectProvider(provider) {
           try {
-            const response = await fetch(`/api/onboarding/auth-url/${encodeURIComponent(sessionId)}?provider=${provider}`);
+            const response = await fetch(`${API_BASE}/api/onboarding/auth-url/${encodeURIComponent(sessionId)}?provider=${provider}`);
             const payload = await readJson(response);
 
             if (payload.url) {
@@ -1759,7 +1766,7 @@
             authStatus.classList.remove('hidden');
 
             setTimeout(async () => {
-              await fetch(`/api/onboarding/auth-complete/${encodeURIComponent(sessionId)}`, {
+              await fetch(`${API_BASE}/api/onboarding/auth-complete/${encodeURIComponent(sessionId)}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify({ provider })

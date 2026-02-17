@@ -26,7 +26,9 @@ const allowedOrigins = new Set([
   'https://www.getclawdaddy.com',
   'http://localhost',
   'http://localhost:3000',
-  'http://18.209.163.24:3848'
+  'http://18.209.163.24:3848',
+  'http://3.230.7.207',
+  'http://3.230.7.207:3848'
 ]);
 
 const SESSION_ID_REGEX = /^cs_[a-zA-Z0-9_]+$/;
