@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ClawDaddy Portal</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/portal/styles.css">
 </head>
 <body>
   <div id="app">
     <!-- Login View -->
     <div id="view-login" class="view">
       <div class="login-card">
-        <img src="/logo.svg" alt="ClawDaddy" class="login-logo">
+        <img src="/portal/logo.svg" alt="ClawDaddy" class="login-logo">
         <h1>Welcome back</h1>
         <form id="login-form">
           <input type="password" id="login-input" placeholder="Password" autocomplete="current-password" required>
@@ -24,7 +24,7 @@
     <!-- Home View -->
     <div id="view-home" class="view" hidden>
       <header class="portal-header">
-        <img src="/logo.svg" alt="ClawDaddy" class="header-logo">
+        <img src="/portal/logo.svg" alt="ClawDaddy" class="header-logo">
         <span id="header-url" class="header-url"></span>
         <div class="header-actions">
           <button id="btn-settings" class="btn-icon" title="Settings">
@@ -117,6 +117,6 @@
     <!-- Toast container -->
     <div id="toast-container"></div>
   </div>
-  <script src="/app.js" defer></script>
+  <script src="/portal/app.js" defer></script>
 </body>
 </html>

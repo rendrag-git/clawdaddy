@@ -33,7 +33,7 @@
   // --- Auth ---
   async function checkAuth() {
     try {
-      const data = await api('GET', '/api/auth/check');
+      const data = await api('GET', '/portal/api/auth/check');
       return data.authenticated;
     } catch {
       return false;
@@ -41,22 +41,22 @@
   }
 
   async function loginWithToken(token) {
-    return api('POST', '/api/auth/login', { token });
+    return api('POST', '/portal/api/auth/login', { token });
   }
 
   async function loginWithPassword(password) {
-    return api('POST', '/api/auth/login', { password });
+    return api('POST', '/portal/api/auth/login', { password });
   }
 
   async function logout() {
-    await api('POST', '/api/auth/logout');
+    await api('POST', '/portal/api/auth/logout');
     profile = null;
     showView('login');
   }
 
   // --- Profile ---
   async function loadProfile() {
-    const data = await api('GET', '/api/portal/profile');
+    const data = await api('GET', '/portal/api/portal/profile');
     profile = data;
     renderHome();
   }
@@ -83,7 +83,7 @@
 
     // Dashboard link
     const dashLink = document.getElementById('link-dashboard');
-    dashLink.href = '/dashboard' + (profile.gatewayToken ? '?token=' + profile.gatewayToken : '');
+    dashLink.href = '/#token=' + (profile.gatewayToken || '');
 
     // API key
     const apikeyStatus = document.getElementById('apikey-status');
@@ -122,7 +122,7 @@
       return;
     }
 
-    const data = await api('POST', '/api/portal/settings/password', {
+    const data = await api('POST', '/portal/api/portal/settings/password', {
       currentPassword: current,
       newPassword: newPw
     });
@@ -142,7 +142,7 @@
     const msg = document.getElementById('apikey-msg');
     const key = document.getElementById('new-apikey').value;
 
-    const data = await api('POST', '/api/portal/settings/api-key', { apiKey: key });
+    const data = await api('POST', '/portal/api/portal/settings/api-key', { apiKey: key });
 
     if (data.ok) {
       msg.textContent = data.message || 'API key updated';
@@ -200,7 +200,7 @@
         return;
       }
 
-      var data = await api('POST', '/api/portal/settings/password', { newPassword: pw });
+      var data = await api('POST', '/portal/api/portal/settings/password', { newPassword: pw });
       if (data.ok) {
         toast('Password set successfully');
         document.getElementById('set-password-banner').hidden = true;
@@ -229,7 +229,7 @@
     var urlToken = params.get('token');
     if (urlToken) {
       // Strip token from URL immediately
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState({}, '', '/portal/');
       var result = await loginWithToken(urlToken);
       if (result.ok) {
         await loadProfile();

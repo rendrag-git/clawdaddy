@@ -141,7 +141,7 @@ async function sendReadyEmail(record) {
   const username = record.username;
   const instanceUrl = `https://${username}.clawdaddy.sh`;
   const portalToken = record.portalToken || '';
-  const portalLoginUrl = portalToken ? `${instanceUrl}?token=${encodeURIComponent(portalToken)}` : instanceUrl;
+  const portalLoginUrl = portalToken ? `${instanceUrl}/portal/?token=${encodeURIComponent(portalToken)}` : `${instanceUrl}/portal/`;
   const botName = record.assistantName || 'your assistant';
 
   const htmlBody = `

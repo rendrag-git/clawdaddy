@@ -104,15 +104,18 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-// Serve static files from ./public
+// Serve static files from ./public under /portal/
 const publicDir = path.join(__dirname, 'public');
-app.use(express.static(publicDir));
+app.use('/portal', express.static(publicDir));
+
+// Redirect /portal to /portal/ so relative paths work
+app.get('/portal', (_req, res) => res.redirect('/portal/'));
 
 // ---------------------------------------------------------------------------
 // Auth routes
 // ---------------------------------------------------------------------------
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/portal/api/auth/login', async (req, res) => {
   const { token, password } = req.body || {};
 
   let config;
@@ -151,13 +154,13 @@ app.post('/api/auth/login', async (req, res) => {
     sameSite: 'strict',
     secure: isProduction,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: '/',
+    path: '/portal',
   });
 
   return res.json({ ok: true });
 });
 
-app.get('/api/auth/check', (req, res) => {
+app.get('/portal/api/auth/check', (req, res) => {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
     return res.json({ authenticated: false });
@@ -170,8 +173,8 @@ app.get('/api/auth/check', (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (_req, res) => {
-  res.clearCookie(COOKIE_NAME, { path: '/' });
+app.post('/portal/api/auth/logout', (_req, res) => {
+  res.clearCookie(COOKIE_NAME, { path: '/portal' });
   return res.json({ ok: true });
 });
 
@@ -179,7 +182,7 @@ app.post('/api/auth/logout', (_req, res) => {
 // Portal routes (auth required)
 // ---------------------------------------------------------------------------
 
-app.get('/api/portal/profile', requireAuth, async (_req, res) => {
+app.get('/portal/api/portal/profile', requireAuth, async (_req, res) => {
   try {
     const [config, personality, instanceHealthy] = await Promise.all([
       readConfig(),
@@ -197,7 +200,6 @@ app.get('/api/portal/profile', requireAuth, async (_req, res) => {
       discordConnected: config.discordConnected,
       telegramConnected: config.telegramConnected,
       instanceHealthy,
-      dashboardUrl: '/dashboard',
       gatewayToken: config.gatewayToken,
       hasPassword: config.password !== null && config.password !== undefined,
     });
@@ -207,7 +209,7 @@ app.get('/api/portal/profile', requireAuth, async (_req, res) => {
   }
 });
 
-app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
+app.post('/portal/api/portal/settings/password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
 
   if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
@@ -257,7 +259,7 @@ app.post('/api/portal/settings/password', requireAuth, async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/portal/settings/api-key', requireAuth, async (req, res) => {
+app.post('/portal/api/portal/settings/api-key', requireAuth, async (req, res) => {
   const { apiKey } = req.body || {};
 
   if (!apiKey || typeof apiKey !== 'string') {
@@ -302,8 +304,8 @@ app.post('/api/portal/settings/api-key', requireAuth, async (req, res) => {
 // SPA fallback
 // ---------------------------------------------------------------------------
 
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
+app.get('/portal/*', (req, res) => {
+  if (req.path.startsWith('/portal/api/')) {
     return res.status(404).json({ error: 'Not found' });
   }
   const indexPath = path.join(publicDir, 'index.html');

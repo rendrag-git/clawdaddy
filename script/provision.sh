@@ -399,7 +399,7 @@ mkdir -p /home/ubuntu/clawd
 cp /opt/clawdaddy-docker/files/SOUL.md /home/ubuntu/clawd/ 2>/dev/null || true
 cp /opt/clawdaddy-docker/files/USER.md /home/ubuntu/clawd/ 2>/dev/null || true
 cp /opt/clawdaddy-docker/files/AGENTS.md /home/ubuntu/clawd/ 2>/dev/null || true
-chown -R 1000:1000 /home/ubuntu/clawd
+chown -R 1001:1001 /home/ubuntu/clawd
 
 echo "Starting OpenClaw container..."
 DOCKER_ARGS="-d --name openclaw --restart unless-stopped"
@@ -659,16 +659,11 @@ apt-get install -y -qq caddy > /dev/null 2>&1
 
 cat > /etc/caddy/Caddyfile <<'CADDYEOF'
 ${dns_username}.clawdaddy.sh {
-    handle /dashboard* {
-        reverse_proxy localhost:18789
-    }
-    handle /api/* {
+    handle /portal/* {
         reverse_proxy localhost:3847
     }
     handle {
-        root * /home/ubuntu/clawdaddy/portal/public
-        file_server
-        try_files {path} /index.html
+        reverse_proxy localhost:18789
     }
 }
 CADDYEOF
