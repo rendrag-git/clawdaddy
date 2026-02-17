@@ -205,15 +205,40 @@ async function loadStore() {
   }
 }
 
+// Write lock to prevent concurrent saveStore() from clobbering each other.
+// Instead of saving a full store snapshot (which goes stale during long operations),
+// use updateSession() for all session mutations.
+let _writeLock = Promise.resolve();
+
 async function saveStore(store) {
-  const directory = path.dirname(DATA_FILE);
-  await fs.mkdir(directory, { recursive: true });
+  _writeLock = _writeLock.then(async () => {
+    const directory = path.dirname(DATA_FILE);
+    await fs.mkdir(directory, { recursive: true });
+    const tmpPath = `${DATA_FILE}.tmp`;
+    const payload = `${JSON.stringify(store, null, 2)}\n`;
+    await fs.writeFile(tmpPath, payload, 'utf8');
+    await fs.rename(tmpPath, DATA_FILE);
+  }).catch(err => { console.error('saveStore error:', err.message); });
+  return _writeLock;
+}
 
-  const tmpPath = `${DATA_FILE}.tmp`;
-  const payload = `${JSON.stringify(store, null, 2)}\n`;
-
-  await fs.writeFile(tmpPath, payload, 'utf8');
-  await fs.rename(tmpPath, DATA_FILE);
+// Safe session updater: re-reads store, applies mutation, writes back — all under lock.
+// Use this instead of loadStore() + saveStore() for session mutations.
+async function updateSession(sessionId, mutator) {
+  _writeLock = _writeLock.then(async () => {
+    const store = await loadStore();
+    if (!store.sessions[sessionId]) {
+      store.sessions[sessionId] = {};
+    }
+    mutator(store.sessions[sessionId], store);
+    const directory = path.dirname(DATA_FILE);
+    await fs.mkdir(directory, { recursive: true });
+    const tmpPath = `${DATA_FILE}.tmp`;
+    const payload = `${JSON.stringify(store, null, 2)}\n`;
+    await fs.writeFile(tmpPath, payload, 'utf8');
+    await fs.rename(tmpPath, DATA_FILE);
+  }).catch(err => { console.error('updateSession error:', err.message); });
+  return _writeLock;
 }
 
 
@@ -282,8 +307,7 @@ app.post('/api/onboarding', async (req, res) => {
 
     // Fire-and-forget: spawn real provisioning in background
     // Tech debt: saveStore() calls in the stage callback and .then() are not
-    // serialized. At low volume this is fine. At scale, use a write queue or
-    // per-session lock to prevent interleaved JSON writes.
+    // Use updateSession() for all provisioning callbacks to avoid stale store snapshots.
     void spawnProvision({
       email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
       username: record.username,
@@ -292,31 +316,32 @@ app.post('/api/onboarding', async (req, res) => {
       stripeCustomerId: record.stripeCustomerId || '',
       stripeCheckoutSessionId: sessionId,
     }, (stage) => {
-      record.provisionStage = stage;
-      record.updatedAt = new Date().toISOString();
-      saveStore(store);
+      updateSession(sessionId, (rec) => {
+        rec.provisionStage = stage;
+        rec.updatedAt = new Date().toISOString();
+      });
     }).then(result => {
-      record.status = 'ready';
-      record.serverIp = result.serverIp;
-      record.sshKeyPath = result.sshKeyPath;
-      record.customerId = result.customerId;
-      record.vncPassword = result.vncPassword;
-      record.dnsHostname = result.dnsHostname;
-      record.provisionStage = 'complete';
-      record.readyAt = new Date().toISOString();
-      record.updatedAt = new Date().toISOString();
-      if (result.dnsHostname) {
-        record.webchatUrl = `https://${result.dnsHostname}`;
-      }
-      store.sessions[sessionId] = record;
-      saveStore(store);
+      updateSession(sessionId, (rec) => {
+        rec.status = 'ready';
+        rec.serverIp = result.serverIp;
+        rec.sshKeyPath = result.sshKeyPath;
+        rec.customerId = result.customerId;
+        rec.vncPassword = result.vncPassword;
+        rec.dnsHostname = result.dnsHostname;
+        rec.provisionStage = 'complete';
+        rec.readyAt = new Date().toISOString();
+        rec.updatedAt = new Date().toISOString();
+        if (result.dnsHostname) {
+          rec.webchatUrl = `https://${result.dnsHostname}`;
+        }
+      });
       console.log(`Provisioning complete for session ${sessionId}: ${result.serverIp}`);
     }).catch(err => {
-      record.status = 'failed';
-      record.provisionError = err.message;
-      record.updatedAt = new Date().toISOString();
-      store.sessions[sessionId] = record;
-      saveStore(store);
+      updateSession(sessionId, (rec) => {
+        rec.status = 'failed';
+        rec.provisionError = err.message;
+        rec.updatedAt = new Date().toISOString();
+      });
       console.error(`Provisioning failed for session ${sessionId}: ${err.message}`);
     });
 
@@ -537,6 +562,19 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
 
     if (!record.quizResults) {
       return res.status(400).json({ ok: false, error: 'Quiz results not found. Submit quiz first.' });
+    }
+
+    // Skip regeneration if profile already exists (avoids 2-min Opus call on retry)
+    if (record.generatedFiles && record.generatedFiles.soulMd) {
+      console.log(`Profile already generated for session ${sessionId}, skipping regeneration`);
+      const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+        fileList.push('MULTI-AGENT.md');
+        for (const agent of record.generatedFiles.agents) {
+          fileList.push(`agents/${agent.name}/SOUL.md`);
+        }
+      }
+      return res.json({ ok: true, files: fileList, cached: true });
     }
 
     const username = record.username || slugify(record.displayName);

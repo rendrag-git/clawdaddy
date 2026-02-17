@@ -1628,11 +1628,12 @@
             });
             if (!profileRes.ok) throw new Error('Failed to generate profile.');
 
-            const writeRes = await fetch(`${API_BASE}/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
+            // Write files to instance — non-blocking. If instance isn't ready yet,
+            // files will be written when provisioning completes (or on retry).
+            fetch(`${API_BASE}/api/onboarding/write-files/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { Accept: 'application/json' }
-            });
-            if (!writeRes.ok) throw new Error('Failed to write profile files.');
+            }).catch(() => {}); // fire-and-forget
 
             showStep(3);
             renderStep3();
