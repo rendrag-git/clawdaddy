@@ -144,6 +144,65 @@
     msg.hidden = false;
   }
 
+  // --- Set-password banner ---
+  function renderPasswordBanner() {
+    const banner = document.getElementById('set-password-banner');
+    if (!banner) return;
+    if (profile && profile.hasPassword === false) {
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
+  }
+
+  async function submitSetPassword(form) {
+    const msg = document.getElementById('set-password-msg');
+    const pw = document.getElementById('set-password-input').value;
+    const confirm = document.getElementById('set-password-confirm').value;
+
+    if (pw.length < 6) {
+      msg.textContent = 'Password must be at least 6 characters';
+      msg.className = 'feedback-msg feedback-error';
+      msg.hidden = false;
+      return;
+    }
+
+    if (pw !== confirm) {
+      msg.textContent = 'Passwords do not match';
+      msg.className = 'feedback-msg feedback-error';
+      msg.hidden = false;
+      return;
+    }
+
+    const data = await api('POST', '/api/portal/settings/password', { newPassword: pw });
+
+    if (data.ok) {
+      msg.textContent = 'Password set!';
+      msg.className = 'feedback-msg feedback-success';
+      form.reset();
+      profile.hasPassword = true;
+      renderPasswordBanner();
+      toast('Password saved');
+    } else {
+      msg.textContent = data.error || 'Failed to set password';
+      msg.className = 'feedback-msg feedback-error';
+    }
+    msg.hidden = false;
+  }
+
+  // --- Auto-login from URL token ---
+  async function tryTokenLogin() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (!token) return false;
+
+    // Strip token from URL immediately
+    window.history.replaceState({}, '', window.location.pathname);
+
+    const result = await login(token);
+    return result.ok;
+  }
+
   // --- Init ---
   async function init() {
     // Login form
@@ -184,10 +243,29 @@
       updateApiKey(e.target);
     });
 
-    // Check auth on load
+    // Set-password banner form
+    const spForm = document.getElementById('set-password-form');
+    if (spForm) {
+      spForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitSetPassword(e.target);
+      });
+    }
+
+    // Auto-login from ?token= URL param
+    const tokenLoggedIn = await tryTokenLogin();
+    if (tokenLoggedIn) {
+      await loadProfile();
+      renderPasswordBanner();
+      showView('home');
+      return;
+    }
+
+    // Check existing session
     const authed = await checkAuth();
     if (authed) {
       await loadProfile();
+      renderPasswordBanner();
       showView('home');
     } else {
       showView('login');

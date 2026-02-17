@@ -34,6 +34,17 @@
         </div>
       </header>
       <main class="portal-main">
+        <!-- Set-password banner (shown when no password set) -->
+        <div id="set-password-banner" class="card set-password-card" hidden>
+          <h3>Set a password</h3>
+          <p class="text-muted">Create a password so you can log in without the email link.</p>
+          <form id="set-password-form">
+            <input type="password" id="set-password-input" placeholder="New password (min 6 chars)" required minlength="6">
+            <input type="password" id="set-password-confirm" placeholder="Confirm password" required>
+            <button type="submit" class="btn-primary">Save Password</button>
+            <div id="set-password-msg" class="feedback-msg" hidden></div>
+          </form>
+        </div>
         <div id="welcome-section">
           <h2 id="welcome-title"></h2>
           <div id="personality-card" class="card muted-card"></div>
