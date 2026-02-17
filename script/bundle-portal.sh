@@ -36,6 +36,7 @@ if [[ ! -f "${PORTAL_DIR}/server.js" ]]; then
 fi
 
 tar -czf "${OUTPUT}" \
+    --owner=0 --group=0 \
     -C "${REPO_ROOT}" \
     portal/server.js \
     portal/package.json \

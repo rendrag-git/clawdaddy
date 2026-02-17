@@ -694,6 +694,8 @@ echo "Downloading portal bundle from ${PORTAL_BUNDLE_URL}..."
 curl -fsSL '${PORTAL_BUNDLE_URL}' -o /tmp/portal-bundle.tar.gz
 tar -xzf /tmp/portal-bundle.tar.gz -C /home/ubuntu/clawdaddy/portal --strip-components=1
 rm -f /tmp/portal-bundle.tar.gz
+chown -R root:root /home/ubuntu/clawdaddy/portal
+chmod o+x /home/ubuntu
 
 cd /home/ubuntu/clawdaddy/portal && npm install --production
 echo "Portal dependencies installed"
