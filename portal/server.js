@@ -18,7 +18,7 @@ const CONFIG_PATH =
   process.env.PORTAL_CONFIG_PATH ||
   '/home/ubuntu/clawdaddy-portal/config.json';
 const SOUL_MD_PATH =
-  process.env.SOUL_MD_PATH || '/home/ubuntu/clawd/agents/main/SOUL.md';
+  process.env.SOUL_MD_PATH || '/home/ubuntu/clawd/SOUL.md';
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 const COOKIE_NAME = 'portal_session';
 
@@ -55,10 +55,8 @@ async function writeConfig(config) {
 async function readSoulMd() {
   try {
     const content = await fs.readFile(SOUL_MD_PATH, 'utf-8');
-    // Extract everything between "## Personality" and the next "##" heading
-    const match = content.match(
-      /^## Personality\s*\n([\s\S]*?)(?=\n## |\n*$)/m,
-    );
+    // Extract the bold opening summary paragraph from SOUL.md
+    const match = content.match(/\*\*(.+?)\*\*/s);
     if (match) {
       return match[1].trim();
     }

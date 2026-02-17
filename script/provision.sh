@@ -743,7 +743,7 @@ ExecStart=/usr/bin/node server.js
 Environment=PORT=3847
 Environment=NODE_ENV=production
 Environment=PORTAL_CONFIG_PATH=/home/ubuntu/clawdaddy-portal/config.json
-Environment=SOUL_MD_PATH=/home/ubuntu/clawd/agents/main/SOUL.md
+Environment=SOUL_MD_PATH=/home/ubuntu/clawd/SOUL.md
 Restart=always
 RestartSec=5
 
