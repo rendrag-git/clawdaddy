@@ -320,7 +320,7 @@ async function deployFilesToInstance(sessionId) {
       const { stdout } = await execFileAsync('ssh', [
         '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
         `ubuntu@${record.serverIp}`,
-        'cat /home/ubuntu/clawdaddy-portal/config.json 2>/dev/null || echo ""'
+        'cat /home/ubuntu/clawdaddy-portal/config.json 2>/dev/null || echo "{}"'
       ]);
       const portalConfig = JSON.parse(stdout.trim());
       portalToken = portalConfig.portalToken || '';
