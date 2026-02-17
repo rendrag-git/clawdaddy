@@ -140,9 +140,8 @@ async function sendReadyEmail(record) {
 
   const username = record.username;
   const instanceUrl = `https://${username}.clawdaddy.sh`;
-  const dashboardUrl = `${instanceUrl}/dashboard`;
-  const gatewayToken = record.gatewayToken || '';
-  const tokenParam = gatewayToken ? `?token=${encodeURIComponent(gatewayToken)}` : '';
+  const portalToken = record.portalToken || '';
+  const loginUrl = portalToken ? `${instanceUrl}?token=${encodeURIComponent(portalToken)}` : instanceUrl;
   const botName = record.assistantName || 'your assistant';
 
   const htmlBody = `
@@ -153,13 +152,12 @@ async function sendReadyEmail(record) {
   <div style="padding:24px;">
     <p style="font-size:16px;line-height:1.6;color:#c9d4ff;">Hey! <strong>${escapeHtml(botName)}</strong> is set up and ready to go at:</p>
     <p style="text-align:center;margin:20px 0;">
-      <a href="${instanceUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
+      <a href="${loginUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
     </p>
-    ${gatewayToken ? `<p style="font-size:14px;color:#a7b3d8;text-align:center;">Gateway token: <code style="background:rgba(124,140,255,0.15);padding:2px 8px;border-radius:4px;color:#7c8cff;">${escapeHtml(gatewayToken)}</code></p>` : ''}
     <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
     <h2 style="font-size:18px;color:#e6ecff;margin:0 0 12px;">Quick start</h2>
     <ol style="font-size:14px;color:#c9d4ff;line-height:1.8;padding-left:20px;margin:0;">
-      <li>Open <a href="${dashboardUrl}${tokenParam}" style="color:#3ee7ff;">${username}.clawdaddy.sh/dashboard</a> to access the control panel</li>
+      <li>Open <a href="${loginUrl}" style="color:#3ee7ff;">${username}.clawdaddy.sh</a> to access your portal (you'll be logged in automatically)</li>
       <li>Use the webchat to talk to ${escapeHtml(botName)} directly in your browser</li>
       <li>Connect Discord: add a bot token in the dashboard settings to chat from your server</li>
     </ol>
@@ -306,6 +304,7 @@ async function deployFilesToInstance(sessionId) {
   }
 
   let gatewayToken = '';
+  let portalToken = '';
   if (filesDeployed) {
     try {
       const { stdout } = await execFileAsync('ssh', [
@@ -317,6 +316,17 @@ async function deployFilesToInstance(sessionId) {
     } catch (err) {
       console.error(`Gateway token read failed for ${sessionId}: ${err.message}`);
     }
+    try {
+      const { stdout } = await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+        `ubuntu@${record.serverIp}`,
+        'cat /home/ubuntu/clawdaddy-portal/config.json 2>/dev/null || echo "{}"'
+      ]);
+      const portalConfig = JSON.parse(stdout.trim());
+      portalToken = portalConfig.portalToken || '';
+    } catch (err) {
+      console.error(`Portal token read failed for ${sessionId}: ${err.message}`);
+    }
   }
 
   await updateSession(sessionId, (rec) => {
@@ -325,9 +335,10 @@ async function deployFilesToInstance(sessionId) {
     rec.filesWrittenAt = new Date().toISOString();
     rec.updatedAt = new Date().toISOString();
     if (gatewayToken) rec.gatewayToken = gatewayToken;
+    if (portalToken) rec.portalToken = portalToken;
   });
 
-  return { ok: true, deployed: filesDeployed, gatewayToken };
+  return { ok: true, deployed: filesDeployed, gatewayToken, portalToken };
 }
 
 async function tryAutoWriteFiles(sessionId) {
@@ -348,8 +359,11 @@ async function tryAutoWriteFiles(sessionId) {
       const freshStore = await loadStore();
       const freshRecord = freshStore.sessions[sessionId];
       if (freshRecord) {
-        sendReadyEmail({ ...freshRecord, gatewayToken: result.gatewayToken || freshRecord.gatewayToken })
-          .catch(err => console.error(`Ready email failed for ${sessionId}: ${err.message}`));
+        sendReadyEmail({
+          ...freshRecord,
+          gatewayToken: result.gatewayToken || freshRecord.gatewayToken,
+          portalToken: result.portalToken || freshRecord.portalToken,
+        }).catch(err => console.error(`Ready email failed for ${sessionId}: ${err.message}`));
       }
     }
   } catch (err) {
