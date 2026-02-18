@@ -246,12 +246,20 @@ async function deployFilesToInstance(sessionId) {
   }
 
   if (gatewayToken || portalToken) {
+    // Hash portal password before storing — plaintext only exists in memory
+    // and is returned once in the HTTP response for the success screen.
+    let hashedPassword = null;
+    if (portalToken) {
+      const bcrypt = require('bcrypt');
+      hashedPassword = bcrypt.hashSync(portalToken, 10);
+    }
     updateOnboardingSession(sessionId, {
       ...(gatewayToken ? { gateway_token: gatewayToken } : {}),
-      ...(portalToken ? { portal_password: portalToken } : {}),
+      ...(hashedPassword ? { portal_password: hashedPassword } : {}),
     });
   }
 
+  // Return plaintext portalToken in response (shown once on success screen, never persisted in plaintext)
   return { ok: true, deployed: filesDeployed, gatewayToken, portalToken };
 }
 
