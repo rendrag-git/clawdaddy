@@ -4,6 +4,9 @@ import Stripe from 'stripe';
 import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { init as initDb } from './lib/customers.js';
+initDb();
+
 // Lazy-load stripe handlers to prevent email.js from crashing startup
 let stripe_handlers = null;
 async function getStripeHandlers() {

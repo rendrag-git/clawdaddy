@@ -9,6 +9,10 @@ import {
 } from './customers.js';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+const require_cjs = createRequire(import.meta.url);
+const dbMod = require_cjs('../../../api/lib/db.js');
 
 const in_flight_checkout_sessions = new Set();
 
@@ -28,17 +32,11 @@ export async function handle_checkout_completed(session) {
 
   const tier = metadata.tier || 'byok';
 
-  // If this checkout was initiated via the onboarding flow, don't provision here.
-  // The onboarding server owns the provisioning lifecycle.
-  if (metadata.onboarding === 'true') {
-    console.log(`Onboarding checkout detected for ${customer_email} (session: ${checkout_session_id}). Sending welcome email only.`);
-    try {
-      await email.onboarding_welcome(customer_email, checkout_session_id);
-    } catch (err) {
-      console.error(`Failed to send onboarding welcome email to ${customer_email}: ${err.message}`);
-    }
-    return;
-  }
+  const custom_fields = session.custom_fields || [];
+  const username_field = custom_fields.find(f => f.key === 'username');
+  const bot_name_field = custom_fields.find(f => f.key === 'bot_name');
+  const username = username_field?.text?.value || metadata.username || null;
+  const bot_name = bot_name_field?.text?.value || metadata.bot_name || null;
 
   if (!customer_email) {
     console.error(`checkout.session.completed missing customer email (session: ${checkout_session_id || 'unknown'})`);
@@ -77,6 +75,27 @@ export async function handle_checkout_completed(session) {
     in_flight_checkout_sessions.add(checkout_session_id);
   }
 
+  // Persist customer + onboarding session to SQLite
+  let customer_id = null;
+  if (username) {
+    try {
+      customer_id = dbMod.createCustomer({
+        username,
+        email: customer_email,
+        botName: bot_name,
+        tier,
+        stripeCustomerId: stripe_customer_id,
+        stripeSessionId: checkout_session_id,
+      });
+
+      // Create onboarding session for the frontend to use
+      dbMod.createOnboardingSession({ stripeSessionId: checkout_session_id, customerId: customer_id });
+      console.log(`Created customer ${customer_id} (${username}) and onboarding session for ${checkout_session_id}`);
+    } catch (err) {
+      console.error(`Failed to persist customer to SQLite: ${err.message}`);
+    }
+  }
+
   // Send immediate acknowledgment (tier-specific template), but don't block provisioning on email issues.
   try {
     if (tier === 'managed') {
@@ -91,17 +110,26 @@ export async function handle_checkout_completed(session) {
   // Spawn provision asynchronously -- don't block the webhook response
   void spawn_provision(params)
     .then(async (result) => {
-      let customer_id = result.customer_id;
-      if (!customer_id) {
-        const recent = await find_most_recent_by_email(customer_email);
-        customer_id = recent?.id || null;
+      // Resolve customer_id: prefer outer (SQLite-created), then provisioner result, then DB lookup
+      let resolved_customer_id = customer_id || result.customer_id;
+      if (!resolved_customer_id) {
+        const recent = find_most_recent_by_email(customer_email);
+        resolved_customer_id = recent?.id || null;
       }
 
-      if (customer_id) {
-        await update_customer(customer_id, {
+      if (resolved_customer_id) {
+        update_customer(resolved_customer_id, {
           stripe_customer_id: stripe_customer_id || '',
           stripe_subscription_id: stripe_subscription_id || '',
           stripe_checkout_session_id: checkout_session_id || '',
+        });
+
+        // Update provision details in SQLite
+        dbMod.updateProvision(resolved_customer_id, {
+          serverIp: result.ip,
+          sshKeyPath: result.ssh_key_path || (username ? `/home/ubuntu/.ssh/customer-keys/openclaw-${username}` : null),
+          dnsHostname: username ? `${username}.clawdaddy.sh` : null,
+          provisionStatus: 'ready',
         });
       } else {
         console.error(`Could not map provisioned customer for ${customer_email} to persist Stripe IDs`);
