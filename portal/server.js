@@ -81,6 +81,18 @@ async function checkHealth() {
 }
 
 // ---------------------------------------------------------------------------
+// Input sanitization
+// ---------------------------------------------------------------------------
+
+function sanitizeAgentId(value) {
+  const id = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  return id || 'main';
+}
+
+// ---------------------------------------------------------------------------
 // Agent helpers
 // ---------------------------------------------------------------------------
 
@@ -213,6 +225,18 @@ app.get('/portal/manifest.json', async (_req, res) => {
       { src: '/portal/logo.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
     ],
   });
+});
+
+// Protect chat routes — redirect to login if not authenticated
+app.use('/portal/chat', (req, res, next) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.redirect('/portal/');
+  try {
+    jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.redirect('/portal/');
+  }
 });
 
 // Serve static files from ./public under /portal/
@@ -432,19 +456,14 @@ app.post('/portal/api/chat/send', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  const agentId = sanitizeAgentId(agent);
+
   let config;
   try {
     config = await readConfig();
   } catch (err) {
     console.error('Failed to read config:', err.message);
     return res.status(500).json({ error: 'Server configuration error' });
-  }
-
-  let systemPrompt;
-  try {
-    systemPrompt = await getAgentSystemPrompt(agent || 'main');
-  } catch {
-    systemPrompt = 'You are a helpful assistant.';
   }
 
   // Sanitize messages — only pass role + content
@@ -456,12 +475,13 @@ app.post('/portal/api/chat/send', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'No valid messages provided' });
   }
 
+  // Use OpenAI chat completions format for OpenClaw gateway
   const requestBody = JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    system: systemPrompt,
+    model: 'openclaw:' + agentId,
     messages: cleanMessages,
     max_tokens: 4096,
     stream: true,
+    user: config.username || undefined,
   });
 
   // Set SSE headers
@@ -476,13 +496,11 @@ app.post('/portal/api/chat/send', requireAuth, async (req, res) => {
     {
       hostname: '127.0.0.1',
       port: GATEWAY_PORT,
-      path: '/v1/messages',
+      path: '/v1/chat/completions',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
         'Authorization': 'Bearer ' + (config.gatewayToken || ''),
-        'anthropic-version': '2023-06-01',
       },
     },
     (proxyRes) => {

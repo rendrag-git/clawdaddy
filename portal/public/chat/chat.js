@@ -142,61 +142,87 @@
   }
 
   // ── Markdown renderer ──
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderMarkdown(src) {
     if (!src) return '';
 
-    // Escape HTML
-    let html = src
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    var text = String(src).replace(/\r\n/g, '\n');
 
-    // Code blocks: ```lang\n...\n```
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
-      return '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>';
+    // 1. Extract code blocks BEFORE escaping so content stays raw
+    var codeBlocks = [];
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
+      var idx = codeBlocks.length;
+      codeBlocks.push('<pre><code>' + escapeHtml(code.replace(/\n$/, '')) + '</code></pre>');
+      return '@@CB' + idx + '@@';
     });
 
-    // Inline code
-    html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    // 2. Extract inline code before escaping
+    var inlineCode = [];
+    text = text.replace(/`([^`\n]+)`/g, function (_, code) {
+      var idx = inlineCode.length;
+      inlineCode.push('<code>' + escapeHtml(code) + '</code>');
+      return '@@IC' + idx + '@@';
+    });
+
+    // 3. Extract links before escaping (preserve href)
+    var links = [];
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, url) {
+      var idx = links.length;
+      links.push('<a href="' + encodeURI(url) + '" target="_blank" rel="noopener">' + escapeHtml(label) + '</a>');
+      return '@@LK' + idx + '@@';
+    });
+
+    // 4. Now escape everything else
+    text = escapeHtml(text);
+
+    // 5. Restore placeholders
+    text = text.replace(/@@CB(\d+)@@/g, function (_, i) { return codeBlocks[i]; });
+    text = text.replace(/@@IC(\d+)@@/g, function (_, i) { return inlineCode[i]; });
+    text = text.replace(/@@LK(\d+)@@/g, function (_, i) { return links[i]; });
 
     // Headers
-    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
     // Horizontal rules
-    html = html.replace(/^---+$/gm, '<hr>');
+    text = text.replace(/^---+$/gm, '<hr>');
 
     // Bold + italic
-    html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
 
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-    // Blockquotes
-    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+    // Blockquotes (escaped > becomes &gt;)
+    text = text.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
     // Unordered lists
-    html = html.replace(/^(?:[-*] .+\n?)+/gm, function (block) {
-      const items = block.trim().split('\n').map(function (line) {
+    text = text.replace(/^(?:[-*] .+\n?)+/gm, function (block) {
+      var items = block.trim().split('\n').map(function (line) {
         return '<li>' + line.replace(/^[-*] /, '') + '</li>';
       }).join('');
       return '<ul>' + items + '</ul>';
     });
 
     // Ordered lists
-    html = html.replace(/^(?:\d+\. .+\n?)+/gm, function (block) {
-      const items = block.trim().split('\n').map(function (line) {
+    text = text.replace(/^(?:\d+\. .+\n?)+/gm, function (block) {
+      var items = block.trim().split('\n').map(function (line) {
         return '<li>' + line.replace(/^\d+\. /, '') + '</li>';
       }).join('');
       return '<ol>' + items + '</ol>';
     });
 
     // Tables
-    html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, function (_, headerRow, sepRow, bodyRows) {
+    text = text.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, function (_, headerRow, sepRow, bodyRows) {
       var headers = headerRow.split('|').filter(function (c) { return c.trim(); });
       var rows = bodyRows.trim().split('\n');
       var thead = '<thead><tr>' + headers.map(function (h) { return '<th>' + h.trim() + '</th>'; }).join('') + '</tr></thead>';
@@ -207,18 +233,16 @@
       return '<table>' + thead + tbody + '</table>';
     });
 
-    // Paragraphs: split by double newlines (but not inside pre/table etc)
-    var parts = html.split(/\n\n+/);
-    html = parts.map(function (p) {
+    // Paragraphs: split by double newlines
+    var parts = text.split(/\n\n+/);
+    text = parts.map(function (p) {
       p = p.trim();
       if (!p) return '';
-      // Don't wrap block elements
       if (/^<(h[1-6]|pre|ul|ol|blockquote|hr|table|div)/.test(p)) return p;
-      // Convert single newlines to <br> within paragraphs
       return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
     }).join('\n');
 
-    return html;
+    return text;
   }
 
   // ── Rendering ──
@@ -493,11 +517,34 @@
           try {
             var event = JSON.parse(jsonStr);
 
-            if (event.type === 'content_block_delta' && event.delta && event.delta.text) {
-              fullText += event.delta.text;
-            } else if (event.type === 'error') {
-              throw new Error(event.error || 'Stream error');
+            if (event.type === 'error') {
+              throw new Error((event.error && event.error.message) || event.error || 'Stream error');
             }
+
+            // Extract text delta — handle multiple gateway formats
+            var delta = '';
+            // OpenAI chat completions format (OpenClaw gateway)
+            if (event.choices && event.choices[0] && event.choices[0].delta && typeof event.choices[0].delta.content === 'string') {
+              delta = event.choices[0].delta.content;
+            }
+            // Anthropic streaming formats
+            else if (event.type === 'content_block_delta' && event.delta && typeof event.delta.text === 'string') {
+              delta = event.delta.text;
+            } else if (event.type === 'content_block_start' && event.content_block && typeof event.content_block.text === 'string') {
+              delta = event.content_block.text;
+            } else if (event.type === 'message_delta' && event.delta && typeof event.delta.text === 'string') {
+              delta = event.delta.text;
+            } else if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
+              delta = event.delta;
+            } else if (typeof event.completion === 'string') {
+              delta = event.completion;
+            }
+            // OpenAI non-streaming format (full message)
+            else if (event.choices && event.choices[0] && event.choices[0].message && typeof event.choices[0].message.content === 'string') {
+              delta = event.choices[0].message.content;
+            }
+
+            if (delta) fullText += delta;
           } catch (parseErr) {
             if (parseErr.message && !parseErr.message.includes('JSON')) {
               throw parseErr;

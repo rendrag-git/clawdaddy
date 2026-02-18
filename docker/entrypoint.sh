@@ -34,8 +34,6 @@ if [[ -z "${ANTHROPIC_API_KEY}" ]]; then
 fi
 
 # --- Generate OpenClaw config ---
-echo "📝 Writing OpenClaw configuration..."
-
 MODEL="${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-20250514}"
 
 # Persistent gateway token - generate once, reuse on restarts
@@ -50,7 +48,7 @@ fi
 
 WEBCHAT="${WEBCHAT_ENABLED:-true}"
 
-# Build channels object
+# Build channels object from env vars
 CHANNELS="{}"
 if [[ -n "${DISCORD_TOKEN}" && -n "${DISCORD_CHANNEL}" ]]; then
     CHANNELS=$(DISCORD_TOKEN="${DISCORD_TOKEN}" DISCORD_CHANNEL="${DISCORD_CHANNEL}" node -e "
@@ -66,8 +64,13 @@ if [[ -n "${TELEGRAM_TOKEN}" && -n "${TELEGRAM_CHAT}" ]]; then
       console.log(JSON.stringify(c))" <<< "${CHANNELS}" 2>/dev/null || echo "${CHANNELS}")
 fi
 
-# Write main config (no API key here — that goes in auth-profiles.json)
-cat > "${CONFIG_DIR}/openclaw.json" <<CONF
+INIT_MARKER="${CONFIG_DIR}/.initialized"
+
+if [[ ! -f "${INIT_MARKER}" ]]; then
+    # ── First boot: write full config from env vars ──
+    echo "📝 First boot — initializing OpenClaw configuration..."
+
+    cat > "${CONFIG_DIR}/openclaw.json" <<CONF
 {
   "auth": {
     "profiles": {
@@ -97,18 +100,23 @@ cat > "${CONFIG_DIR}/openclaw.json" <<CONF
     "controlUi": {
       "dangerouslyDisableDeviceAuth": true,
       "allowInsecureAuth": true
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
     }
   },
   "channels": ${CHANNELS}
 }
 CONF
 
-# Remove any unrecognized config keys that would cause openclaw to reject the config
-su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
+    # Remove any unrecognized config keys that would cause openclaw to reject the config
+    su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
 
-# Write auth-profiles.json (where the API key actually lives)
-mkdir -p "${CONFIG_DIR}/agents/main/agent"
-cat > "${CONFIG_DIR}/agents/main/agent/auth-profiles.json" <<APROF
+    # Write auth-profiles.json (where the API key actually lives)
+    mkdir -p "${CONFIG_DIR}/agents/main/agent"
+    cat > "${CONFIG_DIR}/agents/main/agent/auth-profiles.json" <<APROF
 {
   "version": 1,
   "profiles": {
@@ -123,6 +131,60 @@ cat > "${CONFIG_DIR}/agents/main/agent/auth-profiles.json" <<APROF
   }
 }
 APROF
+
+    touch "${INIT_MARKER}"
+
+else
+    # ── Subsequent boot: merge env-driven values into existing config ──
+    echo "📝 Restarting — merging env updates into existing config..."
+
+    node -e "
+      const fs = require('fs');
+      const p = '${CONFIG_DIR}/openclaw.json';
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+
+      // Update model if env changed
+      if (!cfg.agents) cfg.agents = {};
+      if (!cfg.agents.defaults) cfg.agents.defaults = {};
+      if (!cfg.agents.defaults.model) cfg.agents.defaults.model = {};
+      cfg.agents.defaults.model.primary = '${MODEL}';
+
+      // Ensure gateway auth token is current
+      if (!cfg.gateway) cfg.gateway = {};
+      if (!cfg.gateway.auth) cfg.gateway.auth = {};
+      cfg.gateway.auth.token = '${GW_TOKEN}';
+
+      // Ensure http chatCompletions is enabled
+      if (!cfg.gateway.http) cfg.gateway.http = {};
+      if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
+      cfg.gateway.http.endpoints.chatCompletions = { enabled: true };
+
+      // Update channels from env (if provided)
+      const channels = ${CHANNELS};
+      if (Object.keys(channels).length > 0) {
+        if (!cfg.channels) cfg.channels = {};
+        Object.assign(cfg.channels, channels);
+      }
+
+      fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+      console.log('   Config merged successfully');
+    "
+
+    # Update API key in auth-profiles (merge, don't overwrite)
+    AUTH_PROF="${CONFIG_DIR}/agents/main/agent/auth-profiles.json"
+    if [[ -f "${AUTH_PROF}" ]]; then
+        node -e "
+          const fs = require('fs');
+          const p = '${AUTH_PROF}';
+          const prof = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (prof.profiles && prof.profiles['anthropic:manual']) {
+            prof.profiles['anthropic:manual'].token = '${ANTHROPIC_API_KEY}';
+          }
+          fs.writeFileSync(p, JSON.stringify(prof, null, 2) + '\n');
+          console.log('   Auth profiles updated');
+        "
+    fi
+fi
 
 # Generate device identity (required for webchat pairing/auth)
 mkdir -p "${CONFIG_DIR}/identity"
