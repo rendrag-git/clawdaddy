@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { exec } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +23,12 @@ const SOUL_MD_PATH =
   process.env.SOUL_MD_PATH || '/home/ubuntu/clawd/SOUL.md';
 const CLAWD_DIR = process.env.CLAWD_DIR || '/home/ubuntu/clawd';
 const GATEWAY_PORT = parseInt(process.env.GATEWAY_PORT || '18789', 10);
+const OPENCLAW_CONFIG_PATH =
+  process.env.OPENCLAW_CONFIG_PATH ||
+  '/home/clawd/.openclaw/openclaw.json';
+const AUTH_PROFILES_PATH =
+  process.env.AUTH_PROFILES_PATH ||
+  '/home/clawd/.openclaw/agents/main/agent/auth-profiles.json';
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 const COOKIE_NAME = 'portal_session';
 
@@ -53,6 +60,89 @@ async function writeConfig(config) {
   // Invalidate cache after write
   _configCache = config;
   _configCacheTime = Date.now();
+}
+
+// ---------------------------------------------------------------------------
+// Auth-profiles helpers
+// ---------------------------------------------------------------------------
+
+async function readAuthProfiles() {
+  try {
+    const raw = await fs.readFile(AUTH_PROFILES_PATH, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return { version: 1, profiles: {}, order: {} };
+    }
+    throw err;
+  }
+}
+
+async function writeAuthProfiles(data) {
+  await fs.mkdir(path.dirname(AUTH_PROFILES_PATH), { recursive: true });
+  await fs.writeFile(AUTH_PROFILES_PATH, JSON.stringify(data, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// OpenClaw config helpers
+// ---------------------------------------------------------------------------
+
+async function readOpenClawConfig() {
+  const raw = await fs.readFile(OPENCLAW_CONFIG_PATH, 'utf-8');
+  return JSON.parse(raw);
+}
+
+async function writeOpenClawConfig(data) {
+  await fs.writeFile(
+    OPENCLAW_CONFIG_PATH,
+    JSON.stringify(data, null, 2),
+    'utf-8'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gateway restart
+// ---------------------------------------------------------------------------
+
+function restartGateway() {
+  exec('openclaw gateway restart', (err, stdout, stderr) => {
+    if (err) {
+      console.error('Gateway restart failed:', err.message);
+      return;
+    }
+    if (stdout) console.log('Gateway restart:', stdout.trim());
+    if (stderr) console.error('Gateway restart stderr:', stderr.trim());
+  });
+}
+
+// ---------------------------------------------------------------------------
+// API key validation
+// ---------------------------------------------------------------------------
+
+const KEY_PREFIXES = {
+  anthropic: 'sk-ant-',
+  openai: 'sk-',
+  openrouter: 'sk-or-',
+  google: 'AI',
+};
+
+function validateKeyFormat(provider, key) {
+  const prefix = KEY_PREFIXES[provider];
+  if (!prefix) return { valid: false, error: `Unknown provider: ${provider}` };
+  if (!key || typeof key !== 'string') return { valid: false, error: 'Key is required' };
+  if (!key.startsWith(prefix)) {
+    return { valid: false, error: `Key must start with "${prefix}"` };
+  }
+  if (key.length < 10) return { valid: false, error: 'Key is too short' };
+  return { valid: true };
+}
+
+function maskKey(key) {
+  if (!key || key.length < 8) return '****';
+  return key.slice(0, 7) + '...' + key.slice(-4);
 }
 
 async function readSoulMd() {
@@ -433,6 +523,207 @@ app.post('/portal/api/portal/settings/api-key', requireAuth, async (req, res) =>
   }
 
   return res.json({ ok: true, message: 'API key updated in portal config.' });
+});
+
+// ---------------------------------------------------------------------------
+// Config: API Key management (auth required)
+// ---------------------------------------------------------------------------
+
+app.get('/portal/api/config/keys', requireAuth, async (_req, res) => {
+  try {
+    const profiles = await readAuthProfiles();
+    const providers = {};
+
+    for (const [profileId, profile] of Object.entries(profiles.profiles || {})) {
+      const prov = profile.provider;
+      if (!providers[prov]) {
+        providers[prov] = {
+          provider: prov,
+          configured: true,
+          masked: maskKey(profile.token),
+          profileId,
+        };
+      }
+    }
+
+    // Include unconfigured providers
+    for (const prov of ['anthropic', 'openai', 'openrouter', 'google']) {
+      if (!providers[prov]) {
+        providers[prov] = { provider: prov, configured: false, masked: null, profileId: null };
+      }
+    }
+
+    return res.json({ ok: true, providers: Object.values(providers) });
+  } catch (err) {
+    console.error('Failed to read auth profiles:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to read API keys' });
+  }
+});
+
+app.post('/portal/api/config/keys', requireAuth, async (req, res) => {
+  const { provider, key } = req.body || {};
+
+  const validation = validateKeyFormat(provider, key);
+  if (!validation.valid) {
+    return res.status(400).json({ ok: false, error: validation.error });
+  }
+
+  try {
+    const profiles = await readAuthProfiles();
+    const profileId = `${provider}:manual`;
+
+    profiles.profiles[profileId] = {
+      type: 'token',
+      provider,
+      token: key,
+    };
+
+    // Update order
+    if (!profiles.order[provider]) {
+      profiles.order[provider] = [];
+    }
+    if (!profiles.order[provider].includes(profileId)) {
+      profiles.order[provider].push(profileId);
+    }
+
+    await writeAuthProfiles(profiles);
+    restartGateway();
+
+    return res.json({ ok: true, masked: maskKey(key) });
+  } catch (err) {
+    console.error('Failed to save API key:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to save API key' });
+  }
+});
+
+app.post('/portal/api/config/keys/test', requireAuth, async (req, res) => {
+  const { provider, key } = req.body || {};
+
+  const validation = validateKeyFormat(provider, key);
+  if (!validation.valid) {
+    return res.status(400).json({ ok: false, error: validation.error });
+  }
+
+  try {
+    let testUrl, testOpts;
+
+    if (provider === 'anthropic') {
+      testUrl = 'https://api.anthropic.com/v1/models';
+      testOpts = {
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+        },
+      };
+    } else if (provider === 'openai') {
+      testUrl = 'https://api.openai.com/v1/models';
+      testOpts = {
+        headers: { Authorization: `Bearer ${key}` },
+      };
+    } else if (provider === 'openrouter') {
+      testUrl = 'https://openrouter.ai/api/v1/models';
+      testOpts = {
+        headers: { Authorization: `Bearer ${key}` },
+      };
+    } else if (provider === 'google') {
+      testUrl = `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(key)}`;
+      testOpts = {};
+    } else {
+      return res.status(400).json({ ok: false, error: 'Unknown provider' });
+    }
+
+    const testRes = await fetch(testUrl, testOpts);
+    if (testRes.ok) {
+      return res.json({ ok: true, message: 'Key is valid' });
+    }
+
+    return res.json({ ok: false, error: `Key rejected by ${provider} (HTTP ${testRes.status})` });
+  } catch (err) {
+    return res.json({ ok: false, error: `Connection failed: ${err.message}` });
+  }
+});
+
+app.delete('/portal/api/config/keys/:provider', requireAuth, async (req, res) => {
+  const { provider } = req.params;
+
+  try {
+    const profiles = await readAuthProfiles();
+    const profileId = `${provider}:manual`;
+
+    if (!profiles.profiles[profileId]) {
+      return res.status(404).json({ ok: false, error: 'Key not found' });
+    }
+
+    delete profiles.profiles[profileId];
+
+    // Clean up order
+    if (profiles.order[provider]) {
+      profiles.order[provider] = profiles.order[provider].filter(
+        (id) => id !== profileId
+      );
+      if (profiles.order[provider].length === 0) {
+        delete profiles.order[provider];
+      }
+    }
+
+    await writeAuthProfiles(profiles);
+    restartGateway();
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete API key:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to delete key' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Config: Agent model management (auth required)
+// ---------------------------------------------------------------------------
+
+app.get('/portal/api/config/agents', requireAuth, async (_req, res) => {
+  try {
+    const oc = await readOpenClawConfig();
+    const agents = oc.agents?.list || [];
+    return res.json({
+      ok: true,
+      agents: agents.map((a) => ({
+        id: a.id,
+        name: a.name || a.id,
+        model: a.model || null,
+      })),
+    });
+  } catch (err) {
+    console.error('Failed to read openclaw config:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to load agents' });
+  }
+});
+
+app.patch('/portal/api/config/agents/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { model } = req.body || {};
+
+  if (!model || typeof model !== 'string') {
+    return res.status(400).json({ ok: false, error: 'model is required' });
+  }
+
+  try {
+    const oc = await readOpenClawConfig();
+    const agents = oc.agents?.list || [];
+    const agent = agents.find((a) => a.id === id);
+
+    if (!agent) {
+      return res.status(404).json({ ok: false, error: `Agent "${id}" not found` });
+    }
+
+    agent.model = model;
+    await writeOpenClawConfig(oc);
+    restartGateway();
+
+    return res.json({ ok: true, agent: { id: agent.id, name: agent.name, model: agent.model } });
+  } catch (err) {
+    console.error('Failed to update agent model:', err.message);
+    return res.status(500).json({ ok: false, error: 'Failed to update agent' });
+  }
 });
 
 // ---------------------------------------------------------------------------
