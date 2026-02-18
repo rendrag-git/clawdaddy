@@ -147,7 +147,7 @@
       renderQuestion();
     });
 
-    fetch('/quiz-design.json')
+    fetch('/onboarding/quiz-design.json')
       .then(r => r.json())
       .then(quiz => { state.quiz = quiz; renderQuestion(); })
       .catch(err => {
