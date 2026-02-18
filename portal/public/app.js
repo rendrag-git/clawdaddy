@@ -177,74 +177,79 @@
     var container = document.getElementById('keys-container');
     container.innerHTML = '';
 
-    var data = await api('GET', '/portal/api/config/keys');
-    if (!data.ok) {
+    try {
+      var data = await api('GET', '/portal/api/config/keys');
+      if (!data.ok) {
+        container.innerHTML = '<p class="text-muted">Failed to load API keys.</p>';
+        return;
+      }
+
+      configuredProviders = data.providers.filter(function(p) { return p.configured; }).map(function(p) { return p.provider; });
+
+      for (var i = 0; i < data.providers.length; i++) {
+        var prov = data.providers[i];
+        var card = document.createElement('div');
+        card.className = 'key-card';
+        card.dataset.provider = prov.provider;
+
+        var info = document.createElement('div');
+        info.className = 'key-card-info';
+
+        var name = document.createElement('span');
+        name.className = 'key-card-provider';
+        name.textContent = prov.provider;
+        info.appendChild(name);
+
+        if (prov.configured) {
+          var masked = document.createElement('span');
+          masked.className = 'key-card-masked';
+          masked.textContent = prov.masked;
+          info.appendChild(masked);
+
+          var dot = document.createElement('span');
+          dot.className = 'status-dot status-online';
+          dot.style.marginLeft = '0.5rem';
+          info.appendChild(dot);
+        } else {
+          var status = document.createElement('span');
+          status.className = 'key-card-status';
+          status.textContent = 'Not configured';
+          info.appendChild(status);
+        }
+
+        card.appendChild(info);
+
+        var actions = document.createElement('div');
+        actions.className = 'key-card-actions';
+
+        if (prov.configured) {
+          var removeBtn = document.createElement('button');
+          removeBtn.className = 'btn-text';
+          removeBtn.textContent = 'Remove';
+          removeBtn.dataset.provider = prov.provider;
+          removeBtn.addEventListener('click', function(e) {
+            removeKey(e.currentTarget.dataset.provider);
+          });
+          actions.appendChild(removeBtn);
+        }
+
+        var addBtn = document.createElement('button');
+        addBtn.className = prov.configured ? 'btn-secondary' : 'btn-primary';
+        addBtn.textContent = prov.configured ? 'Update Key' : 'Add API Key';
+        addBtn.dataset.provider = prov.provider;
+        addBtn.addEventListener('click', function(e) {
+          var btn = e.currentTarget;
+          var parentCard = btn.closest('.key-card');
+          toggleKeyInput(parentCard, btn.dataset.provider);
+        });
+        actions.appendChild(addBtn);
+
+        card.appendChild(actions);
+        container.appendChild(card);
+      }
+    } catch (e) {
       container.innerHTML = '<p class="text-muted">Failed to load API keys.</p>';
       return;
-    }
-
-    configuredProviders = data.providers.filter(function(p) { return p.configured; }).map(function(p) { return p.provider; });
-
-    for (var i = 0; i < data.providers.length; i++) {
-      var prov = data.providers[i];
-      var card = document.createElement('div');
-      card.className = 'key-card';
-      card.dataset.provider = prov.provider;
-
-      var info = document.createElement('div');
-      info.className = 'key-card-info';
-
-      var name = document.createElement('span');
-      name.className = 'key-card-provider';
-      name.textContent = prov.provider;
-      info.appendChild(name);
-
-      if (prov.configured) {
-        var masked = document.createElement('span');
-        masked.className = 'key-card-masked';
-        masked.textContent = prov.masked;
-        info.appendChild(masked);
-
-        var dot = document.createElement('span');
-        dot.className = 'status-dot status-online';
-        dot.style.marginLeft = '0.5rem';
-        info.appendChild(dot);
-      } else {
-        var status = document.createElement('span');
-        status.className = 'key-card-status';
-        status.textContent = 'Not configured';
-        info.appendChild(status);
-      }
-
-      card.appendChild(info);
-
-      var actions = document.createElement('div');
-      actions.className = 'key-card-actions';
-
-      if (prov.configured) {
-        var removeBtn = document.createElement('button');
-        removeBtn.className = 'btn-text';
-        removeBtn.textContent = 'Remove';
-        removeBtn.dataset.provider = prov.provider;
-        removeBtn.addEventListener('click', function(e) {
-          removeKey(e.currentTarget.dataset.provider);
-        });
-        actions.appendChild(removeBtn);
-      }
-
-      var addBtn = document.createElement('button');
-      addBtn.className = prov.configured ? 'btn-secondary' : 'btn-primary';
-      addBtn.textContent = prov.configured ? 'Update Key' : 'Add API Key';
-      addBtn.dataset.provider = prov.provider;
-      addBtn.addEventListener('click', function(e) {
-        var btn = e.currentTarget;
-        var parentCard = btn.closest('.key-card');
-        toggleKeyInput(parentCard, btn.dataset.provider);
-      });
-      actions.appendChild(addBtn);
-
-      card.appendChild(actions);
-      container.appendChild(card);
     }
   }
 
@@ -261,7 +266,7 @@
     row.className = 'key-input-row';
 
     var input = document.createElement('input');
-    input.type = 'text';
+    input.type = 'password';
     input.placeholder = provider === 'anthropic' ? 'sk-ant-...' :
                         provider === 'openai' ? 'sk-...' :
                         provider === 'openrouter' ? 'sk-or-...' : 'AI...';
@@ -290,34 +295,46 @@
 
   async function testKey(card, provider, key) {
     setKeyFeedback(card, 'Testing...', '');
-    var data = await api('POST', '/portal/api/config/keys/test', { provider: provider, key: key });
-    if (data.ok) {
-      setKeyFeedback(card, data.message, 'feedback-success');
-    } else {
-      setKeyFeedback(card, data.error, 'feedback-error');
+    try {
+      var data = await api('POST', '/portal/api/config/keys/test', { provider: provider, key: key });
+      if (data.ok) {
+        setKeyFeedback(card, data.message, 'feedback-success');
+      } else {
+        setKeyFeedback(card, data.error, 'feedback-error');
+      }
+    } catch (e) {
+      setKeyFeedback(card, 'Connection error', 'feedback-error');
     }
   }
 
   async function saveKey(card, provider, key) {
     setKeyFeedback(card, 'Saving...', '');
-    var data = await api('POST', '/portal/api/config/keys', { provider: provider, key: key });
-    if (data.ok) {
-      toast(provider + ' key saved');
-      loadKeys();
-      loadAgents();
-    } else {
-      setKeyFeedback(card, data.error, 'feedback-error');
+    try {
+      var data = await api('POST', '/portal/api/config/keys', { provider: provider, key: key });
+      if (data.ok) {
+        toast(provider + ' key saved');
+        loadKeys();
+        loadAgents();
+      } else {
+        setKeyFeedback(card, data.error, 'feedback-error');
+      }
+    } catch (e) {
+      setKeyFeedback(card, 'Connection error', 'feedback-error');
     }
   }
 
   async function removeKey(provider) {
-    var data = await api('DELETE', '/portal/api/config/keys/' + provider);
-    if (data.ok) {
-      toast(provider + ' key removed');
-      loadKeys();
-      loadAgents();
-    } else {
-      toast(data.error || 'Failed to remove key');
+    try {
+      var data = await api('DELETE', '/portal/api/config/keys/' + provider);
+      if (data.ok) {
+        toast(provider + ' key removed');
+        loadKeys();
+        loadAgents();
+      } else {
+        toast(data.error || 'Failed to remove key');
+      }
+    } catch (e) {
+      toast('Connection error');
     }
   }
 
@@ -336,122 +353,127 @@
     var container = document.getElementById('agents-container');
     container.innerHTML = '';
 
-    var data = await api('GET', '/portal/api/config/agents');
-    if (!data.ok) {
+    try {
+      var data = await api('GET', '/portal/api/config/agents');
+      if (!data.ok) {
+        container.innerHTML = '<p class="text-muted">Failed to load agents.</p>';
+        return;
+      }
+
+      for (var i = 0; i < data.agents.length; i++) {
+        var agent = data.agents[i];
+        var card = document.createElement('div');
+        card.className = 'agent-card';
+
+        var header = document.createElement('div');
+        header.className = 'agent-card-header';
+
+        var agentName = document.createElement('span');
+        agentName.className = 'agent-card-name';
+        agentName.textContent = agent.name;
+        header.appendChild(agentName);
+
+        var currentModel = document.createElement('span');
+        currentModel.className = 'agent-card-model';
+        currentModel.textContent = agent.model || 'not set';
+        header.appendChild(currentModel);
+
+        card.appendChild(header);
+
+        var row = document.createElement('div');
+        row.className = 'agent-model-row';
+
+        var select = document.createElement('select');
+        var defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '\u2014 select model \u2014';
+        select.appendChild(defaultOpt);
+
+        var available = CURATED_MODELS.filter(function(m) {
+          return configuredProviders.indexOf(m.provider) !== -1;
+        });
+
+        var addedProviders = {};
+        for (var j = 0; j < available.length; j++) {
+          var m = available[j];
+          if (!addedProviders[m.provider]) {
+            var group = document.createElement('optgroup');
+            group.label = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+            var providerModels = available.filter(function(x) { return x.provider === m.provider; });
+            for (var k = 0; k < providerModels.length; k++) {
+              var opt = document.createElement('option');
+              opt.value = providerModels[k].value;
+              opt.textContent = providerModels[k].label;
+              if (providerModels[k].value === agent.model) opt.selected = true;
+              group.appendChild(opt);
+            }
+            select.appendChild(group);
+            addedProviders[m.provider] = true;
+          }
+        }
+
+        var customOpt = document.createElement('option');
+        customOpt.value = '__custom__';
+        customOpt.textContent = 'Custom...';
+        select.appendChild(customOpt);
+
+        var isCurated = CURATED_MODELS.some(function(cm) { return cm.value === agent.model; });
+        if (agent.model && !isCurated) {
+          customOpt.selected = true;
+        }
+
+        var customInput = document.createElement('input');
+        customInput.type = 'text';
+        customInput.className = 'custom-model-input';
+        customInput.placeholder = 'model-name';
+        if (agent.model && !isCurated) {
+          customInput.classList.add('visible');
+          customInput.value = agent.model;
+        }
+
+        select.addEventListener('change', (function(ci) {
+          return function(e) {
+            if (e.target.value === '__custom__') {
+              ci.classList.add('visible');
+              ci.focus();
+            } else {
+              ci.classList.remove('visible');
+              ci.value = '';
+            }
+          };
+        })(customInput));
+
+        var applyBtn = document.createElement('button');
+        applyBtn.className = 'btn-primary';
+        applyBtn.textContent = 'Apply';
+
+        (function(agentObj, sel, ci, cm, btn) {
+          btn.addEventListener('click', async function() {
+            var model = sel.value === '__custom__' ? ci.value : sel.value;
+            if (!model) return;
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            var result = await api('PATCH', '/portal/api/config/agents/' + agentObj.id, { model: model });
+            if (result.ok) {
+              toast(agentObj.name + ' model updated');
+              cm.textContent = model;
+            } else {
+              toast(result.error || 'Failed to update');
+            }
+            btn.textContent = 'Apply';
+            btn.disabled = false;
+          });
+        })(agent, select, customInput, currentModel, applyBtn);
+
+        row.appendChild(select);
+        row.appendChild(customInput);
+        row.appendChild(applyBtn);
+        card.appendChild(row);
+        container.appendChild(card);
+      }
+    } catch (e) {
       container.innerHTML = '<p class="text-muted">Failed to load agents.</p>';
       return;
-    }
-
-    for (var i = 0; i < data.agents.length; i++) {
-      var agent = data.agents[i];
-      var card = document.createElement('div');
-      card.className = 'agent-card';
-
-      var header = document.createElement('div');
-      header.className = 'agent-card-header';
-
-      var agentName = document.createElement('span');
-      agentName.className = 'agent-card-name';
-      agentName.textContent = agent.name;
-      header.appendChild(agentName);
-
-      var currentModel = document.createElement('span');
-      currentModel.className = 'agent-card-model';
-      currentModel.textContent = agent.model || 'not set';
-      header.appendChild(currentModel);
-
-      card.appendChild(header);
-
-      var row = document.createElement('div');
-      row.className = 'agent-model-row';
-
-      var select = document.createElement('select');
-      var defaultOpt = document.createElement('option');
-      defaultOpt.value = '';
-      defaultOpt.textContent = '\u2014 select model \u2014';
-      select.appendChild(defaultOpt);
-
-      var available = CURATED_MODELS.filter(function(m) {
-        return configuredProviders.indexOf(m.provider) !== -1;
-      });
-
-      var addedProviders = {};
-      for (var j = 0; j < available.length; j++) {
-        var m = available[j];
-        if (!addedProviders[m.provider]) {
-          var group = document.createElement('optgroup');
-          group.label = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
-          var providerModels = available.filter(function(x) { return x.provider === m.provider; });
-          for (var k = 0; k < providerModels.length; k++) {
-            var opt = document.createElement('option');
-            opt.value = providerModels[k].value;
-            opt.textContent = providerModels[k].label;
-            if (providerModels[k].value === agent.model) opt.selected = true;
-            group.appendChild(opt);
-          }
-          select.appendChild(group);
-          addedProviders[m.provider] = true;
-        }
-      }
-
-      var customOpt = document.createElement('option');
-      customOpt.value = '__custom__';
-      customOpt.textContent = 'Custom...';
-      select.appendChild(customOpt);
-
-      var isCurated = CURATED_MODELS.some(function(cm) { return cm.value === agent.model; });
-      if (agent.model && !isCurated) {
-        customOpt.selected = true;
-      }
-
-      var customInput = document.createElement('input');
-      customInput.type = 'text';
-      customInput.className = 'custom-model-input';
-      customInput.placeholder = 'model-name';
-      if (agent.model && !isCurated) {
-        customInput.classList.add('visible');
-        customInput.value = agent.model;
-      }
-
-      select.addEventListener('change', (function(ci) {
-        return function(e) {
-          if (e.target.value === '__custom__') {
-            ci.classList.add('visible');
-            ci.focus();
-          } else {
-            ci.classList.remove('visible');
-            ci.value = '';
-          }
-        };
-      })(customInput));
-
-      var applyBtn = document.createElement('button');
-      applyBtn.className = 'btn-primary';
-      applyBtn.textContent = 'Apply';
-
-      (function(agentObj, sel, ci, cm, btn) {
-        btn.addEventListener('click', async function() {
-          var model = sel.value === '__custom__' ? ci.value : sel.value;
-          if (!model) return;
-          btn.textContent = 'Saving...';
-          btn.disabled = true;
-          var result = await api('PATCH', '/portal/api/config/agents/' + agentObj.id, { model: model });
-          if (result.ok) {
-            toast(agentObj.name + ' model updated');
-            cm.textContent = model;
-          } else {
-            toast(result.error || 'Failed to update');
-          }
-          btn.textContent = 'Apply';
-          btn.disabled = false;
-        });
-      })(agent, select, customInput, currentModel, applyBtn);
-
-      row.appendChild(select);
-      row.appendChild(customInput);
-      row.appendChild(applyBtn);
-      card.appendChild(row);
-      container.appendChild(card);
     }
   }
 

@@ -112,8 +112,15 @@ async function writeAuthProfiles(data) {
 // ---------------------------------------------------------------------------
 
 async function readOpenClawConfig() {
-  const raw = await fs.readFile(OPENCLAW_CONFIG_PATH, 'utf-8');
-  return JSON.parse(raw);
+  try {
+    const raw = await fs.readFile(OPENCLAW_CONFIG_PATH, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return { agents: { list: [] } };
+    }
+    throw err;
+  }
 }
 
 async function writeOpenClawConfig(data) {
@@ -563,6 +570,7 @@ app.get('/portal/api/config/keys', requireAuth, async (_req, res) => {
     const providers = {};
 
     for (const [profileId, profile] of Object.entries(profiles.profiles || {})) {
+      if (!profileId.endsWith(':manual')) continue;
       const prov = profile.provider;
       if (!providers[prov]) {
         providers[prov] = {
@@ -744,6 +752,10 @@ app.patch('/portal/api/config/agents/:id', requireAuth, async (req, res) => {
 
   if (!model || typeof model !== 'string') {
     return res.status(400).json({ ok: false, error: 'model is required' });
+  }
+
+  if (!/^[a-zA-Z0-9_.:\/-]{1,128}$/.test(model)) {
+    return res.status(400).json({ ok: false, error: 'Invalid model name' });
   }
 
   try {
