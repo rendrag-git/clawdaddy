@@ -238,11 +238,18 @@ async function deployFilesToInstance(sessionId) {
     await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), record.generatedFiles.multiAgentMd, 'utf8');
   }
 
+  if (record.generatedFiles.agentsMd) {
+    await fs.writeFile(path.join(outputDir, 'AGENTS.md'), record.generatedFiles.agentsMd, 'utf8');
+  }
+
   if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
     for (const agent of record.generatedFiles.agents) {
       const agentDir = path.join(outputDir, 'agents', agent.name);
       await fs.mkdir(agentDir, { recursive: true });
       await fs.writeFile(path.join(agentDir, 'SOUL.md'), agent.soulMd, 'utf8');
+      if (agent.agentsMd) await fs.writeFile(path.join(agentDir, 'AGENTS.md'), agent.agentsMd, 'utf8');
+      if (agent.heartbeatMd) await fs.writeFile(path.join(agentDir, 'HEARTBEAT.md'), agent.heartbeatMd, 'utf8');
+      if (agent.userMd) await fs.writeFile(path.join(agentDir, 'USER.md'), agent.userMd, 'utf8');
     }
   }
 
@@ -268,6 +275,10 @@ async function deployFilesToInstance(sessionId) {
       await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'MULTI-AGENT.md'), `${remoteBase}/MULTI-AGENT.md`]);
     }
 
+    if (record.generatedFiles.agentsMd) {
+      await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'AGENTS.md'), `${remoteBase}/AGENTS.md`]);
+    }
+
     if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
       await execFileAsync('ssh', [
         '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
@@ -276,18 +287,29 @@ async function deployFilesToInstance(sessionId) {
       ]);
 
       for (const agent of record.generatedFiles.agents) {
-        const localPath = path.join(outputDir, 'agents', agent.name, 'SOUL.md');
-        await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/SOUL.md`]);
+        for (const filename of ['SOUL.md', 'AGENTS.md', 'HEARTBEAT.md', 'USER.md']) {
+          const localPath = path.join(outputDir, 'agents', agent.name, filename);
+          try {
+            await fs.access(localPath);
+            await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/${filename}`]);
+          } catch (e) { /* file doesn't exist, skip */ }
+        }
       }
     }
 
     let chmodPaths = '/home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/HEARTBEAT.md /home/ubuntu/clawd/BOOTSTRAP.md';
+    if (record.generatedFiles.agentsMd) {
+      chmodPaths += ' /home/ubuntu/clawd/AGENTS.md';
+    }
     if (record.generatedFiles.multiAgentMd) {
       chmodPaths += ' /home/ubuntu/clawd/MULTI-AGENT.md';
     }
     if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
       for (const agent of record.generatedFiles.agents) {
         chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/SOUL.md`;
+        if (agent.agentsMd) chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/AGENTS.md`;
+        if (agent.heartbeatMd) chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/HEARTBEAT.md`;
+        if (agent.userMd) chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/USER.md`;
       }
     }
 
@@ -299,6 +321,19 @@ async function deployFilesToInstance(sessionId) {
 
     filesDeployed = true;
     console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
+
+    // Restart container so entrypoint re-discovers agents
+    try {
+      await execFileAsync('ssh', [
+        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${record.serverIp}`,
+        'sudo docker restart openclaw'
+      ]);
+      // Wait for gateway to fully initialize before reading token
+      await new Promise(resolve => setTimeout(resolve, 15000));
+    } catch (restartErr) {
+      console.error(`Container restart failed for ${sessionId}: ${restartErr.message}`);
+    }
   } catch (scpErr) {
     console.error(`SCP deployment failed for ${sessionId}: ${scpErr.message}`);
   }
@@ -828,10 +863,14 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
     if (record.generatedFiles && record.generatedFiles.soulMd) {
       console.log(`Profile already generated for session ${sessionId}, skipping regeneration`);
       const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+      if (record.generatedFiles.agentsMd) fileList.push('AGENTS.md');
       if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
         fileList.push('MULTI-AGENT.md');
         for (const agent of record.generatedFiles.agents) {
           fileList.push(`agents/${agent.name}/SOUL.md`);
+          if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
+          if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
+          if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
         }
       }
       return res.json({ ok: true, files: fileList, cached: true });
@@ -840,13 +879,13 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
     const username = record.username || slugify(record.displayName);
     const botName = record.assistantName || 'Assistant';
 
-    const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agents, multiAgentMd } = await generateProfile(
+    const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd } = await generateProfile(
       record.quizResults,
       username,
       botName
     );
 
-    record.generatedFiles = { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agents, multiAgentMd };
+    record.generatedFiles = { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd };
     record.profileGeneratedAt = new Date().toISOString();
     record.updatedAt = new Date().toISOString();
 
@@ -857,10 +896,14 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
     void tryAutoWriteFiles(sessionId);
 
     const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+    if (agentsMd) fileList.push('AGENTS.md');
     if (agents && agents.length > 0) {
       fileList.push('MULTI-AGENT.md');
       for (const agent of agents) {
         fileList.push(`agents/${agent.name}/SOUL.md`);
+        if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
+        if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
+        if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
       }
     }
 

@@ -225,6 +225,84 @@ mkdir -p "${CONFIG_DIR}/devices"
 chown -R clawd:clawd "${CONFIG_DIR}"
 chmod 600 "${CONFIG_DIR}/openclaw.json" "${CONFIG_DIR}/agents/main/agent/auth-profiles.json"
 
+# --- Discover and register sub-agents ---
+echo "🔍 Discovering sub-agents..."
+
+if [[ -d "${WORKSPACE}/agents" ]]; then
+    MODEL="${MODEL}" WORKSPACE="${WORKSPACE}" CONFIG_DIR="${CONFIG_DIR}" node -e "
+      const fs = require('fs');
+      const path = require('path');
+      const cfgPath = process.argv[1];
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const workspace = process.env.WORKSPACE;
+      const configDir = process.env.CONFIG_DIR;
+      const model = process.env.MODEL;
+
+      // Discover agent directories
+      const agentsDir = path.join(workspace, 'agents');
+      let agentNames = [];
+      try {
+        agentNames = fs.readdirSync(agentsDir).filter(name => {
+          const stat = fs.statSync(path.join(agentsDir, name));
+          return stat.isDirectory() && /^[a-zA-Z0-9-]+\$/.test(name);
+        });
+      } catch (e) {}
+
+      if (agentNames.length === 0) {
+        console.log('   No sub-agents found');
+        process.exit(0);
+      }
+
+      // Build agents config
+      if (!cfg.agents) cfg.agents = {};
+      cfg.agents.skipBootstrap = true;
+
+      const list = [
+        { id: 'main', default: true, workspace: workspace, model: { primary: model } }
+      ];
+
+      for (const name of agentNames) {
+        list.push({
+          id: name,
+          workspace: path.join(workspace, 'agents', name),
+          model: { primary: model }
+        });
+
+        // Create config directory and copy auth from main
+        const agentConfigDir = path.join(configDir, 'agents', name, 'agent');
+        fs.mkdirSync(agentConfigDir, { recursive: true });
+
+        const mainAuth = path.join(configDir, 'agents', 'main', 'agent', 'auth-profiles.json');
+        const agentAuth = path.join(agentConfigDir, 'auth-profiles.json');
+        if (fs.existsSync(mainAuth)) {
+          fs.copyFileSync(mainAuth, agentAuth);
+        }
+
+        // Create sessions directory
+        const sessionsDir = path.join(configDir, 'agents', name, 'sessions');
+        fs.mkdirSync(sessionsDir, { recursive: true });
+        const sessionsFile = path.join(sessionsDir, 'sessions.json');
+        if (!fs.existsSync(sessionsFile)) {
+          fs.writeFileSync(sessionsFile, '{}');
+        }
+      }
+
+      cfg.agents.list = list;
+
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+      console.log('   Registered agents: main, ' + agentNames.join(', '));
+    " "${CONFIG_DIR}/openclaw.json" || {
+        echo "⚠️  Agent discovery failed (non-fatal)" >&2
+    }
+else
+    echo "   No agents directory found"
+fi
+
+chown -R clawd:clawd "${CONFIG_DIR}"
+
+# Clean up any unrecognized config keys after agent discovery
+su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
+
 # --- Set up VNC ---
 VNC_ENABLED="${VNC_ENABLED:-true}"
 if [[ "${VNC_ENABLED}" == "true" ]]; then

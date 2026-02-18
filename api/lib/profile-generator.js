@@ -46,7 +46,7 @@ const AGENT_MAP = {
 };
 
 // Call OpenRouter API (OpenAI-compatible)
-function callOpenRouter(apiKey, model, messages, maxTokens) {
+function callOpenRouter(apiKey, model, messages, maxTokens, timeoutMs) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model,
@@ -79,7 +79,7 @@ function callOpenRouter(apiKey, model, messages, maxTokens) {
     });
 
     req.on('error', reject);
-    req.setTimeout(60000, () => { req.destroy(); reject(new Error('OpenRouter request timed out')); });
+    req.setTimeout(timeoutMs || 120000, () => { req.destroy(); reject(new Error('OpenRouter request timed out')); });
     req.write(body);
     req.end();
   });
@@ -125,12 +125,13 @@ async function generateWithClaude(quizResults, username, botName) {
 
   const prompt = `You are generating personalized configuration files for a ClawDaddy AI assistant.
 
-ClawDaddy is a personal AI assistant platform that creates customized AI helpers based on user preferences. Each assistant is configured with five core files:
+ClawDaddy is a personal AI assistant platform that creates customized AI helpers based on user preferences. Each assistant is configured with six core files:
 - SOUL.md: The assistant's personality, communication style, and behavioral rules across all 9 dimensions
 - USER.md: The user's profile, preferences, challenge/creativity/emotional preferences, and help areas
 - IDENTITY.md: The assistant's archetype identity with dimension fingerprint visualization
 - HEARTBEAT.md: Recurring check-in tasks based on the user's use-case tags and usage level
 - BOOTSTRAP.md: Personalized first-contact message referencing the quiz results
+- AGENTS.md: Behavioral operating instructions — how the assistant approaches tasks, handles errors, and manages context
 
 # User Quiz Results
 
@@ -154,7 +155,7 @@ ${contextSection ? `## Additional Context from Quiz:\n${contextSection}` : ''}
 
 # Your Task
 
-Generate five personalized markdown files for this user's AI assistant. Write in natural, engaging language that incorporates the user's actual responses. DO NOT write generic templates — reference their specific traits, use cases, and free-text responses. Aim for the quality of a thoughtful, bespoke profile — not a form letter.
+Generate six personalized markdown files for this user's AI assistant. Write in natural, engaging language that incorporates the user's actual responses. DO NOT write generic templates — reference their specific traits, use cases, and free-text responses. Aim for the quality of a thoughtful, bespoke profile — not a form letter.
 
 ## SOUL.md Guidelines:
 This is the most important file. It defines who the assistant IS. Structure it like this:
@@ -244,9 +245,21 @@ This is the first message the assistant sends when the user interacts for the fi
 
 Include a "First Interaction Goals" section (for the assistant's internal reference) and a "Post-Bootstrap" section explaining what to do after the first interaction.
 
+## AGENTS.md Guidelines:
+This file defines HOW the assistant operates — behavioral instructions that shape every interaction. Unlike SOUL.md (which defines who the assistant IS), AGENTS.md defines what the assistant DOES and how it works. Structure it like this:
+
+1. **Operational Mode** — How the assistant approaches tasks (step-by-step vs. big leaps, ask-first vs. act-first, based on proactive_vs_reactive and independent_vs_collaborative scores)
+2. **Response Protocol** — Default response structure, when to use lists vs. prose, how to handle multi-part requests
+3. **Decision Framework** — When to act autonomously vs. ask for confirmation, risk tolerance, how to handle ambiguity
+4. **Tool Usage** — How to leverage available tools (file operations, web search, code execution), when to chain vs. single-shot
+5. **Error Handling** — How to communicate failures, retry strategies, escalation triggers
+6. **Context Management** — How to maintain conversation context, when to summarize, memory update triggers
+
+Write actionable rules, not vague principles. Each rule should change behavior in an observable way.
+
 # Output Format
 
-Output the five files separated by these exact markers (markers must appear on their own line):
+Output the six files separated by these exact markers (markers must appear on their own line):
 ---SOUL.MD---
 [SOUL.md content here]
 ---USER.MD---
@@ -257,22 +270,26 @@ Output the five files separated by these exact markers (markers must appear on t
 [HEARTBEAT.md content here]
 ---BOOTSTRAP.MD---
 [BOOTSTRAP.md content here]
+---AGENTS.MD---
+[AGENTS.md content here]
 
-Generate all five files now. Make them deeply personal, specific, and immediately useful. Every section should reflect THIS user's actual quiz results — not generic advice.`;
+Generate all six files now. Make them deeply personal, specific, and immediately useful. Every section should reflect THIS user's actual quiz results — not generic advice.`;
 
   const responseText = await callOpenRouter(
     apiKey,
     'anthropic/claude-opus-4.6',
     [{ role: 'user', content: prompt }],
-    8000
+    15000,
+    120000
   );
 
-  // Parse the response — 5 files separated by markers
+  // Parse the response — 6 files separated by markers
   const soulMatch = responseText.match(/---SOUL\.MD---([\s\S]*?)---USER\.MD---/);
   const userMatch = responseText.match(/---USER\.MD---([\s\S]*?)---IDENTITY\.MD---/);
   const identityMatch = responseText.match(/---IDENTITY\.MD---([\s\S]*?)---HEARTBEAT\.MD---/);
   const heartbeatMatch = responseText.match(/---HEARTBEAT\.MD---([\s\S]*?)---BOOTSTRAP\.MD---/);
-  const bootstrapMatch = responseText.match(/---BOOTSTRAP\.MD---([\s\S]*?)$/);
+  const bootstrapMatch = responseText.match(/---BOOTSTRAP\.MD---([\s\S]*?)---AGENTS\.MD---/);
+  const agentsMatch = responseText.match(/---AGENTS\.MD---([\s\S]*?)$/);
 
   if (!soulMatch || !userMatch || !identityMatch) {
     throw new Error('Failed to parse Claude response - missing expected markers');
@@ -283,7 +300,8 @@ Generate all five files now. Make them deeply personal, specific, and immediatel
     userMd: userMatch[1].trim(),
     identityMd: identityMatch[1].trim(),
     heartbeatMd: (heartbeatMatch ? heartbeatMatch[1].trim() : ''),
-    bootstrapMd: (bootstrapMatch ? bootstrapMatch[1].trim() : '')
+    bootstrapMd: (bootstrapMatch ? bootstrapMatch[1].trim() : ''),
+    agentsMd: (agentsMatch ? agentsMatch[1].trim() : '')
   };
 }
 
@@ -538,7 +556,33 @@ After delivering the welcome message:
 2. Log the interaction in memory
 3. Start operating from SOUL.md and HEARTBEAT.md`;
 
-  return { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd };
+  const agentsMd = `# Agent Operations
+
+## Operational Mode
+${proactivity > 0.55 ? '- Act first, report after. Take initiative on routine tasks.' : '- Ask before acting on anything non-trivial. Confirm understanding before executing.'}
+${autonomy > 0.55 ? '- Work independently. Deliver finished results with a brief recap.' : '- Check in at decision points. Offer choices rather than making unilateral calls.'}
+
+## Response Protocol
+- ${detail > 0.62 ? 'Default to step-by-step breakdowns. Include examples.' : detail < 0.38 ? 'Lead with the answer. Expand only if asked.' : 'Summary first, detail on request.'}
+- For multi-part requests: address each part explicitly, numbered.
+- ${structure > 0.62 ? 'Use checklists and structured formats by default.' : 'Use prose unless structure adds clarity.'}
+
+## Decision Framework
+- Act autonomously on: routine lookups, formatting, simple calculations
+- Ask first on: anything destructive, external communications, spending decisions
+- ${challenge > 0.60 ? 'Flag questionable assumptions. Push back on weak reasoning.' : 'Default to executing the request. Flag concerns only if significant.'}
+
+## Error Handling
+- State what failed, why, and the next step — in that order.
+- ${humor > 0.5 ? 'A light touch is fine when things go wrong. No drama.' : 'Keep error reports factual and actionable.'}
+- Retry once silently. On second failure, report and suggest alternatives.
+
+## Context Management
+- Summarize long conversations every 10-15 exchanges.
+- Track open action items explicitly.
+- Update memory when the user shares durable preferences or facts.`;
+
+  return { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd };
 }
 
 // Generate behavioral rules for a specific sub-agent type
@@ -572,39 +616,117 @@ function generateAgentBehaviors(agent) {
   return behaviors[agent.tag] || '- Operate within domain expertise.\n- Report status to main agent.';
 }
 
-// Generate sub-agent SOUL.md files from quiz use-case tags
-function generateSubAgents(quizResults, botName) {
-  const tags = quizResults.tags || [];
+// Generate sub-agent SOUL.md + AGENTS.md via individual Opus call
+async function generateSubAgentWithClaude(agent, quizResults, botName, apiKey) {
   const scores = quizResults.dimensionScores || {};
+  const tags = quizResults.tags || [];
+  const freeText = quizResults.freeText || {};
 
-  // Find matching agents from tags
-  const matchedAgents = [];
-  for (const tag of tags) {
-    if (AGENT_MAP[tag]) {
-      matchedAgents.push({ tag, ...AGENT_MAP[tag] });
-    }
+  const prompt = `You are generating configuration files for a specialized sub-agent of a ClawDaddy AI assistant named "${botName}".
+
+This sub-agent is called "${agent.displayName}" (${agent.emoji}) and focuses on: ${agent.focus}.
+
+It operates under the main agent's direction. The user interacts with the main agent, which delegates domain-specific tasks to this sub-agent.
+
+# User Context
+
+## Personality Dimension Scores (inherited from main agent):
+organized_vs_spontaneous: ${(scores.organized_vs_spontaneous || 0.5).toFixed(2)} (0=spontaneous, 1=organized)
+formal_vs_casual: ${(scores.formal_vs_casual || 0.5).toFixed(2)} (0=casual, 1=formal)
+proactive_vs_reactive: ${(scores.proactive_vs_reactive || 0.5).toFixed(2)} (0=reactive, 1=proactive)
+serious_vs_playful: ${(scores.serious_vs_playful || 0.5).toFixed(2)} (0=playful, 1=serious)
+independent_vs_collaborative: ${(scores.independent_vs_collaborative || 0.5).toFixed(2)} (0=collaborative, 1=independent)
+detailed_vs_big_picture: ${(scores.detailed_vs_big_picture || 0.5).toFixed(2)} (0=big-picture, 1=detailed)
+supportive_vs_challenging: ${(scores.supportive_vs_challenging || 0.5).toFixed(2)} (0=challenging, 1=supportive)
+practical_vs_exploratory: ${(scores.practical_vs_exploratory || 0.5).toFixed(2)} (0=exploratory, 1=practical)
+analytical_vs_empathetic: ${(scores.analytical_vs_empathetic || 0.5).toFixed(2)} (0=empathetic, 1=analytical)
+
+## User's Role: ${freeText['user.role'] || 'Not specified'}
+## User's Name: ${freeText['user.preferred_name'] || 'the user'}
+## All Tags: ${tags.join(', ')}
+
+# Your Task
+
+Generate two files for this sub-agent. Make them deeply specific to the ${agent.displayName} role \u2014 not generic templates.
+
+## SOUL.md Guidelines:
+This defines the sub-agent's personality and identity within its domain. Include:
+1. **Role summary** \u2014 What this agent does, in 2-3 vivid sentences
+2. **Personality** \u2014 Inherited from main agent but specialized. A ${agent.displayName} handling ${agent.focus} should feel like a domain expert, not a generic helper.
+3. **Core Behaviors** \u2014 5-8 specific, actionable rules for how this agent operates in its domain. Reference real workflows (e.g., for email: triage \u2192 draft \u2192 follow-up tracking).
+4. **Communication Style** \u2014 How this agent reports back to the main agent. Terse status updates? Detailed briefs? Depends on the domain.
+5. **What I Don't Do** \u2014 Clear boundaries. Tasks outside this domain get routed back to main.
+6. **Quality Standards** \u2014 What "good work" looks like in this domain.
+
+## AGENTS.md Guidelines:
+This defines HOW this sub-agent operates \u2014 behavioral rules and workflows. Include:
+1. **Workflow** \u2014 Step-by-step process for the most common task in this domain
+2. **Prioritization** \u2014 How to triage and order work within this domain
+3. **Escalation Rules** \u2014 When to punt back to the main agent
+4. **Output Formats** \u2014 Default format for deliverables in this domain
+5. **Tool Preferences** \u2014 Which tools to prefer for domain tasks
+
+# Output Format
+
+Output the two files separated by these exact markers:
+---SOUL.MD---
+[SOUL.md content]
+---AGENTS.MD---
+[AGENTS.md content]
+
+Generate both files now. Make them specific to ${agent.displayName}'s domain.`;
+
+  const responseText = await callOpenRouter(
+    apiKey,
+    'anthropic/claude-opus-4.6',
+    [{ role: 'user', content: prompt }],
+    3000,
+    60000
+  );
+
+  const soulMatch = responseText.match(/---SOUL\.MD---([\s\S]*?)---AGENTS\.MD---/);
+  const agentsMatch = responseText.match(/---AGENTS\.MD---([\s\S]*?)$/);
+
+  if (!soulMatch) {
+    throw new Error(`Failed to parse sub-agent response for ${agent.name}`);
   }
 
-  // Cap at 3 sub-agents (most impactful \u2014 work tags first, then personal)
-  const workAgents = matchedAgents.filter(a => a.tag.startsWith('work:'));
-  const personalAgents = matchedAgents.filter(a => a.tag.startsWith('personal:'));
-  const selected = [...workAgents, ...personalAgents].slice(0, 3);
+  return {
+    soulMd: soulMatch[1].trim(),
+    agentsMd: (agentsMatch ? agentsMatch[1].trim() : '')
+  };
+}
 
-  if (selected.length === 0) return { agents: [], multiAgentMd: '' };
+// Generate templated HEARTBEAT.md for a sub-agent
+function generateSubAgentHeartbeat(agent, usage) {
+  const frequency = {
+    high: 'Active \u2014 check every 30-60 min',
+    medium: 'Moderate \u2014 check 3x/day',
+    low: 'Light \u2014 check 1x/day',
+    minimal: 'Weekly summary only'
+  }[usage] || 'Moderate \u2014 check 3x/day';
 
-  // Derive personality traits to inherit
-  const casualness = clamp(1 - (scores.formal_vs_casual || 0.5), 0, 1);
-  const humor = clamp(1 - (scores.serious_vs_playful || 0.5), 0, 1);
-  const toneLabel = casualness < 0.45 ? 'formal' : casualness > 0.55 ? 'casual' : 'neutral';
+  return `# HEARTBEAT.md \u2014 ${agent.displayName} ${agent.emoji}
 
-  const agents = selected.map(agent => {
-    // Validate agent name: alphanumeric + hyphen only (prevent path injection)
-    const safeName = agent.name.replace(/[^a-zA-Z0-9-]/g, '');
-    if (!safeName || safeName !== agent.name) {
-      throw new Error(`Invalid agent name: ${agent.name}`);
-    }
+> Domain: ${agent.focus}
+> Frequency: ${frequency}
 
-    const soulMd = `# SOUL.md \u2014 ${agent.displayName} ${agent.emoji}
+## Heartbeat Checklist
+
+- [ ] Check for pending ${agent.focus.split(',')[0].trim()} tasks
+- [ ] Process any queued items in domain
+- [ ] Report status to main agent if anything changed
+
+## Rules
+1. Only heartbeat on items in your domain: ${agent.focus}
+2. Batch updates \u2014 one report per heartbeat, not per item
+3. Flag blockers immediately, don't wait for next heartbeat
+`;
+}
+
+// Template fallback: generate SOUL.md for a sub-agent without Opus
+function generateTemplateSubAgentSoul(agent, botName, toneLabel, humor, casualness) {
+  return `# SOUL.md \u2014 ${agent.displayName} ${agent.emoji}
 
 ## Role
 I'm a specialized sub-agent of ${botName}, focused on: ${agent.focus}.
@@ -624,13 +746,99 @@ ${generateAgentBehaviors(agent)}
 - Direct user interaction \u2014 all communication goes through main agent
 - Decision-making beyond my scope \u2014 escalate with context
 `;
+}
+
+// Template fallback: generate AGENTS.md for a sub-agent without Opus
+function generateTemplateSubAgentAgents(agent) {
+  return `# Agent Operations \u2014 ${agent.displayName}
+
+## Workflow
+1. Receive task from main agent
+2. Execute within domain: ${agent.focus}
+3. Report results back to main agent
+
+## Escalation Rules
+- Tasks outside domain: route to main agent
+- Ambiguous requests: ask main agent for clarification
+- Errors: report with context and suggested next steps
+
+## Output Format
+- Status updates: one-line summary
+- Deliverables: structured markdown
+`;
+}
+
+// Generate sub-agent files from quiz use-case tags (parallel Opus calls with template fallback)
+async function generateSubAgents(quizResults, botName, mainUserMd) {
+  const tags = quizResults.tags || [];
+  const scores = quizResults.dimensionScores || {};
+
+  // Find matching agents from tags
+  const matchedAgents = [];
+  for (const tag of tags) {
+    if (AGENT_MAP[tag]) {
+      matchedAgents.push({ tag, ...AGENT_MAP[tag] });
+    }
+  }
+
+  // Cap at 3 sub-agents (most impactful \u2014 work tags first, then personal)
+  const workAgents = matchedAgents.filter(a => a.tag.startsWith('work:'));
+  const personalAgents = matchedAgents.filter(a => a.tag.startsWith('personal:'));
+  const selected = [...workAgents, ...personalAgents].slice(0, 3);
+
+  if (selected.length === 0) return { agents: [], multiAgentMd: '' };
+
+  const usageTag = tags.find(t => t.startsWith('usage:'));
+  const usage = usageTag ? usageTag.split(':')[1] : 'medium';
+
+  // Derive personality traits for template fallback
+  const casualness = clamp(1 - (scores.formal_vs_casual || 0.5), 0, 1);
+  const humor = clamp(1 - (scores.serious_vs_playful || 0.5), 0, 1);
+  const toneLabel = casualness < 0.45 ? 'formal' : casualness > 0.55 ? 'casual' : 'neutral';
+
+  let apiKey;
+  try {
+    apiKey = await getApiKey();
+  } catch (err) {
+    apiKey = null;
+  }
+
+  // Fire parallel Opus calls for each sub-agent
+  const results = await Promise.allSettled(
+    selected.map(agent => {
+      if (!apiKey) return Promise.reject(new Error('No API key'));
+      return generateSubAgentWithClaude(agent, quizResults, botName, apiKey);
+    })
+  );
+
+  const agents = selected.map((agent, i) => {
+    // Validate agent name: alphanumeric + hyphen only (prevent path injection)
+    const safeName = agent.name.replace(/[^a-zA-Z0-9-]/g, '');
+    if (!safeName || safeName !== agent.name) {
+      throw new Error(`Invalid agent name: ${agent.name}`);
+    }
+
+    let soulMd, agentsMd;
+
+    if (results[i].status === 'fulfilled') {
+      soulMd = results[i].value.soulMd;
+      agentsMd = results[i].value.agentsMd;
+      console.log(`Sub-agent ${agent.name}: Opus generation succeeded`);
+    } else {
+      console.error(`Sub-agent ${agent.name}: Opus failed (${results[i].reason.message}), using template`);
+      soulMd = generateTemplateSubAgentSoul(agent, botName, toneLabel, humor, casualness);
+      agentsMd = generateTemplateSubAgentAgents(agent);
+    }
 
     return {
       name: safeName,
       displayName: agent.displayName,
       emoji: agent.emoji,
       tag: agent.tag,
-      soulMd
+      soulMd,
+      agentsMd,
+      heartbeatMd: generateSubAgentHeartbeat(agent, usage),
+      userMd: mainUserMd
     };
   });
 
@@ -670,8 +878,8 @@ async function generateProfile(quizResults, username, botName) {
     result = generateFallback(quizResults, username, botName);
   }
 
-  // Generate sub-agents from use-case tags
-  const { agents, multiAgentMd } = generateSubAgents(quizResults, botName);
+  // Generate sub-agents from use-case tags (parallel Opus calls per agent)
+  const { agents, multiAgentMd } = await generateSubAgents(quizResults, botName, result.userMd);
 
   return { ...result, agents, multiAgentMd };
 }
