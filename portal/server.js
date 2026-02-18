@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,8 @@ const CONFIG_PATH =
   '/home/ubuntu/clawdaddy-portal/config.json';
 const SOUL_MD_PATH =
   process.env.SOUL_MD_PATH || '/home/ubuntu/clawd/SOUL.md';
+const CLAWD_DIR = process.env.CLAWD_DIR || '/home/ubuntu/clawd';
+const GATEWAY_PORT = parseInt(process.env.GATEWAY_PORT || '18789', 10);
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 const COOKIE_NAME = 'portal_session';
 
@@ -78,6 +81,91 @@ async function checkHealth() {
 }
 
 // ---------------------------------------------------------------------------
+// Agent helpers
+// ---------------------------------------------------------------------------
+
+async function readAgents() {
+  const config = await readConfig();
+  const agents = [];
+
+  // Main agent — parse from IDENTITY.md
+  try {
+    const identityMd = await fs.readFile(
+      path.join(CLAWD_DIR, 'IDENTITY.md'),
+      'utf-8',
+    );
+    const headerMatch = identityMd.match(
+      /^#\s+IDENTITY\.md\s+(?:—|-)\s+(.+)/m,
+    );
+    const emojiMatch = identityMd.match(
+      /\*\*Signature emoji:\*\*\s*(.+)/m,
+    );
+    agents.push({
+      id: 'main',
+      name: headerMatch ? headerMatch[1].trim() : config.botName || 'Assistant',
+      emoji: emojiMatch ? emojiMatch[1].trim() : '\u{1F916}',
+      isMain: true,
+    });
+  } catch {
+    agents.push({
+      id: 'main',
+      name: config.botName || 'Assistant',
+      emoji: '\u{1F916}',
+      isMain: true,
+    });
+  }
+
+  // Sub-agents — scan agents/ directory
+  try {
+    const agentsDir = path.join(CLAWD_DIR, 'agents');
+    const dirs = await fs.readdir(agentsDir);
+    for (const dir of dirs) {
+      // Validate directory name (prevent traversal)
+      if (!/^[a-zA-Z0-9_-]+$/.test(dir)) continue;
+      try {
+        const soulPath = path.join(agentsDir, dir, 'agent', 'SOUL.md');
+        const soulMd = await fs.readFile(soulPath, 'utf-8');
+        // Header format: # SOUL.md — DisplayName Emoji
+        const match = soulMd.match(
+          /^#\s+SOUL\.md\s+(?:—|-)\s+(\S+)\s+(\S+)/m,
+        );
+        if (match) {
+          agents.push({
+            id: dir,
+            name: match[1].trim(),
+            emoji: match[2].trim(),
+            isMain: false,
+          });
+        }
+      } catch {
+        /* skip invalid agent dirs */
+      }
+    }
+  } catch {
+    /* no agents directory */
+  }
+
+  return agents;
+}
+
+async function getAgentSystemPrompt(agentId) {
+  try {
+    // Validate agent ID
+    if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) return 'You are a helpful assistant.';
+
+    if (agentId === 'main') {
+      return await fs.readFile(path.join(CLAWD_DIR, 'SOUL.md'), 'utf-8');
+    }
+    return await fs.readFile(
+      path.join(CLAWD_DIR, 'agents', agentId, 'agent', 'SOUL.md'),
+      'utf-8',
+    );
+  } catch {
+    return 'You are a helpful assistant.';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Auth middleware
 // ---------------------------------------------------------------------------
 
@@ -103,6 +191,29 @@ const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
+
+// Dynamic PWA manifest (before static middleware so it takes precedence)
+app.get('/portal/manifest.json', async (_req, res) => {
+  let botName = 'Clawd';
+  try {
+    const config = await readConfig();
+    botName = config.botName || botName;
+  } catch { /* use default */ }
+
+  res.json({
+    name: botName + ' Chat',
+    short_name: botName,
+    description: 'Chat with your ' + botName + ' AI assistant team',
+    start_url: '/portal/chat/',
+    scope: '/portal/',
+    display: 'standalone',
+    background_color: '#0f0f0f',
+    theme_color: '#0f0f0f',
+    icons: [
+      { src: '/portal/logo.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ],
+  });
+});
 
 // Serve static files from ./public under /portal/
 const publicDir = path.join(__dirname, 'public');
@@ -301,6 +412,133 @@ app.post('/portal/api/portal/settings/api-key', requireAuth, async (req, res) =>
 });
 
 // ---------------------------------------------------------------------------
+// Chat routes (auth required)
+// ---------------------------------------------------------------------------
+
+app.get('/portal/api/chat/agents', requireAuth, async (_req, res) => {
+  try {
+    const agents = await readAgents();
+    return res.json({ agents });
+  } catch (err) {
+    console.error('Failed to read agents:', err.message);
+    return res.status(500).json({ error: 'Failed to load agents' });
+  }
+});
+
+app.post('/portal/api/chat/send', requireAuth, async (req, res) => {
+  const { agent, messages } = req.body || {};
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array is required' });
+  }
+
+  let config;
+  try {
+    config = await readConfig();
+  } catch (err) {
+    console.error('Failed to read config:', err.message);
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
+  let systemPrompt;
+  try {
+    systemPrompt = await getAgentSystemPrompt(agent || 'main');
+  } catch {
+    systemPrompt = 'You are a helpful assistant.';
+  }
+
+  // Sanitize messages — only pass role + content
+  const cleanMessages = messages
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+    .map((m) => ({ role: m.role, content: String(m.content) }));
+
+  if (cleanMessages.length === 0) {
+    return res.status(400).json({ error: 'No valid messages provided' });
+  }
+
+  const requestBody = JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    system: systemPrompt,
+    messages: cleanMessages,
+    max_tokens: 4096,
+    stream: true,
+  });
+
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  // Proxy request to OpenClaw gateway
+  const proxyReq = http.request(
+    {
+      hostname: '127.0.0.1',
+      port: GATEWAY_PORT,
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Authorization': 'Bearer ' + (config.gatewayToken || ''),
+        'anthropic-version': '2023-06-01',
+      },
+    },
+    (proxyRes) => {
+      if (proxyRes.statusCode !== 200) {
+        let errBody = '';
+        proxyRes.on('data', (chunk) => { errBody += chunk; });
+        proxyRes.on('end', () => {
+          const errMsg = errBody || 'Gateway returned ' + proxyRes.statusCode;
+          res.write('data: ' + JSON.stringify({ type: 'error', error: errMsg }) + '\n\n');
+          res.end();
+        });
+        return;
+      }
+
+      // Pipe SSE stream from gateway to client
+      proxyRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      proxyRes.on('end', () => {
+        res.end();
+      });
+
+      proxyRes.on('error', (err) => {
+        res.write('data: ' + JSON.stringify({ type: 'error', error: err.message }) + '\n\n');
+        res.end();
+      });
+    },
+  );
+
+  proxyReq.on('error', (err) => {
+    console.error('Gateway proxy error:', err.message);
+    res.write(
+      'data: ' +
+        JSON.stringify({ type: 'error', error: 'Could not connect to AI gateway' }) +
+        '\n\n',
+    );
+    res.end();
+  });
+
+  proxyReq.setTimeout(120000, () => {
+    proxyReq.destroy();
+    res.write('data: ' + JSON.stringify({ type: 'error', error: 'Request timed out' }) + '\n\n');
+    res.end();
+  });
+
+  // Handle client disconnect
+  req.on('close', () => {
+    proxyReq.destroy();
+  });
+
+  proxyReq.write(requestBody);
+  proxyReq.end();
+});
+
+// ---------------------------------------------------------------------------
 // SPA fallback
 // ---------------------------------------------------------------------------
 
@@ -308,6 +546,17 @@ app.get('/portal/*', (req, res) => {
   if (req.path.startsWith('/portal/api/')) {
     return res.status(404).json({ error: 'Not found' });
   }
+
+  // Chat SPA fallback — serve chat/index.html for /portal/chat/* routes
+  if (req.path.startsWith('/portal/chat')) {
+    const chatIndex = path.join(publicDir, 'chat', 'index.html');
+    return res.sendFile(chatIndex, (err) => {
+      if (err) {
+        res.status(404).send('Not found');
+      }
+    });
+  }
+
   const indexPath = path.join(publicDir, 'index.html');
   return res.sendFile(indexPath, (err) => {
     if (err) {

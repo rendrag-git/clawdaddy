@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f0f0f">
+  <title>Chat</title>
+  <link rel="manifest" href="/portal/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/portal/logo.svg">
+  <link rel="apple-touch-icon" href="/portal/logo.svg">
+  <link rel="stylesheet" href="/portal/chat/chat.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar overlay (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+
+    <!-- Sidebar / Drawer -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="/portal/logo.svg" alt="ClawDaddy" class="sidebar-logo">
+        <button id="btn-close-sidebar" class="btn-icon sidebar-close" title="Close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <nav id="channel-list" class="channel-list"></nav>
+      <div class="sidebar-footer">
+        <a href="/portal/" class="sidebar-link">Portal</a>
+      </div>
+    </aside>
+
+    <!-- Main chat area -->
+    <div class="chat-main">
+      <!-- Header -->
+      <header class="chat-header">
+        <button id="btn-hamburger" class="btn-icon" title="Channels">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <div class="chat-header-info">
+          <span id="header-agent-emoji" class="header-emoji"></span>
+          <span id="header-agent-name" class="header-name"></span>
+        </div>
+        <div class="chat-header-actions">
+          <button id="btn-new-thread" class="btn-icon" title="New thread">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button id="btn-threads" class="btn-icon" title="Threads">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 6h12M4 10h8M4 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Thread picker dropdown -->
+      <div id="thread-picker" class="thread-picker" hidden>
+        <div class="thread-picker-header">
+          <span>Threads</span>
+          <button id="btn-close-threads" class="btn-icon btn-sm">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="thread-list" class="thread-list"></div>
+      </div>
+
+      <!-- Messages -->
+      <div id="messages" class="messages"></div>
+
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-wrap">
+          <textarea id="msg-input" class="msg-input" placeholder="Message..." rows="1" autocomplete="off"></textarea>
+          <button id="btn-send" class="btn-send" title="Send" disabled>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10l14-7-4 7 4 7z" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/chat/chat.js" defer></script>
+</body>
+</html>
