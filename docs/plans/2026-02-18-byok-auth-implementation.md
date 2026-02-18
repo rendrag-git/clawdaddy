@@ -11,6 +11,43 @@
 **Design doc:** `docs/plans/2026-02-18-byok-auth-design.md`
 **Auth flow docs:** `docs/auth-flow-anthropic.md`, `docs/auth-flow-openai.md`
 
+**Review feedback incorporated:** Dev (generateId prefix, writeAuthProfile structure + stdin piping, frontend retry max, deployFilesToInstance clarification, Stripe custom fields task), Edgar (bcrypt portal_password, indexes, updated_at triggers).
+
+---
+
+## Task 0: Stripe Custom Fields Setup
+
+**Context:** Username and bot_name are collected during Stripe Checkout, not in the onboarding UI. The Stripe payment link needs custom fields configured.
+
+**Step 1: Add custom fields to Stripe payment link**
+
+Via Stripe Dashboard or API, add two custom fields to the checkout payment link:
+- `username` — text, required, label "Choose your username (becomes yourname.clawdaddy.sh)"
+- `bot_name` — text, required, label "Name your AI assistant"
+
+Via API (if preferred):
+```bash
+stripe payment_links update plink_XXXX \
+  --custom-fields[0][key]=username \
+  --custom-fields[0][label][custom]="Choose your username" \
+  --custom-fields[0][type]=text \
+  --custom-fields[0][text][minimum_length]=3 \
+  --custom-fields[0][text][maximum_length]=20 \
+  --custom-fields[1][key]=bot_name \
+  --custom-fields[1][label][custom]="Name your AI assistant" \
+  --custom-fields[1][type]=text \
+  --custom-fields[1][text][minimum_length]=2 \
+  --custom-fields[1][text][maximum_length]=80
+```
+
+**Step 2: Verify** — create a test checkout session and confirm `custom_fields` appears in the session object with `key`, `text.value`.
+
+**Step 3: Commit** (no code change — Stripe config only, document in commit message)
+
+```bash
+git commit --allow-empty -m "chore: configure Stripe payment link custom fields for username + bot_name"
+```
+
 ---
 
 ## Task 1: Shared SQLite Database Layer
@@ -22,11 +59,13 @@
 
 This is the foundation. Both servers import this module. CJS format (onboarding server is CJS; webhook server can import CJS via Node 22 ESM interop).
 
-**Step 1: Install better-sqlite3**
+**Step 1: Install dependencies**
 
 ```bash
-cd api && npm install better-sqlite3
+cd api && npm install better-sqlite3 bcrypt
 ```
+
+> `bcrypt` is for hashing `portal_password` before storage. Already a dep in the portal server — same convention here. Store `bcrypt.hashSync(password, 10)`, verify with `bcrypt.compareSync()` on login.
 
 **Step 2: Create `api/lib/db.js`**
 
@@ -78,6 +117,16 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+    CREATE INDEX IF NOT EXISTS idx_customers_stripe_customer_id ON customers(stripe_customer_id);
+    CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_customer_id ON onboarding_sessions(customer_id);
+
+    CREATE TRIGGER IF NOT EXISTS customers_updated_at AFTER UPDATE ON customers
+    BEGIN UPDATE customers SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+    CREATE TRIGGER IF NOT EXISTS onboarding_sessions_updated_at AFTER UPDATE ON onboarding_sessions
+    BEGIN UPDATE onboarding_sessions SET updated_at = datetime('now') WHERE id = NEW.id; END;
   `);
 
   migrateFromJson();
@@ -90,7 +139,7 @@ function getDb() {
 }
 
 function generateId() {
-  return crypto.randomUUID();
+  return 'oc_' + crypto.randomBytes(4).toString('hex');
 }
 
 // --- customers ---
@@ -309,6 +358,7 @@ describe('customers', () => {
   it('createCustomer and getByUsername', () => {
     const id = db.createCustomer({ username: 'alice', email: 'alice@test.com', botName: 'Jarvis' });
     assert.ok(id);
+    assert.match(id, /^oc_[a-f0-9]{8}$/);
     const c = db.getCustomerByUsername('alice');
     assert.equal(c.username, 'alice');
     assert.equal(c.email, 'alice@test.com');
@@ -817,44 +867,50 @@ function completeOpenai(authSessionId, redirectUrl) {
 }
 
 // --- auth-profiles.json write ---
+// Correct format matching entrypoint convention:
+// { "version": 1, "profiles": { "anthropic:manual": { "type": "token", "provider": "anthropic", "token": "..." } }, "order": { "anthropic": ["anthropic:manual"] } }
+// Pipes JSON via stdin to avoid shell injection.
 
 function writeAuthProfile(serverIp, sshKeyPath, provider, token) {
   return new Promise((resolve, reject) => {
-    // Determine the auth profile JSON and target path based on provider
-    let profileJson, remotePath;
+    let profileName, profileEntry, orderKey;
 
     if (provider === 'anthropic') {
-      profileJson = JSON.stringify({
-        "anthropic:manual": {
-          type: "anthropic/token",
-          token: token,
-          created: new Date().toISOString()
-        }
-      });
-      // Write to the agent's auth-profiles.json
-      remotePath = '/home/ubuntu/clawd/agents/*/agent/auth-profiles.json';
+      profileName = 'anthropic:manual';
+      orderKey = 'anthropic';
+      profileEntry = { type: 'token', provider: 'anthropic', token };
+    } else if (provider === 'openai') {
+      profileName = 'openai-codex:oauth';
+      orderKey = 'openai-codex';
+      profileEntry = { type: 'token', provider: 'openai-codex', token };
     } else {
-      // OpenAI tokens are handled by the wizard — this is a fallback
-      profileJson = JSON.stringify({ token });
-      remotePath = '/home/ubuntu/clawd/agents/*/agent/auth-profiles.json';
+      return reject(new Error(`Unknown provider: ${provider}`));
     }
 
-    // Use a simple approach: write JSON to a known path, then merge
-    const cmd = `
-      echo '${profileJson.replace(/'/g, "'\\''")}' > /tmp/auth-profile-update.json && \
-      for f in /home/ubuntu/.openclaw/agents/*/agent/auth-profiles.json; do
-        if [ -f "$f" ]; then
-          node -e "
-            const fs = require('fs');
-            const existing = JSON.parse(fs.readFileSync('$f', 'utf8') || '{}');
-            const update = JSON.parse(fs.readFileSync('/tmp/auth-profile-update.json', 'utf8'));
-            Object.assign(existing, update);
-            fs.writeFileSync('$f', JSON.stringify(existing, null, 2));
-          " 2>/dev/null
-        fi
-      done && \
-      rm -f /tmp/auth-profile-update.json && \
-      echo AUTH_PROFILE_WRITTEN
+    // Build the update payload — the remote script reads this from stdin
+    const updatePayload = JSON.stringify({ profileName, profileEntry, orderKey });
+
+    // Remote node script: reads JSON from stdin, merges into each auth-profiles.json
+    const remoteScript = `
+      node -e '
+        const fs = require("fs");
+        const { profileName, profileEntry, orderKey } = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
+        const glob = require("child_process").execSync("ls /home/ubuntu/.openclaw/agents/*/agent/auth-profiles.json 2>/dev/null || true", { encoding: "utf8" }).trim().split("\\n").filter(Boolean);
+        let wrote = 0;
+        for (const f of glob) {
+          let existing = { version: 1, profiles: {}, order: {} };
+          try { existing = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}
+          existing.version = existing.version || 1;
+          existing.profiles = existing.profiles || {};
+          existing.order = existing.order || {};
+          existing.profiles[profileName] = profileEntry;
+          if (!existing.order[orderKey]) existing.order[orderKey] = [];
+          if (!existing.order[orderKey].includes(profileName)) existing.order[orderKey].push(profileName);
+          fs.writeFileSync(f, JSON.stringify(existing, null, 2));
+          wrote++;
+        }
+        console.log("AUTH_PROFILE_WRITTEN:" + wrote);
+      '
     `.trim();
 
     const proc = spawn('ssh', [
@@ -862,8 +918,12 @@ function writeAuthProfile(serverIp, sshKeyPath, provider, token) {
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'ConnectTimeout=10',
       `ubuntu@${serverIp}`,
-      cmd
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+      remoteScript
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    // Pipe the update payload via stdin (no shell interpolation)
+    proc.stdin.write(updatePayload);
+    proc.stdin.end();
 
     let stdout = '';
     proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
@@ -1005,8 +1065,10 @@ initDb();
 
 **Remove entirely:**
 - `loadStore()`, `saveStore()`, `updateSession()`, `_writeLock`
-- `deployFilesToInstance()` internal `spawnProvision` usage
-- The `POST /api/onboarding` handler's provisioning logic
+- The `spawnProvision()` call inside `POST /api/onboarding` (webhook owns provisioning now)
+
+**Keep but modify:**
+- `deployFilesToInstance()` — keep the SCP file push logic intact. Only change: read `server_ip` / `ssh_key_path` from `getCustomerByStripeSessionId()` instead of JSON store, and guard with `provision_status === 'ready'` check before attempting SCP. Remove any `spawnProvision()` reference inside it.
 
 **Rewrite `POST /api/onboarding`:**
 ```js
@@ -1099,8 +1161,8 @@ app.post('/api/onboarding/quiz/:sessionId', async (req, res) => {
 **Rewrite `POST /api/onboarding/generate-profile/:sessionId`:**
 Same logic as current but reads/writes via `getOnboardingSession` / `updateOnboardingSession` instead of the JSON store. Check for cached profile via `session.generated_files`. Store result in `updateOnboardingSession(sessionId, { generated_files: JSON.stringify({...}), step: 'auth' })`.
 
-**Rewrite `deployFilesToInstance()`:**
-Read `server_ip` and `ssh_key_path` from `getCustomerByStripeSessionId(sessionId)`. Guard: `if (customer.provision_status !== 'ready') return { ok: false, error: 'Instance not provisioned yet.' };`
+**Modify `deployFilesToInstance()`:**
+Keep all SCP/chmod/docker-restart logic. Change data source: read `server_ip` and `ssh_key_path` from `getCustomerByStripeSessionId(sessionId)` instead of JSON store. Read `generated_files` from `getOnboardingSession(sessionId).generated_files` (parse JSON). Add guard: `if (customer.provision_status !== 'ready') return { ok: false, error: 'Instance not provisioned yet.' };`
 
 **Replace auth endpoint stubs with real ones:**
 
@@ -1219,7 +1281,13 @@ async function initOnboarding() {
 
     if (!response.ok || !payload.ok) {
       if (response.status === 404) {
-        // Customer not yet created — payment may still be processing
+        state.initRetries = (state.initRetries || 0) + 1;
+        if (state.initRetries >= 10) {
+          // ~30s of retries — bail with support message
+          document.getElementById('welcome-screen').querySelector('p').textContent =
+            'We couldn\'t find your account. Please contact hello@clawdaddy.sh for help.';
+          return;
+        }
         document.getElementById('welcome-screen').querySelector('p').textContent =
           'Setting up your account... This may take a moment after payment.';
         setTimeout(initOnboarding, 3000); // retry
