@@ -451,6 +451,196 @@ input[type="password"]::placeholder {
   }
 }
 
+/* Config View */
+.config-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.key-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.key-card-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.key-card-provider {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.key-card-status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.key-card-masked {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.key-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.key-card-actions .btn-primary,
+.key-card-actions .btn-secondary {
+  width: auto;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.key-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.key-input-row input {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+
+.key-input-row button {
+  width: auto;
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+}
+
+.key-feedback {
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.agent-card-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.agent-card-model {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.agent-model-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.agent-model-row select,
+.agent-model-row input {
+  flex: 1;
+  min-width: 180px;
+  margin-bottom: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.agent-model-row select:focus,
+.agent-model-row input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.agent-model-row button {
+  width: auto;
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+}
+
+.custom-model-input {
+  display: none;
+}
+
+.custom-model-input.visible {
+  display: block;
+}
+
+.config-advanced {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.config-advanced-toggle {
+  display: block;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.config-advanced-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.config-advanced-toggle::before {
+  content: '\25B8 ';
+}
+
+.config-advanced[open] .config-advanced-toggle::before {
+  content: '\25BE ';
+}
+
+.config-advanced-body {
+  padding: 0 1.25rem 1.25rem;
+  background: var(--surface);
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .info-cards {
@@ -476,5 +666,19 @@ input[type="password"]::placeholder {
 
   #welcome-title {
     font-size: 1.5rem;
+  }
+
+  .key-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .key-card-actions {
+    width: 100%;
+  }
+
+  .key-card-actions .btn-primary,
+  .key-card-actions .btn-secondary {
+    flex: 1;
   }
 }
