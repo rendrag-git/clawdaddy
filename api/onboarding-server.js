@@ -6,16 +6,18 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
-const { spawnProvision } = require('./lib/provisioner');
+const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth } = require('./lib/db');
+const { startAuth, completeAuth } = require('./lib/ssh-auth');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
+
+initDb();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
 
 const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
-const DATA_FILE = process.env.ONBOARDING_STORE_PATH || path.join(__dirname, 'onboarding-data.json');
 const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
 const ZEPTOMAIL_KEY_PATH = process.env.ZEPTOMAIL_KEY_PATH || '/home/ubuntu/clawdaddy/.secrets/zeptomail-key';
 let cachedZeptoMailKey = null;
@@ -209,17 +211,25 @@ function escapeHtml(str) {
 }
 
 async function deployFilesToInstance(sessionId) {
-  const store = await loadStore();
-  const record = store.sessions[sessionId];
+  const customer = getCustomerByStripeSessionId(sessionId);
+  if (!customer) return { ok: false, error: 'Session not found.' };
 
-  if (!record) return { ok: false, error: 'Session not found.' };
-  if (!record.generatedFiles) return { ok: false, error: 'Profile not generated yet.' };
-  if (record.status !== 'ready' || !record.serverIp || !record.sshKeyPath) {
+  if (customer.provision_status !== 'ready') {
     return { ok: false, error: 'Instance not provisioned yet.' };
   }
-  if (record.filesDeployed) return { ok: true, deployed: true, skipped: true };
+  if (!customer.server_ip || !customer.ssh_key_path) {
+    return { ok: false, error: 'Instance not provisioned yet.' };
+  }
 
-  const username = record.username || slugify(record.displayName);
+  const session = getOnboardingSession(sessionId);
+  if (!session || !session.generated_files) return { ok: false, error: 'Profile not generated yet.' };
+
+  const generatedFiles = JSON.parse(session.generated_files);
+  if (!generatedFiles.soulMd) return { ok: false, error: 'Profile not generated yet.' };
+
+  const username = customer.username;
+  const serverIp = customer.server_ip;
+  const sshKeyPath = customer.ssh_key_path;
 
   const baseDir = path.join(__dirname, 'generated');
   const outputDir = path.resolve(baseDir, username);
@@ -228,22 +238,22 @@ async function deployFilesToInstance(sessionId) {
   }
   await fs.mkdir(outputDir, { recursive: true });
 
-  await fs.writeFile(path.join(outputDir, 'SOUL.md'), record.generatedFiles.soulMd, 'utf8');
-  await fs.writeFile(path.join(outputDir, 'USER.md'), record.generatedFiles.userMd, 'utf8');
-  await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), record.generatedFiles.identityMd, 'utf8');
-  await fs.writeFile(path.join(outputDir, 'HEARTBEAT.md'), record.generatedFiles.heartbeatMd || '', 'utf8');
-  await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), record.generatedFiles.bootstrapMd || '', 'utf8');
+  await fs.writeFile(path.join(outputDir, 'SOUL.md'), generatedFiles.soulMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'USER.md'), generatedFiles.userMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'IDENTITY.md'), generatedFiles.identityMd, 'utf8');
+  await fs.writeFile(path.join(outputDir, 'HEARTBEAT.md'), generatedFiles.heartbeatMd || '', 'utf8');
+  await fs.writeFile(path.join(outputDir, 'BOOTSTRAP.md'), generatedFiles.bootstrapMd || '', 'utf8');
 
-  if (record.generatedFiles.multiAgentMd) {
-    await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), record.generatedFiles.multiAgentMd, 'utf8');
+  if (generatedFiles.multiAgentMd) {
+    await fs.writeFile(path.join(outputDir, 'MULTI-AGENT.md'), generatedFiles.multiAgentMd, 'utf8');
   }
 
-  if (record.generatedFiles.agentsMd) {
-    await fs.writeFile(path.join(outputDir, 'AGENTS.md'), record.generatedFiles.agentsMd, 'utf8');
+  if (generatedFiles.agentsMd) {
+    await fs.writeFile(path.join(outputDir, 'AGENTS.md'), generatedFiles.agentsMd, 'utf8');
   }
 
-  if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-    for (const agent of record.generatedFiles.agents) {
+  if (generatedFiles.agents && generatedFiles.agents.length > 0) {
+    for (const agent of generatedFiles.agents) {
       const agentDir = path.join(outputDir, 'agents', agent.name);
       await fs.mkdir(agentDir, { recursive: true });
       await fs.writeFile(path.join(agentDir, 'SOUL.md'), agent.soulMd, 'utf8');
@@ -254,58 +264,58 @@ async function deployFilesToInstance(sessionId) {
   }
 
   const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-  if (!record.serverIp || !ipPattern.test(record.serverIp)) {
+  if (!ipPattern.test(serverIp)) {
     return { ok: false, error: 'Invalid server IP.' };
   }
   const keyPathPattern = /^\/[\w\-/.]+$/;
-  if (!record.sshKeyPath || !keyPathPattern.test(record.sshKeyPath)) {
+  if (!keyPathPattern.test(sshKeyPath)) {
     return { ok: false, error: 'Invalid SSH key path.' };
   }
 
   let filesDeployed = false;
   try {
-    const scpOpts = ['-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
-    const remoteBase = `ubuntu@${record.serverIp}:/home/ubuntu/clawd`;
+    const scpOpts = ['-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30'];
+    const remoteBase = `ubuntu@${serverIp}:/home/ubuntu/clawd`;
 
     for (const filename of ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md']) {
       await execFileAsync('scp', [...scpOpts, path.join(outputDir, filename), `${remoteBase}/${filename}`]);
     }
 
-    if (record.generatedFiles.multiAgentMd) {
+    if (generatedFiles.multiAgentMd) {
       await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'MULTI-AGENT.md'), `${remoteBase}/MULTI-AGENT.md`]);
     }
 
-    if (record.generatedFiles.agentsMd) {
+    if (generatedFiles.agentsMd) {
       await execFileAsync('scp', [...scpOpts, path.join(outputDir, 'AGENTS.md'), `${remoteBase}/AGENTS.md`]);
     }
 
-    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
+    if (generatedFiles.agents && generatedFiles.agents.length > 0) {
       await execFileAsync('ssh', [
-        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
-        `ubuntu@${record.serverIp}`,
-        'mkdir -p ' + record.generatedFiles.agents.map(a => `/home/ubuntu/clawd/agents/${a.name}`).join(' ')
+        '-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${serverIp}`,
+        'mkdir -p ' + generatedFiles.agents.map(a => `/home/ubuntu/clawd/agents/${a.name}`).join(' ')
       ]);
 
-      for (const agent of record.generatedFiles.agents) {
+      for (const agent of generatedFiles.agents) {
         for (const filename of ['SOUL.md', 'AGENTS.md', 'HEARTBEAT.md', 'USER.md']) {
           const localPath = path.join(outputDir, 'agents', agent.name, filename);
           try {
             await fs.access(localPath);
-            await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${record.serverIp}:/home/ubuntu/clawd/agents/${agent.name}/${filename}`]);
+            await execFileAsync('scp', [...scpOpts, localPath, `ubuntu@${serverIp}:/home/ubuntu/clawd/agents/${agent.name}/${filename}`]);
           } catch (e) { /* file doesn't exist, skip */ }
         }
       }
     }
 
     let chmodPaths = '/home/ubuntu/clawd/SOUL.md /home/ubuntu/clawd/USER.md /home/ubuntu/clawd/IDENTITY.md /home/ubuntu/clawd/HEARTBEAT.md /home/ubuntu/clawd/BOOTSTRAP.md';
-    if (record.generatedFiles.agentsMd) {
+    if (generatedFiles.agentsMd) {
       chmodPaths += ' /home/ubuntu/clawd/AGENTS.md';
     }
-    if (record.generatedFiles.multiAgentMd) {
+    if (generatedFiles.multiAgentMd) {
       chmodPaths += ' /home/ubuntu/clawd/MULTI-AGENT.md';
     }
-    if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-      for (const agent of record.generatedFiles.agents) {
+    if (generatedFiles.agents && generatedFiles.agents.length > 0) {
+      for (const agent of generatedFiles.agents) {
         chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/SOUL.md`;
         if (agent.agentsMd) chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/AGENTS.md`;
         if (agent.heartbeatMd) chmodPaths += ` /home/ubuntu/clawd/agents/${agent.name}/HEARTBEAT.md`;
@@ -314,19 +324,19 @@ async function deployFilesToInstance(sessionId) {
     }
 
     await execFileAsync('ssh', [
-      '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
-      `ubuntu@${record.serverIp}`,
+      '-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+      `ubuntu@${serverIp}`,
       `chmod 644 ${chmodPaths}`
     ]);
 
     filesDeployed = true;
-    console.log(`Files deployed to ${record.serverIp} for session ${sessionId}`);
+    console.log(`Files deployed to ${serverIp} for session ${sessionId}`);
 
     // Restart container so entrypoint re-discovers agents
     try {
       await execFileAsync('ssh', [
-        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
-        `ubuntu@${record.serverIp}`,
+        '-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30',
+        `ubuntu@${serverIp}`,
         'sudo docker restart openclaw'
       ]);
       // Wait for gateway to fully initialize before reading token
@@ -343,8 +353,8 @@ async function deployFilesToInstance(sessionId) {
   if (filesDeployed) {
     try {
       const { stdout } = await execFileAsync('ssh', [
-        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
-        `ubuntu@${record.serverIp}`,
+        '-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+        `ubuntu@${serverIp}`,
         'sudo docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo ""'
       ]);
       gatewayToken = stdout.trim();
@@ -353,8 +363,8 @@ async function deployFilesToInstance(sessionId) {
     }
     try {
       const { stdout } = await execFileAsync('ssh', [
-        '-i', record.sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
-        `ubuntu@${record.serverIp}`,
+        '-i', sshKeyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+        `ubuntu@${serverIp}`,
         'cat /home/ubuntu/clawdaddy-portal/config.json 2>/dev/null || echo "{}"'
       ]);
       const portalConfig = JSON.parse(stdout.trim());
@@ -364,46 +374,14 @@ async function deployFilesToInstance(sessionId) {
     }
   }
 
-  await updateSession(sessionId, (rec) => {
-    rec.filesWritten = true;
-    rec.filesDeployed = filesDeployed;
-    rec.filesWrittenAt = new Date().toISOString();
-    rec.updatedAt = new Date().toISOString();
-    if (gatewayToken) rec.gatewayToken = gatewayToken;
-    if (portalToken) rec.portalToken = portalToken;
-  });
+  if (gatewayToken || portalToken) {
+    updateOnboardingSession(sessionId, {
+      ...(gatewayToken ? { gateway_token: gatewayToken } : {}),
+      ...(portalToken ? { portal_password: portalToken } : {}),
+    });
+  }
 
   return { ok: true, deployed: filesDeployed, gatewayToken, portalToken };
-}
-
-async function tryAutoWriteFiles(sessionId) {
-  const store = await loadStore();
-  const record = store.sessions[sessionId];
-
-  if (!record) return;
-  if (record.filesDeployed) return;
-  if (record.status !== 'ready') return;
-  if (!record.generatedFiles) return;
-
-  console.log(`Auto-write-files triggered for session ${sessionId}`);
-
-  try {
-    const result = await deployFilesToInstance(sessionId);
-
-    if (result.ok && result.deployed && !result.skipped) {
-      const freshStore = await loadStore();
-      const freshRecord = freshStore.sessions[sessionId];
-      if (freshRecord) {
-        sendReadyEmail({
-          ...freshRecord,
-          gatewayToken: result.gatewayToken || freshRecord.gatewayToken,
-          portalToken: result.portalToken || freshRecord.portalToken
-        }).catch(err => console.error(`Ready email failed for ${sessionId}: ${err.message}`));
-      }
-    }
-  } catch (err) {
-    console.error(`Auto-write-files failed for ${sessionId}: ${err.message}`);
-  }
 }
 
 function stripeGet(pathname, secretKey) {
@@ -477,183 +455,35 @@ async function validateStripeCheckoutSession(sessionId) {
   return session;
 }
 
-async function loadStore() {
-  try {
-    const content = await fs.readFile(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(content);
-
-    if (!parsed || typeof parsed !== 'object') {
-      return { sessions: {} };
-    }
-
-    if (!parsed.sessions || typeof parsed.sessions !== 'object') {
-      parsed.sessions = {};
-    }
-
-    return parsed;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return { sessions: {} };
-    }
-
-    throw error;
-  }
-}
-
-// Write lock to prevent concurrent saveStore() from clobbering each other.
-// Instead of saving a full store snapshot (which goes stale during long operations),
-// use updateSession() for all session mutations.
-let _writeLock = Promise.resolve();
-
-async function saveStore(store) {
-  _writeLock = _writeLock.then(async () => {
-    const directory = path.dirname(DATA_FILE);
-    await fs.mkdir(directory, { recursive: true });
-    const tmpPath = `${DATA_FILE}.tmp`;
-    const payload = `${JSON.stringify(store, null, 2)}\n`;
-    await fs.writeFile(tmpPath, payload, 'utf8');
-    await fs.rename(tmpPath, DATA_FILE);
-  }).catch(err => { console.error('saveStore error:', err.message); });
-  return _writeLock;
-}
-
-// Safe session updater: re-reads store, applies mutation, writes back — all under lock.
-// Use this instead of loadStore() + saveStore() for session mutations.
-async function updateSession(sessionId, mutator) {
-  _writeLock = _writeLock.then(async () => {
-    const store = await loadStore();
-    if (!store.sessions[sessionId]) {
-      store.sessions[sessionId] = {};
-    }
-    mutator(store.sessions[sessionId], store);
-    const directory = path.dirname(DATA_FILE);
-    await fs.mkdir(directory, { recursive: true });
-    const tmpPath = `${DATA_FILE}.tmp`;
-    const payload = `${JSON.stringify(store, null, 2)}\n`;
-    await fs.writeFile(tmpPath, payload, 'utf8');
-    await fs.rename(tmpPath, DATA_FILE);
-  }).catch(err => { console.error('updateSession error:', err.message); });
-  return _writeLock;
-}
-
 
 app.post('/api/onboarding', async (req, res) => {
-  const timestamp = new Date().toISOString();
+  const sessionId = parseSessionId(req.body?.sessionId || req.body?.session_id);
+  if (!sessionId || !isValidSessionId(sessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
 
   try {
-    const displayName = normalizeName(req.body?.displayName);
-    const assistantName = normalizeName(req.body?.assistantName);
-    const sessionId = parseSessionId(req.body?.sessionId || req.body?.session_id || req.body?.stripeSessionId);
+    await validateStripeCheckoutSession(sessionId);
 
-    const region = req.body?.region || 'us-east-1';
-    if (!VALID_REGIONS.has(region)) {
-      return res.status(400).json({ ok: false, error: 'Invalid region.' });
+    const customer = getCustomerByStripeSessionId(sessionId);
+    if (!customer) {
+      return res.status(404).json({ ok: false, error: 'Customer not found. Payment may still be processing.' });
     }
 
-    if (!displayName || displayName.length < 2 || displayName.length > 80) {
-      return res.status(400).json({ ok: false, error: 'Display name must be 2-80 characters.' });
-    }
-
-    if (!assistantName || assistantName.length < 2 || assistantName.length > 80) {
-      return res.status(400).json({ ok: false, error: 'Assistant name must be 2-80 characters.' });
-    }
-
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid Stripe session ID.' });
-    }
-
-    const checkoutSession = await validateStripeCheckoutSession(sessionId);
-
-    const store = await loadStore();
-    const existing = store.sessions[sessionId] || {};
-
-    const nowIso = new Date().toISOString();
-    const status = existing.status || 'queued';
-
-    const record = {
-      ...existing,
-      sessionId,
-      displayName,
-      assistantName,
-      status,
-      webchatUrl: existing.webchatUrl || buildWebchatUrl({ sessionId, displayName, assistantName }),
-      stripeCustomerId: checkoutSession.customer || null,
-      stripeCustomerEmail: checkoutSession.customer_details?.email || null,
-      stripePaymentStatus: checkoutSession.payment_status || null,
-      stripeStatus: checkoutSession.status || null,
-      createdAt: existing.createdAt || nowIso,
-      queuedAt: existing.queuedAt || nowIso,
-      updatedAt: nowIso
-    };
-
-    if (record.status === 'provisioning' && !record.provisioningAt) {
-      record.provisioningAt = nowIso;
-    }
-
-    if (record.status === 'ready' && !record.readyAt) {
-      record.readyAt = nowIso;
-    }
-
-    record.username = slugify(displayName);
-    record.region = region;
-
-    store.sessions[sessionId] = record;
-    await saveStore(store);
-
-    // Fire-and-forget: spawn real provisioning in background
-    // Tech debt: saveStore() calls in the stage callback and .then() are not
-    // Use updateSession() for all provisioning callbacks to avoid stale store snapshots.
-    void spawnProvision({
-      email: checkoutSession.customer_details?.email || record.stripeCustomerEmail || '',
-      username: record.username,
-      tier: 'managed',
-      region,
-      stripeCustomerId: record.stripeCustomerId || '',
-      stripeCheckoutSessionId: sessionId,
-    }, (stage) => {
-      updateSession(sessionId, (rec) => {
-        rec.provisionStage = stage;
-        rec.updatedAt = new Date().toISOString();
-      });
-    }).then(result => {
-      updateSession(sessionId, (rec) => {
-        rec.status = 'ready';
-        rec.serverIp = result.serverIp;
-        rec.sshKeyPath = result.sshKeyPath;
-        rec.customerId = result.customerId;
-        rec.vncPassword = result.vncPassword;
-        rec.dnsHostname = result.dnsHostname;
-        rec.provisionStage = 'complete';
-        rec.readyAt = new Date().toISOString();
-        rec.updatedAt = new Date().toISOString();
-        if (result.dnsHostname) {
-          rec.webchatUrl = `https://${result.dnsHostname}`;
-        }
-      }).then(() => tryAutoWriteFiles(sessionId));
-      console.log(`Provisioning complete for session ${sessionId}: ${result.serverIp}`);
-    }).catch(err => {
-      updateSession(sessionId, (rec) => {
-        rec.status = 'failed';
-        rec.provisionError = err.message;
-        rec.updatedAt = new Date().toISOString();
-      });
-      console.error(`Provisioning failed for session ${sessionId}: ${err.message}`);
-    });
-
-    console.log(`[${timestamp}] Onboarding submitted for session ${sessionId}`);
+    const session = getOnboardingSession(sessionId);
 
     return res.json({
       ok: true,
-      status: record.status,
-      webchatUrl: record.status === 'ready' ? record.webchatUrl : null
+      username: customer.username,
+      botName: customer.bot_name,
+      provisionStatus: customer.provision_status,
+      webchatUrl: customer.dns_hostname ? `https://${customer.dns_hostname}` : null,
+      step: session?.step || 'quiz',
     });
   } catch (error) {
-    console.error(`[${timestamp}] Failed onboarding submit:`, error.message);
-
     if (error.statusCode === 404 || error.statusCode === 400) {
       return res.status(400).json({ ok: false, error: 'Invalid or expired Stripe checkout session.' });
     }
-
     return res.status(500).json({ ok: false, error: 'Unable to process onboarding request.' });
   }
 });
@@ -728,28 +558,23 @@ app.post('/api/dns-update', async (req, res) => {
 
 app.get('/api/onboarding/status/:sessionId', async (req, res) => {
   const sessionId = parseSessionId(req.params.sessionId);
-
-  try {
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
-    }
-
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    return res.json({
-      status: record.status,
-      provisionStage: record.provisionStage || null,
-      webchatUrl: record.status === 'ready' ? record.webchatUrl : null
-    });
-  } catch (error) {
-    console.error(`Status lookup failed for ${sessionId}:`, error.message);
-    return res.status(500).json({ ok: false, error: 'Unable to fetch onboarding status.' });
+  if (!sessionId || !isValidSessionId(sessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
   }
+
+  const customer = getCustomerByStripeSessionId(sessionId);
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: 'Session not found.' });
+  }
+
+  return res.json({
+    username: customer.username,
+    botName: customer.bot_name,
+    provisionStatus: customer.provision_status,
+    provisionStage: customer.provision_stage,
+    authStatus: customer.auth_status,
+    webchatUrl: customer.dns_hostname ? `https://${customer.dns_hostname}` : null,
+  });
 });
 
 app.get('/health', (_req, res) => {
@@ -770,26 +595,16 @@ app.get('/api/onboarding/check-username/:username', async (req, res) => {
       });
     }
 
-    const store = await loadStore();
-
-    // Check against existing usernames in all sessions
-    const taken = Object.values(store.sessions).some(
-      s => s.username === raw || slugify(s.displayName) === raw
-    );
+    const taken = !!getCustomerByUsername(raw);
 
     if (taken) {
       // Suggest alternatives: append numbers
       let suggestion = null;
       for (let i = 1; i <= 99; i++) {
         const candidate = `${raw}${i}`;
-        if (candidate.length <= 20) {
-          const candidateTaken = Object.values(store.sessions).some(
-            s => s.username === candidate || slugify(s.displayName) === candidate
-          );
-          if (!candidateTaken) {
-            suggestion = candidate;
-            break;
-          }
+        if (candidate.length <= 20 && !getCustomerByUsername(candidate)) {
+          suggestion = candidate;
+          break;
         }
       }
       return res.json({ available: false, suggestion });
@@ -804,40 +619,28 @@ app.get('/api/onboarding/check-username/:username', async (req, res) => {
 
 app.post('/api/onboarding/quiz/:sessionId', async (req, res) => {
   const sessionId = parseSessionId(req.params.sessionId);
+  if (!sessionId || !isValidSessionId(sessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
 
-  try {
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
-    }
+  const session = getOnboardingSession(sessionId);
+  if (!session) {
+    return res.status(404).json({ ok: false, error: 'Session not found.' });
+  }
 
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    // Store quiz results alongside onboarding record
-    record.quizResults = {
+  updateOnboardingSession(sessionId, {
+    quiz_results: JSON.stringify({
       traits: req.body.traits || {},
       dimensionScores: req.body.dimensionScores || {},
       tags: req.body.tags || [],
       freeText: req.body.freeText || {},
       answers: req.body.answers || {},
       perQuestionContext: req.body.perQuestionContext || {},
-      submittedAt: new Date().toISOString()
-    };
-    record.updatedAt = new Date().toISOString();
+    }),
+    step: 'profile',
+  });
 
-    store.sessions[sessionId] = record;
-    await saveStore(store);
-
-    console.log(`Quiz results saved for session ${sessionId}`);
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error(`Quiz save failed for ${sessionId}:`, error.message);
-    return res.status(500).json({ ok: false, error: 'Unable to save quiz results.' });
-  }
+  return res.json({ ok: true });
 });
 
 app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
@@ -848,52 +651,56 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
     }
 
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
+    const session = getOnboardingSession(sessionId);
+    if (!session) {
       return res.status(404).json({ ok: false, error: 'Session not found.' });
     }
 
-    if (!record.quizResults) {
+    if (!session.quiz_results) {
       return res.status(400).json({ ok: false, error: 'Quiz results not found. Submit quiz first.' });
     }
 
+    const quizResults = JSON.parse(session.quiz_results);
+
     // Skip regeneration if profile already exists (avoids 2-min Opus call on retry)
-    if (record.generatedFiles && record.generatedFiles.soulMd) {
-      console.log(`Profile already generated for session ${sessionId}, skipping regeneration`);
-      const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
-      if (record.generatedFiles.agentsMd) fileList.push('AGENTS.md');
-      if (record.generatedFiles.agents && record.generatedFiles.agents.length > 0) {
-        fileList.push('MULTI-AGENT.md');
-        for (const agent of record.generatedFiles.agents) {
-          fileList.push(`agents/${agent.name}/SOUL.md`);
-          if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
-          if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
-          if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
+    if (session.generated_files) {
+      const generatedFiles = JSON.parse(session.generated_files);
+      if (generatedFiles.soulMd) {
+        console.log(`Profile already generated for session ${sessionId}, skipping regeneration`);
+        const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+        if (generatedFiles.agentsMd) fileList.push('AGENTS.md');
+        if (generatedFiles.agents && generatedFiles.agents.length > 0) {
+          fileList.push('MULTI-AGENT.md');
+          for (const agent of generatedFiles.agents) {
+            fileList.push(`agents/${agent.name}/SOUL.md`);
+            if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
+            if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
+            if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
+          }
         }
+        return res.json({ ok: true, files: fileList, cached: true });
       }
-      return res.json({ ok: true, files: fileList, cached: true });
     }
 
-    const username = record.username || slugify(record.displayName);
-    const botName = record.assistantName || 'Assistant';
+    const customer = getCustomerByStripeSessionId(sessionId);
+    const username = customer?.username || 'assistant';
+    const botName = customer?.bot_name || 'Assistant';
 
     const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd } = await generateProfile(
-      record.quizResults,
+      quizResults,
       username,
       botName
     );
 
-    record.generatedFiles = { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd };
-    record.profileGeneratedAt = new Date().toISOString();
-    record.updatedAt = new Date().toISOString();
+    updateOnboardingSession(sessionId, {
+      generated_files: JSON.stringify({ soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd }),
+      step: 'auth',
+    });
 
-    store.sessions[sessionId] = record;
-    await saveStore(store);
-
-    // Try auto-write-files (in case provisioning already completed)
-    void tryAutoWriteFiles(sessionId);
+    // Try auto-deploy files (in case provisioning already completed)
+    void deployFilesToInstance(sessionId).catch(err =>
+      console.error(`Auto-deploy failed for ${sessionId}: ${err.message}`)
+    );
 
     const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
     if (agentsMd) fileList.push('AGENTS.md');
@@ -936,107 +743,65 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
   }
 });
 
-app.get('/api/onboarding/auth-url/:sessionId', async (req, res) => {
-  const sessionId = parseSessionId(req.params.sessionId);
+// POST /api/onboarding/auth/start
+app.post('/api/onboarding/auth/start', async (req, res) => {
+  const { stripeSessionId, provider } = req.body || {};
+
+  if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
+  if (!['anthropic', 'openai'].includes(provider)) {
+    return res.status(400).json({ ok: false, error: 'Provider must be "anthropic" or "openai".' });
+  }
+
+  const customer = getCustomerByStripeSessionId(stripeSessionId);
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: 'Customer not found.' });
+  }
+  if (customer.provision_status !== 'ready') {
+    return res.status(409).json({ ok: false, error: 'Instance not provisioned yet.' });
+  }
 
   try {
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
-    }
-
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    // TODO: wire to real OAuth provider URLs
-    if (record.status !== 'ready') {
-      return res.json({ status: 'pending' });
-    }
-
-    const username = record.username || slugify(record.displayName);
-    const provider = req.query.provider || 'anthropic';
-    return res.json({
-      status: 'ready',
-      url: `https://auth.clawdaddy.sh/oauth/authorize?provider=${encodeURIComponent(provider)}&instance=${encodeURIComponent(username)}&session=${encodeURIComponent(sessionId)}`,
-      provider
-    });
+    const { authSessionId, oauthUrl } = await startAuth(provider, customer.server_ip, customer.ssh_key_path);
+    return res.json({ ok: true, authSessionId, oauthUrl });
   } catch (error) {
-    console.error(`Auth URL fetch failed for ${sessionId}:`, error.message);
-    return res.status(500).json({ ok: false, error: 'Unable to get auth URL.' });
+    console.error(`Auth start failed for ${stripeSessionId}: ${error.message}`);
+    const status = error.message.includes('Timed out') ? 504 : 502;
+    return res.status(status).json({ ok: false, error: error.message });
   }
 });
 
-app.post('/api/onboarding/auth-complete/:sessionId', async (req, res) => {
-  const sessionId = parseSessionId(req.params.sessionId);
+// POST /api/onboarding/auth/complete
+app.post('/api/onboarding/auth/complete', async (req, res) => {
+  const { authSessionId, code, stripeSessionId } = req.body || {};
 
-  try {
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
-    }
-
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    // TODO: wire to real OAuth callback verification
-    record.authComplete = true;
-    record.authCompletedAt = new Date().toISOString();
-    record.updatedAt = new Date().toISOString();
-
-    store.sessions[sessionId] = record;
-    await saveStore(store);
-
-    console.log(`Auth completed for session ${sessionId}`);
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error(`Auth complete failed for ${sessionId}:`, error.message);
-    return res.status(500).json({ ok: false, error: 'Unable to complete auth.' });
+  if (!authSessionId || !code || !stripeSessionId) {
+    return res.status(400).json({ ok: false, error: 'authSessionId, code, and stripeSessionId are required.' });
   }
-});
-
-app.get('/api/onboarding/ready/:sessionId', async (req, res) => {
-  const sessionId = parseSessionId(req.params.sessionId);
 
   try {
-    if (!sessionId || !isValidSessionId(sessionId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+    const result = await completeAuth(authSessionId, code);
+
+    // Update customer auth status in DB
+    const customer = getCustomerByStripeSessionId(stripeSessionId);
+    if (customer) {
+      updateAuth(customer.id, { authStatus: 'complete', authProvider: result.provider });
+      updateOnboardingSession(stripeSessionId, { step: 'complete' });
     }
 
-    const store = await loadStore();
-    const record = store.sessions[sessionId];
-
-    if (!record) {
-      return res.status(404).json({ ok: false, error: 'Session not found.' });
-    }
-
-    const username = record.username || slugify(record.displayName);
-    const allReady = record.status === 'ready'
-      && record.filesWritten
-      && record.authComplete;
-
-    if (!allReady) {
-      return res.json({ status: 'pending' });
-    }
-
-    return res.json({
-      status: 'ready',
-      webchatUrl: `https://${username}.clawdaddy.sh`
-    });
+    return res.json(result);
   } catch (error) {
-    console.error(`Ready check failed for ${sessionId}:`, error.message);
-    return res.status(500).json({ ok: false, error: 'Unable to check readiness.' });
+    console.error(`Auth complete failed: ${error.message}`);
+    const status = error.message.includes('not found') ? 404
+      : error.message.includes('Timed out') ? 504
+      : 400;
+    return res.status(status).json({ ok: false, error: error.message });
   }
 });
 
 app.listen(PORT, () => {
   console.log(`ClawDaddy onboarding API listening on port ${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
   console.log(`Stripe key path: ${STRIPE_KEY_PATH}`);
   console.log(`ZeptoMail key path: ${ZEPTOMAIL_KEY_PATH}`);
 });
