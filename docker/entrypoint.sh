@@ -34,8 +34,6 @@ if [[ -z "${ANTHROPIC_API_KEY}" ]]; then
 fi
 
 # --- Generate OpenClaw config ---
-echo "📝 Writing OpenClaw configuration..."
-
 MODEL="${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-20250514}"
 
 # Persistent gateway token - generate once, reuse on restarts
@@ -50,7 +48,7 @@ fi
 
 WEBCHAT="${WEBCHAT_ENABLED:-true}"
 
-# Build channels object
+# Build channels object from env vars
 CHANNELS="{}"
 if [[ -n "${DISCORD_TOKEN}" && -n "${DISCORD_CHANNEL}" ]]; then
     CHANNELS=$(DISCORD_TOKEN="${DISCORD_TOKEN}" DISCORD_CHANNEL="${DISCORD_CHANNEL}" node -e "
@@ -66,63 +64,108 @@ if [[ -n "${TELEGRAM_TOKEN}" && -n "${TELEGRAM_CHAT}" ]]; then
       console.log(JSON.stringify(c))" <<< "${CHANNELS}" 2>/dev/null || echo "${CHANNELS}")
 fi
 
-# Write main config (no API key here — that goes in auth-profiles.json)
-cat > "${CONFIG_DIR}/openclaw.json" <<CONF
-{
-  "auth": {
-    "profiles": {
-      "anthropic:manual": {
-        "provider": "anthropic",
-        "mode": "token"
+INIT_MARKER="${CONFIG_DIR}/.initialized"
+
+if [[ ! -f "${INIT_MARKER}" ]]; then
+    # ── First boot: write full config from env vars ──
+    echo "📝 First boot — initializing OpenClaw configuration..."
+
+    MODEL="${MODEL}" GW_TOKEN="${GW_TOKEN}" WORKSPACE="${WORKSPACE}" \
+      TZ="${TZ:-America/New_York}" CHANNELS="${CHANNELS}" \
+      node -e "
+      const fs = require('fs');
+      const channels = JSON.parse(process.env.CHANNELS || '{}');
+      const cfg = {
+        auth: { profiles: { 'anthropic:manual': { provider: 'anthropic', mode: 'token' } } },
+        agents: { defaults: {
+          model: { primary: process.env.MODEL },
+          workspace: process.env.WORKSPACE,
+          userTimezone: process.env.TZ
+        }},
+        gateway: {
+          port: 18789, mode: 'local', bind: 'lan',
+          auth: { mode: 'token', token: process.env.GW_TOKEN },
+          controlUi: { dangerouslyDisableDeviceAuth: true, allowInsecureAuth: true },
+          http: { endpoints: { chatCompletions: { enabled: true } } }
+        },
+        channels
+      };
+      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2) + '\n');
+    " "${CONFIG_DIR}/openclaw.json"
+
+    # Remove any unrecognized config keys that would cause openclaw to reject the config
+    su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
+
+    # Write auth-profiles.json (where the API key actually lives)
+    mkdir -p "${CONFIG_DIR}/agents/main/agent"
+    ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node -e "
+      const fs = require('fs');
+      const prof = {
+        version: 1,
+        profiles: { 'anthropic:manual': { type: 'token', provider: 'anthropic', token: process.env.ANTHROPIC_API_KEY } },
+        order: { anthropic: ['anthropic:manual'] }
+      };
+      fs.writeFileSync(process.argv[1], JSON.stringify(prof, null, 2) + '\n');
+    " "${CONFIG_DIR}/agents/main/agent/auth-profiles.json"
+
+    touch "${INIT_MARKER}"
+
+else
+    # ── Subsequent boot: merge env-driven values into existing config ──
+    echo "📝 Restarting — merging env updates into existing config..."
+
+    MODEL="${MODEL}" GW_TOKEN="${GW_TOKEN}" CHANNELS="${CHANNELS}" \
+      node -e "
+      const fs = require('fs');
+      const p = process.argv[1];
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+
+      // Update model if env changed
+      if (!cfg.agents) cfg.agents = {};
+      if (!cfg.agents.defaults) cfg.agents.defaults = {};
+      if (!cfg.agents.defaults.model) cfg.agents.defaults.model = {};
+      cfg.agents.defaults.model.primary = process.env.MODEL;
+
+      // Ensure gateway auth token is current
+      if (!cfg.gateway) cfg.gateway = {};
+      if (!cfg.gateway.auth) cfg.gateway.auth = {};
+      cfg.gateway.auth.token = process.env.GW_TOKEN;
+
+      // Ensure http chatCompletions is enabled
+      if (!cfg.gateway.http) cfg.gateway.http = {};
+      if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
+      cfg.gateway.http.endpoints.chatCompletions = { enabled: true };
+
+      // Update channels from env (additive — does not remove old channels)
+      const channels = JSON.parse(process.env.CHANNELS || '{}');
+      if (Object.keys(channels).length > 0) {
+        if (!cfg.channels) cfg.channels = {};
+        Object.assign(cfg.channels, channels);
       }
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "${MODEL}"
-      },
-      "workspace": "${WORKSPACE}",
-      "userTimezone": "${TZ:-America/New_York}"
-    }
-  },
-  "gateway": {
-    "port": 18789,
-    "mode": "local",
-    "bind": "lan",
-    "auth": {
-      "mode": "token",
-      "token": "${GW_TOKEN}"
-    },
-    "controlUi": {
-      "dangerouslyDisableDeviceAuth": true,
-      "allowInsecureAuth": true
-    }
-  },
-  "channels": ${CHANNELS}
-}
-CONF
 
-# Remove any unrecognized config keys that would cause openclaw to reject the config
-su - clawd -c "openclaw doctor --fix" 2>/dev/null || true
-
-# Write auth-profiles.json (where the API key actually lives)
-mkdir -p "${CONFIG_DIR}/agents/main/agent"
-cat > "${CONFIG_DIR}/agents/main/agent/auth-profiles.json" <<APROF
-{
-  "version": 1,
-  "profiles": {
-    "anthropic:manual": {
-      "type": "token",
-      "provider": "anthropic",
-      "token": "${ANTHROPIC_API_KEY}"
+      fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+      console.log('   Config merged successfully');
+    " "${CONFIG_DIR}/openclaw.json" || {
+        echo "⚠️  Config merge failed — continuing with existing config" >&2
     }
-  },
-  "order": {
-    "anthropic": ["anthropic:manual"]
-  }
-}
-APROF
+
+    # Update API key in auth-profiles (merge, don't overwrite)
+    AUTH_PROF="${CONFIG_DIR}/agents/main/agent/auth-profiles.json"
+    if [[ -f "${AUTH_PROF}" ]]; then
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node -e "
+          const fs = require('fs');
+          const p = process.argv[1];
+          const prof = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          if (prof.profiles && prof.profiles['anthropic:manual']) {
+            prof.profiles['anthropic:manual'].token = process.env.ANTHROPIC_API_KEY;
+          }
+          fs.writeFileSync(p, JSON.stringify(prof, null, 2) + '\n');
+          console.log('   Auth profiles updated');
+        " "${AUTH_PROF}" || {
+            echo "⚠️  Auth profile merge failed — continuing with existing profile" >&2
+        }
+    fi
+fi
 
 # Generate device identity (required for webchat pairing/auth)
 mkdir -p "${CONFIG_DIR}/identity"
