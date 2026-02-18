@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClawDaddy Quiz Demo</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121a33; --text:#e9eefc; --muted:#a8b2d1; --accent:#7aa2ff; --ok:#38d39f; }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:linear-gradient(180deg,#0b1020,#111933);color:var(--text)}
+    .wrap{max-width:900px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border:1px solid #273258;border-radius:14px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    h1{margin:0 0 8px;font-size:28px} p{margin:0 0 14px;color:var(--muted)}
+    .top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px}
+    .pill{font-size:12px;padding:6px 10px;border-radius:999px;background:#1b2648;color:#b9c7ee;border:1px solid #2a3a67}
+    .q{margin-top:12px;padding-top:12px;border-top:1px solid #25325a}
+    .q h3{margin:0 0 10px;font-size:18px}
+    .opts{display:grid;gap:8px}
+    label.opt{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #2b3968;border-radius:10px;background:#101934;cursor:pointer}
+    label.opt:hover{border-color:#4b63ab}
+    .controls{display:flex;justify-content:space-between;margin-top:18px;gap:10px}
+    button{background:#243a78;color:#fff;border:1px solid #3f5eb8;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    button.secondary{background:transparent;color:#c8d6ff}
+    button:disabled{opacity:.4;cursor:not-allowed}
+    .progress{height:8px;background:#1a274e;border-radius:999px;overflow:hidden;margin:12px 0 4px}
+    .bar{height:100%;background:linear-gradient(90deg,#6a95ff,#8fbcff);width:0%}
+    .summary{white-space:pre-wrap;background:#0f1730;border:1px solid #2d3c6d;padding:12px;border-radius:10px;max-height:380px;overflow:auto}
+    .footer{margin-top:10px;font-size:12px;color:#91a2d8}
+    a{color:#b6c8ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div>
+          <h1>ClawDaddy Quiz Demo</h1>
+          <p>Interactive demo of the onboarding quiz (no Stripe, no provisioning, no data saved).</p>
+        </div>
+        <div class="pill" id="counter">Loading...</div>
+      </div>
+
+      <div class="progress"><div class="bar" id="bar"></div></div>
+      <div id="question"></div>
+
+      <div class="controls">
+        <button class="secondary" id="prevBtn">← Back</button>
+        <div>
+          <button class="secondary" id="skipBtn">Skip</button>
+          <button id="nextBtn">Next →</button>
+        </div>
+      </div>
+
+      <div id="results" style="display:none;margin-top:16px">
+        <h3 style="margin:0 0 8px">Demo Results (local only)</h3>
+        <p>This is just for preview. Nothing is submitted.</p>
+        <div class="summary" id="summary"></div>
+      </div>
+
+      <div class="footer">Tip: share this URL directly for demo. If you want printable version later, I can add it.</div>
+    </div>
+  </div>
+
+  <script>
+    const state = { quiz:null, idx:0, answers:{} };
+    const qEl = document.getElementById('question');
+    const counter = document.getElementById('counter');
+    const bar = document.getElementById('bar');
+    const results = document.getElementById('results');
+    const summary = document.getElementById('summary');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const skipBtn = document.getElementById('skipBtn');
+
+    function currentQ(){ return state.quiz.questions[state.idx]; }
+    function updateProgress(){
+      const total = state.quiz.questions.length;
+      counter.textContent = `Question ${Math.min(state.idx+1,total)} / ${total}`;
+      bar.style.width = `${((state.idx)/total)*100}%`;
+      prevBtn.disabled = state.idx === 0;
+    }
+
+    function renderQuestion(){
+      results.style.display = 'none';
+      const q = currentQ();
+      if(!q){ return renderResults(); }
+      updateProgress();
+
+      if(q.type === 'single_select'){
+        qEl.innerHTML = `<div class="q"><h3>${q.prompt}</h3><div class="opts">${q.options.map(o=>`<label class="opt"><input type="radio" name="opt" value="${o.id}" ${state.answers[q.id]===o.id?'checked':''}> <span>${o.label}</span></label>`).join('')}</div></div>`;
+      } else if(q.type === 'multi_select'){
+        const picked = state.answers[q.id] || [];
+        qEl.innerHTML = `<div class="q"><h3>${q.prompt}</h3><div class="opts">${q.options.map(o=>`<label class="opt"><input type="checkbox" value="${o.id}" ${picked.includes(o.id)?'checked':''}> <span>${o.label}</span></label>`).join('')}</div></div>`;
+      } else {
+        qEl.innerHTML = `<div class="q"><h3>${q.prompt}</h3><input id="txt" style="width:100%;padding:10px;border-radius:8px;border:1px solid #344473;background:#0f1730;color:#fff" placeholder="${q.placeholder||''}" value="${(state.answers[q.id]||'').replace(/"/g,'&quot;')}"></div>`;
+      }
+    }
+
+    function collectCurrent(){
+      const q = currentQ();
+      if(!q) return;
+      if(q.type === 'single_select'){
+        const c = qEl.querySelector('input[type=radio]:checked');
+        if(c) state.answers[q.id] = c.value;
+      } else if(q.type === 'multi_select'){
+        state.answers[q.id] = [...qEl.querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value);
+      } else {
+        const txt = document.getElementById('txt');
+        if(txt && txt.value.trim()) state.answers[q.id] = txt.value.trim();
+      }
+    }
+
+    function renderResults(){
+      bar.style.width = '100%';
+      counter.textContent = 'Done';
+      qEl.innerHTML = '<div class="q"><h3>Done! 🎉</h3><p>You completed the demo quiz.</p></div>';
+      results.style.display = 'block';
+
+      const lines = [];
+      for(const q of state.quiz.questions){
+        const a = state.answers[q.id];
+        if(a == null) continue;
+        if(q.type === 'single_select'){
+          const opt = q.options.find(o=>o.id===a);
+          lines.push(`• ${q.id} ${q.prompt}\n  → ${opt ? opt.label : a}`);
+        } else if(q.type === 'multi_select'){
+          const labels = (a||[]).map(id => (q.options.find(o=>o.id===id)||{}).label || id);
+          lines.push(`• ${q.id} ${q.prompt}\n  → ${labels.join(', ')}`);
+        } else {
+          lines.push(`• ${q.id} ${q.prompt}\n  → ${a}`);
+        }
+      }
+      summary.textContent = lines.join('\n\n');
+    }
+
+    nextBtn.addEventListener('click', () => {
+      collectCurrent();
+      state.idx++;
+      renderQuestion();
+    });
+    prevBtn.addEventListener('click', () => {
+      collectCurrent();
+      state.idx = Math.max(0, state.idx-1);
+      renderQuestion();
+    });
+    skipBtn.addEventListener('click', () => {
+      state.idx++;
+      renderQuestion();
+    });
+
+    fetch('/quiz-design.json')
+      .then(r => r.json())
+      .then(quiz => { state.quiz = quiz; renderQuestion(); })
+      .catch(err => {
+        qEl.innerHTML = `<p>Could not load quiz data: ${err.message}</p>`;
+        counter.textContent = 'Error';
+      });
+  </script>
+</body>
+</html>
