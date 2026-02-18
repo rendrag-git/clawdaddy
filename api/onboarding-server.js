@@ -676,5 +676,5 @@ app.post('/api/onboarding/auth/complete', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`ClawDaddy onboarding API listening on port ${PORT}`);
   console.log(`Stripe key path: ${STRIPE_KEY_PATH}`);
-  console.log(`ZeptoMail key path: ${ZEPTOMAIL_KEY_PATH}`);
+  // ZeptoMail key path log removed — constant not defined in this version
 });
