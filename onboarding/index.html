@@ -1103,7 +1103,7 @@
               throw new Error(payload.error || 'Failed to fetch status.');
             }
 
-            state.serverStatus = payload.status || 'queued';
+            state.serverStatus = payload.provisionStatus || 'queued';
             state.webchatUrl = payload.webchatUrl || '';
 
             if (state.serverStatus === 'ready') {

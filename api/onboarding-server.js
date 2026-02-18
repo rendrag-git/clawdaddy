@@ -18,11 +18,6 @@ const app = express();
 const PORT = Number(process.env.PORT || 3848);
 
 const STRIPE_KEY_PATH = process.env.STRIPE_KEY_PATH || '/home/ubuntu/clawd/.secrets/stripe-key';
-const WEBCHAT_BASE_URL = (process.env.WEBCHAT_BASE_URL || 'https://chat.clawdaddy.sh').replace(/\/+$/, '');
-const ZEPTOMAIL_KEY_PATH = process.env.ZEPTOMAIL_KEY_PATH || '/home/ubuntu/clawdaddy/.secrets/zeptomail-key';
-let cachedZeptoMailKey = null;
-
-
 const allowedOrigins = new Set([
   'https://clawdaddy.sh',
   'https://www.clawdaddy.sh',
@@ -41,12 +36,6 @@ function isValidIPv4(ip) {
   return /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) &&
     ip.split('.').every(n => parseInt(n, 10) <= 255);
 }
-
-const VALID_REGIONS = new Set([
-  'us-east-1', 'us-east-2', 'us-west-2', 'ca-central-1',
-  'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1',
-  'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1'
-]);
 
 const dnsUpdateLastCall = new Map(); // username -> timestamp
 
@@ -68,11 +57,6 @@ app.use(express.json());
 // Serve onboarding UI
 app.use(express.static(path.join(__dirname, '..', 'onboarding')));
 
-function normalizeName(value) {
-  if (typeof value !== 'string') return '';
-  return value.trim().replace(/\s+/g, ' ');
-}
-
 function parseSessionId(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
@@ -80,25 +64,6 @@ function parseSessionId(value) {
 
 function isValidSessionId(sessionId) {
   return SESSION_ID_REGEX.test(sessionId);
-}
-
-function slugify(input) {
-  const slug = (input || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  return slug || 'assistant';
-}
-
-function buildWebchatUrl(record) {
-  if (record.dnsHostname) {
-    return `https://${record.dnsHostname}`;
-  }
-  // Fallback for pre-DNS customers
-  const suffix = record.sessionId.slice(-8).toLowerCase();
-  const slug = slugify(record.assistantName || record.displayName);
-  return `${WEBCHAT_BASE_URL}/${slug}-${suffix}`;
 }
 
 async function getStripeSecretKey() {
@@ -115,100 +80,6 @@ async function getStripeSecretKey() {
   return cachedStripeKey;
 }
 
-async function getZeptoMailKey() {
-  if (cachedZeptoMailKey) return cachedZeptoMailKey;
-  try {
-    const raw = await fs.readFile(ZEPTOMAIL_KEY_PATH, 'utf8');
-    cachedZeptoMailKey = raw.trim();
-    return cachedZeptoMailKey;
-  } catch (err) {
-    console.error(`ZeptoMail key not found at ${ZEPTOMAIL_KEY_PATH}: ${err.message}`);
-    return null;
-  }
-}
-
-async function sendReadyEmail(record) {
-  const apiKey = await getZeptoMailKey();
-  if (!apiKey) {
-    console.error(`Cannot send ready email for ${record.username}: ZeptoMail key not available`);
-    return;
-  }
-
-  const email = record.stripeCustomerEmail;
-  if (!email) {
-    console.error(`Cannot send ready email for ${record.username}: no customer email`);
-    return;
-  }
-
-  const username = record.username;
-  const instanceUrl = `https://${username}.clawdaddy.sh`;
-  const portalToken = record.portalToken || '';
-  const portalLoginUrl = portalToken ? `${instanceUrl}/portal/?token=${encodeURIComponent(portalToken)}` : `${instanceUrl}/portal/`;
-  const botName = record.assistantName || 'your assistant';
-
-  const htmlBody = `
-<div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6ecff;background:#0b1024;border-radius:16px;overflow:hidden;">
-  <div style="background:linear-gradient(110deg,#7c8cff,#3ee7ff);padding:32px 24px;text-align:center;">
-    <h1 style="margin:0;font-size:24px;color:#020512;font-weight:800;">Your AI assistant is live!</h1>
-  </div>
-  <div style="padding:24px;">
-    <p style="font-size:16px;line-height:1.6;color:#c9d4ff;">Hey! <strong>${escapeHtml(botName)}</strong> is set up and ready to go at:</p>
-    <p style="text-align:center;margin:20px 0;">
-      <a href="${portalLoginUrl}" style="display:inline-block;padding:14px 28px;background:linear-gradient(110deg,#7c8cff,#3ee7ff);color:#020512;font-weight:700;font-size:16px;border-radius:12px;text-decoration:none;">${username}.clawdaddy.sh</a>
-    </p>
-    <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
-    <h2 style="font-size:18px;color:#e6ecff;margin:0 0 12px;">Quick start</h2>
-    <ol style="font-size:14px;color:#c9d4ff;line-height:1.8;padding-left:20px;margin:0;">
-      <li>Open <a href="${portalLoginUrl}" style="color:#3ee7ff;">${username}.clawdaddy.sh</a> to log in and manage your assistant</li>
-      <li>Use the webchat to talk to ${escapeHtml(botName)} directly in your browser</li>
-      <li>Connect Discord: add a bot token in the dashboard settings to chat from your server</li>
-    </ol>
-    <hr style="border:none;border-top:1px solid rgba(140,168,255,0.22);margin:24px 0;">
-    <p style="font-size:13px;color:#7a82a8;text-align:center;">Questions? Reply to this email or reach us at <a href="mailto:hello@clawdaddy.sh" style="color:#3ee7ff;">hello@clawdaddy.sh</a></p>
-  </div>
-</div>`;
-
-  const payload = JSON.stringify({
-    from: { address: 'support@clawdaddy.sh', name: 'ClawDaddy' },
-    to: [{ email_address: { address: email } }],
-    subject: `${botName} is ready — ${username}.clawdaddy.sh`,
-    htmlbody: htmlBody
-  });
-
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: 'api.zeptomail.com',
-      path: '/v1.1/email',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': apiKey,
-        'Accept': 'application/json'
-      }
-    }, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          console.log(`Ready email sent to ${email} for ${username}`);
-        } else {
-          console.error(`ZeptoMail error (${res.statusCode}) for ${username}: ${body.slice(0, 300)}`);
-        }
-        resolve();
-      });
-    });
-    req.on('error', (err) => {
-      console.error(`ZeptoMail request failed for ${username}: ${err.message}`);
-      resolve(); // Don't throw — email is non-blocking
-    });
-    req.write(payload);
-    req.end();
-  });
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 async function deployFilesToInstance(sessionId) {
   const customer = getCustomerByStripeSessionId(sessionId);
@@ -506,15 +377,9 @@ app.post('/api/dns-update', async (req, res) => {
       return res.status(429).json({ ok: false, error: 'Rate limited. Try again in 60 seconds.' });
     }
 
-    // Validate token against customers.json
-    const customersPath = process.env.CUSTOMERS_FILE || path.join(__dirname, '..', 'customers.json');
-    const customersRaw = await fs.readFile(customersPath, 'utf8');
-    const customers = JSON.parse(customersRaw);
-    const customer = customers.customers.find(
-      c => c.username === username && c.dns_token === token
-    );
-
-    if (!customer) {
+    // Validate token against SQLite
+    const customer = getCustomerByUsername(username);
+    if (!customer || customer.dns_token !== token) {
       return res.status(401).json({ ok: false, error: 'Invalid credentials.' });
     }
 

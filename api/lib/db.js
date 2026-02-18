@@ -26,6 +26,7 @@ function initDb() {
       server_ip TEXT,
       ssh_key_path TEXT,
       dns_hostname TEXT,
+      dns_token TEXT,
       provision_status TEXT DEFAULT 'pending',
       provision_stage TEXT,
       auth_status TEXT DEFAULT 'pending',
@@ -184,8 +185,8 @@ function migrateFromJson() {
 
     const customers = data.customers || [];
     const insert = getDb().prepare(`
-      INSERT OR IGNORE INTO customers (id, username, email, bot_name, tier, stripe_customer_id, stripe_session_id, server_ip, ssh_key_path, dns_hostname, provision_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO customers (id, username, email, bot_name, tier, stripe_customer_id, stripe_session_id, server_ip, ssh_key_path, dns_hostname, dns_token, provision_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const tx = getDb().transaction(() => {
@@ -201,6 +202,7 @@ function migrateFromJson() {
           c.ip || c.server_ip || null,
           c.ssh_key_path || null,
           c.dns_hostname || null,
+          c.dns_token || null,
           c.ip ? 'ready' : 'pending'
         );
       }
