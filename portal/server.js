@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +31,27 @@ const AUTH_PROFILES_PATH =
   '/home/clawd/.openclaw/agents/main/agent/auth-profiles.json';
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 const COOKIE_NAME = 'portal_session';
+
+// ---------------------------------------------------------------------------
+// File-level write lock (prevents concurrent read-modify-write races)
+// ---------------------------------------------------------------------------
+
+const _writeLocks = new Map();
+
+async function withFileLock(filePath, fn) {
+  while (_writeLocks.has(filePath)) {
+    await _writeLocks.get(filePath);
+  }
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  _writeLocks.set(filePath, promise);
+  try {
+    return await fn();
+  } finally {
+    _writeLocks.delete(filePath);
+    resolve();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,7 +101,7 @@ async function readAuthProfiles() {
 
 async function writeAuthProfiles(data) {
   await fs.mkdir(path.dirname(AUTH_PROFILES_PATH), { recursive: true });
-  await fs.writeFile(AUTH_PROFILES_PATH, JSON.stringify(data, null, 2), {
+  await fs.writeFile(AUTH_PROFILES_PATH, JSON.stringify(data, null, 2) + '\n', {
     encoding: 'utf-8',
     mode: 0o600,
   });
@@ -98,8 +119,8 @@ async function readOpenClawConfig() {
 async function writeOpenClawConfig(data) {
   await fs.writeFile(
     OPENCLAW_CONFIG_PATH,
-    JSON.stringify(data, null, 2),
-    'utf-8'
+    JSON.stringify(data, null, 2) + '\n',
+    { encoding: 'utf-8', mode: 0o600 }
   );
 }
 
@@ -108,7 +129,7 @@ async function writeOpenClawConfig(data) {
 // ---------------------------------------------------------------------------
 
 function restartGateway() {
-  exec('openclaw gateway restart', (err, stdout, stderr) => {
+  execFile('openclaw', ['gateway', 'restart'], (err, stdout, stderr) => {
     if (err) {
       console.error('Gateway restart failed:', err.message);
       return;
@@ -129,12 +150,19 @@ const KEY_PREFIXES = {
   google: 'AI',
 };
 
+const SUPPORTED_PROVIDERS = Object.keys(KEY_PREFIXES);
+const VALID_PROVIDERS = new Set(SUPPORTED_PROVIDERS);
+
 function validateKeyFormat(provider, key) {
   const prefix = KEY_PREFIXES[provider];
   if (!prefix) return { valid: false, error: `Unknown provider: ${provider}` };
   if (!key || typeof key !== 'string') return { valid: false, error: 'Key is required' };
   if (!key.startsWith(prefix)) {
     return { valid: false, error: `Key must start with "${prefix}"` };
+  }
+  // Reject keys that match a more specific provider
+  if (provider === 'openai' && (key.startsWith('sk-ant-') || key.startsWith('sk-or-'))) {
+    return { valid: false, error: 'This looks like an Anthropic or OpenRouter key, not OpenAI' };
   }
   if (key.length < 10) return { valid: false, error: 'Key is too short' };
   return { valid: true };
@@ -547,7 +575,7 @@ app.get('/portal/api/config/keys', requireAuth, async (_req, res) => {
     }
 
     // Include unconfigured providers
-    for (const prov of ['anthropic', 'openai', 'openrouter', 'google']) {
+    for (const prov of SUPPORTED_PROVIDERS) {
       if (!providers[prov]) {
         providers[prov] = { provider: prov, configured: false, masked: null, profileId: null };
       }
@@ -569,27 +597,29 @@ app.post('/portal/api/config/keys', requireAuth, async (req, res) => {
   }
 
   try {
-    const profiles = await readAuthProfiles();
-    const profileId = `${provider}:manual`;
+    return await withFileLock(AUTH_PROFILES_PATH, async () => {
+      const profiles = await readAuthProfiles();
+      const profileId = `${provider}:manual`;
 
-    profiles.profiles[profileId] = {
-      type: 'token',
-      provider,
-      token: key,
-    };
+      profiles.profiles[profileId] = {
+        type: 'token',
+        provider,
+        token: key,
+      };
 
-    // Update order
-    if (!profiles.order[provider]) {
-      profiles.order[provider] = [];
-    }
-    if (!profiles.order[provider].includes(profileId)) {
-      profiles.order[provider].push(profileId);
-    }
+      // Update order
+      if (!profiles.order[provider]) {
+        profiles.order[provider] = [];
+      }
+      if (!profiles.order[provider].includes(profileId)) {
+        profiles.order[provider].push(profileId);
+      }
 
-    await writeAuthProfiles(profiles);
-    restartGateway();
+      await writeAuthProfiles(profiles);
+      restartGateway();
 
-    return res.json({ ok: true, masked: maskKey(key) });
+      return res.json({ ok: true, masked: maskKey(key) });
+    });
   } catch (err) {
     console.error('Failed to save API key:', err.message);
     return res.status(500).json({ ok: false, error: 'Failed to save API key' });
@@ -632,7 +662,7 @@ app.post('/portal/api/config/keys/test', requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Unknown provider' });
     }
 
-    const testRes = await fetch(testUrl, testOpts);
+    const testRes = await fetch(testUrl, { ...testOpts, signal: AbortSignal.timeout(10000) });
     if (testRes.ok) {
       return res.json({ ok: true, message: 'Key is valid' });
     }
@@ -646,30 +676,36 @@ app.post('/portal/api/config/keys/test', requireAuth, async (req, res) => {
 app.delete('/portal/api/config/keys/:provider', requireAuth, async (req, res) => {
   const { provider } = req.params;
 
+  if (!VALID_PROVIDERS.has(provider)) {
+    return res.status(400).json({ ok: false, error: 'Unknown provider' });
+  }
+
   try {
-    const profiles = await readAuthProfiles();
-    const profileId = `${provider}:manual`;
+    return await withFileLock(AUTH_PROFILES_PATH, async () => {
+      const profiles = await readAuthProfiles();
+      const profileId = `${provider}:manual`;
 
-    if (!profiles.profiles[profileId]) {
-      return res.status(404).json({ ok: false, error: 'Key not found' });
-    }
-
-    delete profiles.profiles[profileId];
-
-    // Clean up order
-    if (profiles.order[provider]) {
-      profiles.order[provider] = profiles.order[provider].filter(
-        (id) => id !== profileId
-      );
-      if (profiles.order[provider].length === 0) {
-        delete profiles.order[provider];
+      if (!profiles.profiles[profileId]) {
+        return res.status(404).json({ ok: false, error: 'Key not found' });
       }
-    }
 
-    await writeAuthProfiles(profiles);
-    restartGateway();
+      delete profiles.profiles[profileId];
 
-    return res.json({ ok: true });
+      // Clean up order
+      if (profiles.order[provider]) {
+        profiles.order[provider] = profiles.order[provider].filter(
+          (id) => id !== profileId
+        );
+        if (profiles.order[provider].length === 0) {
+          delete profiles.order[provider];
+        }
+      }
+
+      await writeAuthProfiles(profiles);
+      restartGateway();
+
+      return res.json({ ok: true });
+    });
   } catch (err) {
     console.error('Failed to delete API key:', err.message);
     return res.status(500).json({ ok: false, error: 'Failed to delete key' });
@@ -702,24 +738,30 @@ app.patch('/portal/api/config/agents/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   const { model } = req.body || {};
 
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    return res.status(400).json({ ok: false, error: 'Invalid agent ID' });
+  }
+
   if (!model || typeof model !== 'string') {
     return res.status(400).json({ ok: false, error: 'model is required' });
   }
 
   try {
-    const oc = await readOpenClawConfig();
-    const agents = oc.agents?.list || [];
-    const agent = agents.find((a) => a.id === id);
+    return await withFileLock(OPENCLAW_CONFIG_PATH, async () => {
+      const oc = await readOpenClawConfig();
+      const agents = oc.agents?.list || [];
+      const agent = agents.find((a) => a.id === id);
 
-    if (!agent) {
-      return res.status(404).json({ ok: false, error: `Agent "${id}" not found` });
-    }
+      if (!agent) {
+        return res.status(404).json({ ok: false, error: `Agent "${id}" not found` });
+      }
 
-    agent.model = model;
-    await writeOpenClawConfig(oc);
-    restartGateway();
+      agent.model = model;
+      await writeOpenClawConfig(oc);
+      restartGateway();
 
-    return res.json({ ok: true, agent: { id: agent.id, name: agent.name, model: agent.model } });
+      return res.json({ ok: true, agent: { id: agent.id, name: agent.name, model: agent.model } });
+    });
   } catch (err) {
     console.error('Failed to update agent model:', err.message);
     return res.status(500).json({ ok: false, error: 'Failed to update agent' });
