@@ -712,7 +712,7 @@
       <section id="welcome-screen" class="mx-auto max-w-xl px-4 py-16 text-center">
         <h1 class="text-3xl font-black text-white sm:text-4xl">Welcome to ClawDaddy</h1>
         <p class="mt-4 text-lg text-zinc-300">Thanks for subscribing! Let's set up your personal AI assistant.</p>
-        <p class="mt-2 text-sm text-zinc-400">You'll choose a name, take a quick personality quiz, and we'll spin up a dedicated instance just for you.</p>
+        <p class="mt-2 text-sm text-zinc-400">You'll take a quick personality quiz, connect your AI provider, and we'll spin up a dedicated assistant just for you.</p>
         <button id="start-setup-btn" class="mt-8 inline-flex min-h-[46px] items-center justify-center rounded-xl bg-lobster px-8 py-3 font-bold text-white transition hover:bg-red-500">Start Setup</button>
       </section>
 
@@ -723,68 +723,6 @@
 
         <article class="panel" id="onboarding-panel">
           <span class="session-chip">Session: <strong id="session-preview">loading...</strong></span>
-
-          <!-- Step 1: Your Info -->
-          <div id="step-1" class="step-container active">
-            <h2 class="title">Your Info</h2>
-            <p class="copy">
-              Choose your username (becomes your subdomain) and name your assistant.
-            </p>
-
-            <form id="step-1-form" class="form" novalidate>
-              <div class="field">
-                <label class="label" for="username">Username</label>
-                <input
-                  class="input"
-                  id="username"
-                  name="username"
-                  type="text"
-                  placeholder="yourname"
-                  maxlength="20"
-                  required
-                  autocomplete="off"
-                />
-                <div id="username-check" class="username-check"></div>
-                <div id="subdomain-preview" class="subdomain-preview"></div>
-              </div>
-
-              <div class="field">
-                <label class="label" for="bot-name">Assistant name</label>
-                <input
-                  class="input"
-                  id="bot-name"
-                  name="botName"
-                  type="text"
-                  placeholder="OpenClaw"
-                  maxlength="80"
-                  required
-                />
-              </div>
-
-              <div class="field">
-                <label class="label" for="region">Server region</label>
-                <select class="input" id="region" name="region">
-                  <option value="us-east-1" selected>US East (Virginia)</option>
-                  <option value="us-east-2">US East (Ohio)</option>
-                  <option value="us-west-2">US West (Oregon)</option>
-                  <option value="ca-central-1">Canada (Montreal)</option>
-                  <option value="eu-west-1">Europe (Ireland)</option>
-                  <option value="eu-west-2">Europe (London)</option>
-                  <option value="eu-west-3">Europe (Paris)</option>
-                  <option value="eu-central-1">Europe (Frankfurt)</option>
-                  <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
-                  <option value="ap-southeast-2">Asia Pacific (Sydney)</option>
-                  <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
-                  <option value="ap-northeast-2">Asia Pacific (Seoul)</option>
-                  <option value="ap-south-1">Asia Pacific (Mumbai)</option>
-                </select>
-              </div>
-
-              <button class="button" id="step-1-submit" type="submit">Let's go</button>
-            </form>
-
-            <p id="step-1-error" class="error" role="alert"></p>
-          </div>
 
           <!-- Step 2: Personality Quiz -->
           <div id="step-2" class="step-container">
@@ -810,17 +748,7 @@
 
           <!-- Step 4: You're All Set -->
           <div id="step-4" class="step-container">
-            <div class="success-state">
-              <span class="success-check">✓</span>
-              <h2 class="success-title">Your assistant is ready!</h2>
-              <div class="success-url" id="final-url"></div>
-              <button class="copy-btn" id="copy-url-btn">
-                <span id="copy-icon">📋</span> <span id="copy-text">Copy URL</span>
-              </button>
-              <p class="bookmark-text">Bookmark this — it's your assistant's home</p>
-              <p class="redirect-text" id="redirect-countdown"></p>
-              <button class="button" id="open-now-btn">Open now</button>
-            </div>
+            <div class="success-state"></div>
           </div>
         </article>
 
@@ -852,13 +780,58 @@
           return;
         }
 
-        document.getElementById('session-preview').textContent = `${sessionId.slice(0, 8)}...${sessionId.slice(-6)}`;
+        document.getElementById('session-preview').textContent = 'loading...';
+
+        // ======== Init: Load customer data from API ========
+        async function initOnboarding() {
+          try {
+            const response = await fetch(`${API_BASE}/api/onboarding`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ sessionId })
+            });
+            const payload = await readJson(response);
+
+            if (!response.ok || !payload.ok) {
+              if (response.status === 404) {
+                state.initRetries = (state.initRetries || 0) + 1;
+                if (state.initRetries >= 10) {
+                  // ~30s of retries — bail with support message
+                  document.getElementById('welcome-screen').querySelector('p').textContent =
+                    'We couldn\'t find your account. Please contact hello@clawdaddy.sh for help.';
+                  return;
+                }
+                document.getElementById('welcome-screen').querySelector('p').textContent =
+                  'Setting up your account... This may take a moment after payment.';
+                setTimeout(initOnboarding, 3000); // retry
+                return;
+              }
+              throw new Error(payload.error || 'Failed to load onboarding data.');
+            }
+
+            state.username = payload.username;
+            state.botName = payload.botName;
+            state.serverStatus = payload.provisionStatus;
+            state.serverReady = payload.provisionStatus === 'ready';
+
+            // Update UI with customer info
+            document.getElementById('session-preview').textContent = `${payload.username}`;
+          } catch (error) {
+            console.error('Init failed:', error);
+          }
+        }
 
         // ======== Buffer Page ========
-        document.getElementById('start-setup-btn').addEventListener('click', () => {
+        // Welcome screen "Start Setup" goes straight to quiz
+        document.getElementById('start-setup-btn').addEventListener('click', async () => {
           document.getElementById('welcome-screen').style.display = 'none';
           document.getElementById('wizard-content').style.display = '';
+          showStep(2); // Skip step 1, go straight to quiz
+          startPolling();
+          renderQuestion();
         });
+
+        initOnboarding();
 
         // ======== Quiz Data ========
         const QUIZ_QUESTIONS = [
@@ -1054,32 +1027,23 @@
         const state = {
           sessionId,
           username: '',
-          usernameAvailable: null,
           botName: '',
-          currentStep: 1,
+          currentStep: 2,
           quizIndex: 0,
           answers: {},
           perQuestionContext: {},
           serverStatus: 'queued',
           serverReady: false,
           authComplete: false,
-          webchatUrl: '',
-          suggestionUsername: ''
+          authSessionId: null,
+          initRetries: 0,
+          webchatUrl: ''
         };
 
         // ======== DOM References ========
-        const step1Container = document.getElementById('step-1');
         const step2Container = document.getElementById('step-2');
         const step3Container = document.getElementById('step-3');
         const step4Container = document.getElementById('step-4');
-
-        const usernameInput = document.getElementById('username');
-        const botNameInput = document.getElementById('bot-name');
-        const usernameCheck = document.getElementById('username-check');
-        const subdomainPreview = document.getElementById('subdomain-preview');
-        const step1Form = document.getElementById('step-1-form');
-        const step1Submit = document.getElementById('step-1-submit');
-        const step1Error = document.getElementById('step-1-error');
 
         const provisionChip = document.getElementById('provision-chip');
         const provisionText = document.getElementById('provision-text');
@@ -1089,18 +1053,7 @@
 
         const step3Content = document.getElementById('step-3-content');
 
-        const finalUrlDisplay = document.getElementById('final-url');
-        const copyUrlBtn = document.getElementById('copy-url-btn');
-        const copyIcon = document.getElementById('copy-icon');
-        const copyText = document.getElementById('copy-text');
-        const redirectCountdown = document.getElementById('redirect-countdown');
-        const openNowBtn = document.getElementById('open-now-btn');
-
         // ======== Helpers ========
-        function slugify(str) {
-          return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        }
-
         function escapeHtml(str) {
           const div = document.createElement('div');
           div.textContent = str;
@@ -1113,8 +1066,8 @@
 
         function showStep(stepNum) {
           state.currentStep = stepNum;
-          [step1Container, step2Container, step3Container, step4Container].forEach((el, i) => {
-            el.classList.toggle('active', i + 1 === stepNum);
+          [step2Container, step3Container, step4Container].forEach((el, i) => {
+            el.classList.toggle('active', i + 2 === stepNum);
           });
         }
 
@@ -1125,145 +1078,6 @@
             return {};
           }
         }
-
-        // ======== Username Check (Step 1) ========
-        let usernameDebounceTimer = null;
-
-        async function checkUsername(username) {
-          if (!username || username.length < 3 || username.length > 20) {
-            usernameCheck.innerHTML = '';
-            usernameCheck.className = 'username-check';
-            state.usernameAvailable = null;
-            return;
-          }
-
-          try {
-            const response = await fetch(`${API_BASE}/api/onboarding/check-username/${encodeURIComponent(username)}`);
-            const payload = await readJson(response);
-
-            if (!response.ok) {
-              usernameCheck.innerHTML = '<span>❌ Error checking availability</span>';
-              usernameCheck.className = 'username-check taken';
-              state.usernameAvailable = false;
-              return;
-            }
-
-            if (payload.available) {
-              usernameCheck.innerHTML = '<span>✓ available</span>';
-              usernameCheck.className = 'username-check available';
-              state.usernameAvailable = true;
-              state.suggestionUsername = '';
-            } else {
-              const suggestion = payload.suggestion || '';
-              state.suggestionUsername = suggestion;
-              const suggestionHtml = suggestion
-                ? ` <a class="suggestion-link" data-suggestion="${suggestion}">try "${suggestion}"</a>`
-                : '';
-              usernameCheck.innerHTML = `<span>✕ taken</span>${suggestionHtml}`;
-              usernameCheck.className = 'username-check taken';
-              state.usernameAvailable = false;
-
-              if (suggestion) {
-                const suggestionLink = usernameCheck.querySelector('.suggestion-link');
-                suggestionLink.addEventListener('click', () => {
-                  usernameInput.value = suggestion;
-                  state.username = suggestion;
-                  updateSubdomainPreview(suggestion);
-                  checkUsername(suggestion);
-                });
-              }
-            }
-          } catch (error) {
-            usernameCheck.innerHTML = '<span>❌ Error checking</span>';
-            usernameCheck.className = 'username-check taken';
-            state.usernameAvailable = false;
-          }
-        }
-
-        function updateSubdomainPreview(username) {
-          if (username) {
-            subdomainPreview.textContent = `${username}.clawdaddy.sh`;
-          } else {
-            subdomainPreview.textContent = '';
-          }
-        }
-
-        usernameInput.addEventListener('input', (e) => {
-          let raw = e.target.value.trim();
-          const slugged = slugify(raw);
-          if (raw !== slugged) {
-            e.target.value = slugged;
-            raw = slugged;
-          }
-          state.username = raw;
-          updateSubdomainPreview(raw);
-
-          clearTimeout(usernameDebounceTimer);
-          usernameDebounceTimer = setTimeout(() => {
-            checkUsername(raw);
-          }, 400);
-        });
-
-        botNameInput.addEventListener('input', (e) => {
-          state.botName = e.target.value.trim();
-        });
-
-        step1Form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          showError(step1Error, '');
-
-          const username = state.username;
-          const botName = state.botName;
-
-          const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
-          if (username.length < 3 || username.length > 20 || !usernameRegex.test(username)) {
-            showError(step1Error, 'Username must be 3-20 characters, start/end with a letter or number, no consecutive hyphens.');
-            return;
-          }
-
-          if (botName.length < 2) {
-            showError(step1Error, 'Assistant name must be at least 2 characters.');
-            return;
-          }
-
-          if (state.usernameAvailable === false) {
-            showError(step1Error, 'Username is taken. Try another.');
-            return;
-          }
-
-          if (state.usernameAvailable === null) {
-            showError(step1Error, 'Checking username availability...');
-            return;
-          }
-
-          step1Submit.disabled = true;
-
-          try {
-            const response = await fetch(`${API_BASE}/api/onboarding/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ displayName: username, assistantName: botName, sessionId, region: document.getElementById('region').value })
-            });
-
-            const payload = await readJson(response);
-
-            if (!response.ok) {
-              if (response.status === 400 && /session/i.test(payload.error || '')) {
-                window.location.replace('./error.html?reason=invalid_session');
-                return;
-              }
-              throw new Error(payload.error || 'Could not submit onboarding details.');
-            }
-
-            showStep(2);
-            startPolling();
-            renderQuestion();
-          } catch (error) {
-            showError(step1Error, error.message || 'Unable to submit.');
-          } finally {
-            step1Submit.disabled = false;
-          }
-        });
 
         // ======== Provisioning Polling ========
         let pollTimer = null;
@@ -1289,7 +1103,7 @@
               throw new Error(payload.error || 'Failed to fetch status.');
             }
 
-            state.serverStatus = payload.status || 'queued';
+            state.serverStatus = payload.provisionStatus || 'queued';
             state.webchatUrl = payload.webchatUrl || '';
 
             if (state.serverStatus === 'ready') {
@@ -1628,9 +1442,9 @@
             });
             if (!profileRes.ok) throw new Error('Failed to generate profile.');
 
-            // Server handles write-files automatically when provisioning completes.
-            showStep(4);
-            renderSetupComplete();
+            // After quiz + profile, go to auth step
+            showStep(3);
+            renderStep3();
           } catch (error) {
             quizQuestionArea.innerHTML = `
               <div class="waiting-state">
@@ -1704,17 +1518,17 @@
 
         // ======== Step 3: Connect Your AI ========
         function renderStep3() {
+          // Check if provisioning is ready
           if (!state.serverReady) {
             step3Content.innerHTML = `
               <div class="waiting-state">
-                <p>Almost ready, setting up your server...</p>
-                <div class="auth-status">
+                <div class="provision-chip">
                   <span class="pulse-dot"></span>
-                  <span>Provisioning...</span>
+                  <span>Waiting for your server to finish setting up...</span>
                 </div>
+                <p style="color: var(--text-muted);">This usually takes 2-3 minutes. We'll continue automatically when it's ready.</p>
               </div>
             `;
-
             const checkInterval = setInterval(() => {
               if (state.serverReady) {
                 clearInterval(checkInterval);
@@ -1725,61 +1539,139 @@
           }
 
           step3Content.innerHTML = `
-            <p class="copy">Choose your AI provider to connect.</p>
-            <div class="provider-buttons">
+            <p class="copy">Connect your AI provider so your assistant can think.</p>
+            <div class="provider-buttons" id="provider-buttons">
               <button class="provider-btn anthropic" data-provider="anthropic">
-                Anthropic
+                Connect Claude (Anthropic)
               </button>
               <button class="provider-btn openai" data-provider="openai">
-                OpenAI
+                Connect OpenAI
               </button>
             </div>
-            <div class="auth-status hidden" id="auth-status">
-              <span class="pulse-dot"></span>
-              <span id="auth-status-text">Waiting for authorization...</span>
-            </div>
+            <div id="auth-flow-area" class="hidden"></div>
+            <p id="auth-error" class="error"></p>
           `;
 
-          const providerBtns = step3Content.querySelectorAll('.provider-btn');
-          providerBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-              selectProvider(btn.dataset.provider);
-            });
+          step3Content.querySelectorAll('.provider-btn').forEach(btn => {
+            btn.addEventListener('click', () => selectProvider(btn.dataset.provider));
           });
         }
 
         async function selectProvider(provider) {
+          const providerButtons = document.getElementById('provider-buttons');
+          const flowArea = document.getElementById('auth-flow-area');
+          const authError = document.getElementById('auth-error');
+
+          // Disable buttons while starting
+          providerButtons.querySelectorAll('.provider-btn').forEach(b => b.disabled = true);
+          authError.textContent = '';
+
           try {
-            const response = await fetch(`${API_BASE}/api/onboarding/auth-url/${encodeURIComponent(sessionId)}?provider=${provider}`);
+            const response = await fetch(`${API_BASE}/api/onboarding/auth/start`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ stripeSessionId: sessionId, provider })
+            });
             const payload = await readJson(response);
 
-            if (payload.url) {
-              window.open(payload.url, '_blank');
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload.error || 'Failed to start auth.');
             }
 
-            const authStatus = document.getElementById('auth-status');
-            authStatus.classList.remove('hidden');
+            state.authSessionId = payload.authSessionId;
 
-            setTimeout(async () => {
-              await fetch(`${API_BASE}/api/onboarding/auth-complete/${encodeURIComponent(sessionId)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                body: JSON.stringify({ provider })
-              });
+            // Hide provider buttons, show auth flow
+            providerButtons.classList.add('hidden');
+            flowArea.classList.remove('hidden');
 
-              document.getElementById('auth-status-text').textContent = 'Authorization confirmed!';
-              authStatus.classList.add('confirmed');
+            const isAnthropic = provider === 'anthropic';
+            const instructions = isAnthropic
+              ? `Click the link below to sign in with Anthropic. After authorizing, you'll see a code that looks like <code>ABC123#xyz789</code>. Copy the <strong>full code including the # part</strong> and paste it below.`
+              : `Click the link below to sign in with OpenAI. After authorizing, your browser will try to load a page that won't work — that's expected. Copy the <strong>full URL from your address bar</strong> and paste it below.`;
 
-              setTimeout(() => {
-                state.authComplete = true;
-                showStep(4);
-                renderStep4();
-              }, 1000);
-            }, 3000);
+            const placeholder = isAnthropic
+              ? 'Paste your CODE#STATE here'
+              : 'Paste the full redirect URL here';
+
+            flowArea.innerHTML = `
+              <div style="margin: 1.2rem 0;">
+                <p class="copy" style="margin-bottom: 1rem;">${instructions}</p>
+                <a href="${escapeHtml(payload.oauthUrl)}" target="_blank" rel="noopener"
+                   class="button" style="display: inline-block; text-decoration: none; text-align: center; width: 100%;">
+                  Sign in with ${isAnthropic ? 'Anthropic' : 'OpenAI'} &rarr;
+                </a>
+              </div>
+              <div class="field" style="margin-top: 1.2rem;">
+                <label class="label" for="auth-code-input">${isAnthropic ? 'Authorization code' : 'Redirect URL'}</label>
+                <input class="input" id="auth-code-input" type="text" placeholder="${placeholder}" autocomplete="off" />
+              </div>
+              <button class="button" id="auth-submit-btn" style="margin-top: 0.8rem;" disabled>
+                Complete Setup
+              </button>
+              <div class="auth-status hidden" id="auth-progress">
+                <span class="pulse-dot"></span>
+                <span id="auth-progress-text">Verifying...</span>
+              </div>
+            `;
+
+            const codeInput = document.getElementById('auth-code-input');
+            const submitBtn = document.getElementById('auth-submit-btn');
+
+            codeInput.addEventListener('input', () => {
+              submitBtn.disabled = !codeInput.value.trim();
+            });
+
+            submitBtn.addEventListener('click', () => submitAuthCode(provider));
           } catch (error) {
-            const authStatus = document.getElementById('auth-status');
-            authStatus.classList.remove('hidden');
-            document.getElementById('auth-status-text').textContent = 'Error authorizing. Please try again.';
+            authError.textContent = error.message;
+            providerButtons.querySelectorAll('.provider-btn').forEach(b => b.disabled = false);
+          }
+        }
+
+        async function submitAuthCode(provider) {
+          const codeInput = document.getElementById('auth-code-input');
+          const submitBtn = document.getElementById('auth-submit-btn');
+          const progress = document.getElementById('auth-progress');
+          const authError = document.getElementById('auth-error');
+
+          const code = codeInput.value.trim();
+          if (!code) return;
+
+          submitBtn.disabled = true;
+          codeInput.disabled = true;
+          progress.classList.remove('hidden');
+          authError.textContent = '';
+
+          try {
+            const response = await fetch(`${API_BASE}/api/onboarding/auth/complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({
+                authSessionId: state.authSessionId,
+                code,
+                stripeSessionId: sessionId
+              })
+            });
+            const payload = await readJson(response);
+
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload.error || 'Authorization failed.');
+            }
+
+            // Success
+            document.getElementById('auth-progress-text').textContent = `${provider === 'anthropic' ? 'Claude' : 'OpenAI'} connected!`;
+            progress.classList.add('confirmed');
+
+            setTimeout(() => {
+              state.authComplete = true;
+              showStep(4);
+              renderSetupComplete();
+            }, 1500);
+          } catch (error) {
+            authError.textContent = error.message + ' Please try again.';
+            submitBtn.disabled = false;
+            codeInput.disabled = false;
+            progress.classList.add('hidden');
           }
         }
 
@@ -1791,17 +1683,17 @@
           const step4 = document.getElementById('step-4');
           step4.querySelector('.success-state').innerHTML = `
             <span class="success-check">\u2728</span>
-            <h2 class="success-title">Your AI assistant is being set up!</h2>
+            <h2 class="success-title">You're all set!</h2>
             <p style="color: var(--text-muted); font-size: 1.05rem; line-height: 1.6; margin: 1rem 0;">
-              It'll be live at <strong style="color: var(--accent-2); font-family: monospace;">${escapeHtml(url)}</strong> in about 3 minutes.
+              Your assistant is live at:
             </p>
-            <p style="color: var(--text-muted); font-size: 1rem; margin: 0.5rem 0 1.5rem;">
-              We'll email you when it's ready with your login details and quick-start steps.
-            </p>
+            <div class="success-url">${escapeHtml(url)}</div>
             <button class="copy-btn" id="copy-url-btn-setup">
               <span>\u{1F4CB}</span> <span>Copy URL</span>
             </button>
             <p class="bookmark-text">Bookmark this \u2014 it's your assistant's home</p>
+            <p class="redirect-text" id="redirect-countdown-text"></p>
+            <button class="button" id="open-now-btn-setup" style="margin-top: 0.5rem;">Open now</button>
           `;
 
           const copyBtn = document.getElementById('copy-url-btn-setup');
@@ -1819,80 +1711,27 @@
               }
             });
           }
-        }
 
-        // ======== Step 4: Success (original) ========
-        function renderStep4() {
-          const url = `https://${state.username}.clawdaddy.sh`;
-          state.webchatUrl = url;
-
-          finalUrlDisplay.textContent = url;
-
-          copyUrlBtn.onclick = () => {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(url).then(() => {
-                copyIcon.textContent = '✓';
-                copyText.textContent = 'Copied!';
-                copyUrlBtn.classList.add('copied');
-
-                setTimeout(() => {
-                  copyIcon.textContent = '📋';
-                  copyText.textContent = 'Copy URL';
-                  copyUrlBtn.classList.remove('copied');
-                }, 2000);
-              }).catch(() => {
-                fallbackCopy(url);
-              });
-            } else {
-              fallbackCopy(url);
-            }
-          };
-
-          openNowBtn.onclick = () => {
-            window.location.href = url;
-          };
-
-          startCountdown(5, url);
-        }
-
-        function fallbackCopy(text) {
-          const textarea = document.createElement('textarea');
-          textarea.value = text;
-          textarea.style.position = 'fixed';
-          textarea.style.opacity = '0';
-          document.body.appendChild(textarea);
-          textarea.select();
-          try {
-            document.execCommand('copy');
-            copyIcon.textContent = '✓';
-            copyText.textContent = 'Copied!';
-            copyUrlBtn.classList.add('copied');
-
-            setTimeout(() => {
-              copyIcon.textContent = '📋';
-              copyText.textContent = 'Copy URL';
-              copyUrlBtn.classList.remove('copied');
-            }, 2000);
-          } catch (err) {
-            copyText.textContent = 'Copy failed';
+          const openBtn = document.getElementById('open-now-btn-setup');
+          if (openBtn) {
+            openBtn.addEventListener('click', () => {
+              window.location.href = url;
+            });
           }
-          document.body.removeChild(textarea);
-        }
 
-        function startCountdown(seconds, url) {
-          let remaining = seconds;
-
-          const updateCountdown = () => {
+          // Countdown redirect
+          const countdownEl = document.getElementById('redirect-countdown-text');
+          let remaining = 8;
+          const tick = () => {
             if (remaining > 0) {
-              redirectCountdown.textContent = `Redirecting in ${remaining}...`;
+              countdownEl.textContent = `Redirecting in ${remaining}...`;
               remaining--;
-              setTimeout(updateCountdown, 1000);
+              setTimeout(tick, 1000);
             } else {
               window.location.href = url;
             }
           };
-
-          updateCountdown();
+          tick();
         }
       })();
     </script>
