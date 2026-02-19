@@ -1,3 +1,9 @@
+---
+name: agent-delegate
+description: "Internal agent-to-agent delegation with explicit Discord channel targeting"
+metadata: { "openclaw": { "emoji": "🔗", "events": ["message:received"], "requires": {} } }
+---
+
 # agent-delegate
 
 Internal delegation hook pack for OpenClaw.

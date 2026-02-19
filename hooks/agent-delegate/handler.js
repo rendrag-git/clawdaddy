@@ -3,30 +3,64 @@
 /**
  * Agent Delegate hook pack
  *
- * Routes delegation through OpenClaw's internal agent command path
- * (agentCommand / equivalent), with explicit Discord delivery targeting.
+ * Listens on message:received events but ONLY acts when the message
+ * contains an explicit delegation marker. Normal messages pass through silently.
+ *
+ * Delegation marker: message content starts with [DELEGATE] or metadata contains
+ * { delegate: true } or { routedBy: 'hook:agent-delegate' }.
  */
+
+const DELEGATE_PREFIX = '[DELEGATE]';
+
+function isDelegationRequest(event) {
+  // Check content prefix
+  const content = event?.context?.content || '';
+  if (content.startsWith(DELEGATE_PREFIX)) return true;
+
+  // Check metadata flags
+  const meta = event?.context?.metadata || {};
+  if (meta.delegate === true) return true;
+  if (meta.routedBy === 'hook:agent-delegate') return true;
+
+  return false;
+}
+
+function parseDelegationContent(content) {
+  // Strip [DELEGATE] prefix and parse structured fields
+  // Format: [DELEGATE] to=<channelId> session=<key> model=<model> | <prompt>
+  const body = content.slice(DELEGATE_PREFIX.length).trim();
+  const pipeIdx = body.indexOf('|');
+  const headerPart = pipeIdx >= 0 ? body.slice(0, pipeIdx).trim() : '';
+  const prompt = pipeIdx >= 0 ? body.slice(pipeIdx + 1).trim() : body;
+
+  const fields = {};
+  for (const token of headerPart.split(/\s+/)) {
+    const eqIdx = token.indexOf('=');
+    if (eqIdx > 0) {
+      fields[token.slice(0, eqIdx)] = token.slice(eqIdx + 1);
+    }
+  }
+
+  return {
+    to: fields.to || fields.channel || undefined,
+    sessionKey: fields.session || fields.sessionKey || undefined,
+    model: fields.model || undefined,
+    prompt,
+    channel: fields.provider || 'discord',
+    deliver: true,
+  };
+}
 
 function stringifyError(error) {
   if (!error) return 'unknown error';
   if (typeof error === 'string') return error;
   if (error.stack) return error.stack;
   if (error.message) return error.message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
+  try { return JSON.stringify(error); } catch { return String(error); }
 }
 
 function resolveContextApi(ctx) {
-  const candidate =
-    ctx?.api ||
-    ctx?.runtime ||
-    ctx?.services ||
-    ctx?.openclaw ||
-    ctx;
-
+  const candidate = ctx?.api || ctx?.runtime || ctx?.services || ctx?.openclaw || ctx;
   if (!candidate) return null;
 
   const agentCommand =
@@ -40,56 +74,56 @@ function resolveContextApi(ctx) {
 }
 
 function loggerFor(ctx) {
-  if (ctx?.logger) return ctx.logger;
-  return console;
+  return ctx?.logger || console;
 }
 
-function normalizeInput(ctx) {
-  const input = ctx?.input || ctx?.body || ctx?.payload || {};
+module.exports = async function agentDelegateHook(event = {}) {
+  const log = loggerFor(event);
 
-  const sessionKey = input.sessionKey || input.session || input.targetSession || undefined;
-  const to = input.to || input.channelId || input.discordChannelId || input.targetChannelId || undefined;
-  const prompt = input.prompt || input.message || input.text || '';
+  // CRITICAL: silently skip non-delegation messages
+  if (!isDelegationRequest(event)) {
+    return; // pass through — not a delegation
+  }
 
-  return {
-    raw: input,
-    sessionKey,
-    to,
-    prompt,
-    channel: input.channel || 'discord',
-    deliver: input.deliver !== undefined ? Boolean(input.deliver) : true,
-    model: input.model,
-    metadata: input.metadata || {},
-  };
-}
+  log.info('[agent-delegate] delegation request detected');
 
-module.exports = async function agentDelegateHook(ctx = {}) {
-  const log = loggerFor(ctx);
-  const { raw, sessionKey, to, prompt, channel, deliver, model, metadata } = normalizeInput(ctx);
+  // Parse delegation parameters from message content or metadata
+  const content = event?.context?.content || '';
+  const meta = event?.context?.metadata || {};
+
+  let params;
+  if (content.startsWith(DELEGATE_PREFIX)) {
+    params = parseDelegationContent(content);
+  } else {
+    // Metadata-driven delegation
+    params = {
+      to: meta.to || meta.channelId || meta.targetChannelId,
+      sessionKey: meta.sessionKey || meta.session,
+      model: meta.model,
+      prompt: meta.prompt || meta.message || content,
+      channel: meta.channel || 'discord',
+      deliver: meta.deliver !== undefined ? Boolean(meta.deliver) : true,
+    };
+  }
+
+  const { to, sessionKey, model, prompt, channel, deliver } = params;
 
   if (!to) {
-    const msg = '[agent-delegate] Missing required target channel: provide `to` (Discord channel id).';
-    log.warn(msg, { sessionKey, channel, deliver, hasPrompt: Boolean(prompt) });
-    const error = new Error(msg);
-    error.code = 'MISSING_TARGET_CHANNEL';
-    throw error;
+    log.warn('[agent-delegate] Delegation missing target channel (to). Skipping.');
+    return; // don't throw — just skip gracefully
   }
 
   if (!prompt || !String(prompt).trim()) {
-    const msg = '[agent-delegate] Missing required prompt/message.';
-    log.warn(msg, { sessionKey, to, channel, deliver });
-    const error = new Error(msg);
-    error.code = 'MISSING_PROMPT';
-    throw error;
+    log.warn('[agent-delegate] Delegation missing prompt. Skipping.');
+    return;
   }
 
-  const resolved = resolveContextApi(ctx);
+  const resolved = resolveContextApi(event);
   if (!resolved?.agentCommand) {
-    const msg = '[agent-delegate] No internal agent command function found (expected `agentCommand`).';
-    log.error(msg, { contextKeys: Object.keys(ctx || {}) });
-    const error = new Error(msg);
-    error.code = 'AGENT_COMMAND_UNAVAILABLE';
-    throw error;
+    log.error('[agent-delegate] No internal agentCommand function available.', {
+      contextKeys: Object.keys(event || {}),
+    });
+    return;
   }
 
   const commandInput = {
@@ -99,49 +133,28 @@ module.exports = async function agentDelegateHook(ctx = {}) {
     to,
     model,
     metadata: {
-      ...metadata,
       routedBy: 'hook:agent-delegate',
       transport: 'internal-agent-command',
     },
   };
 
-  if (sessionKey) {
-    commandInput.sessionKey = sessionKey;
-  }
+  if (sessionKey) commandInput.sessionKey = sessionKey;
 
-  log.info('[agent-delegate] route=internal-agent-command dispatching', {
+  log.info('[agent-delegate] dispatching', {
+    to, channel, deliver,
     sessionKey: sessionKey || '(default)',
-    to,
-    channel,
-    deliver,
     model: model || '(default)',
+    promptLength: prompt.length,
   });
 
   try {
     const result = await resolved.agentCommand(commandInput);
-
-    log.info('[agent-delegate] route=internal-agent-command dispatched', {
-      ok: true,
-      to,
-      sessionKey: sessionKey || '(default)',
-      resultType: typeof result,
-      hasResult: result !== undefined,
-    });
-
-    return {
-      ok: true,
-      route: 'internal-agent-command',
-      delivery: { deliver, channel, to },
-      sessionKey: sessionKey || null,
-      result,
-    };
+    log.info('[agent-delegate] dispatched OK', { to, sessionKey: sessionKey || '(default)' });
+    return { ok: true, route: 'internal-agent-command', to, result };
   } catch (error) {
-    log.error('[agent-delegate] route=internal-agent-command failed', {
-      to,
-      channel,
-      sessionKey: sessionKey || '(default)',
-      error: stringifyError(error),
+    log.error('[agent-delegate] dispatch failed', {
+      to, error: stringifyError(error),
     });
-    throw error;
+    // Don't throw — log and move on so we don't break message processing
   }
 };
