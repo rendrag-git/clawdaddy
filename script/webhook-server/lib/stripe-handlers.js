@@ -34,7 +34,7 @@ export async function handle_checkout_completed(session) {
 
   const custom_fields = session.custom_fields || [];
   const username_field = custom_fields.find(f => f.key === 'username');
-  const bot_name_field = custom_fields.find(f => f.key === 'bot_name');
+  const bot_name_field = custom_fields.find(f => f.key === 'botname');
   const username = username_field?.text?.value || metadata.username || null;
   const bot_name = bot_name_field?.text?.value || metadata.bot_name || null;
 
