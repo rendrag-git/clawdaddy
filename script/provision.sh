@@ -11,7 +11,7 @@
 #
 # Required:
 #   --email              Customer email address
-#   --api-key            Anthropic API key (sk-ant-...) — required for byok, unused for managed
+#   --api-key            Anthropic API key (sk-ant-...) — optional for byok (can auth later), unused for managed
 #
 # Optional:
 #   --tier               Tier: "byok" (default) or "managed"
@@ -128,7 +128,7 @@ ${BOLD}Usage:${RESET}
 
 ${BOLD}Required:${RESET}
   --email              Customer email address
-  --api-key            Anthropic API key (sk-ant-...) — required for byok tier
+  --api-key            Anthropic API key (sk-ant-...) — optional for byok (auth can complete later)
 
 ${BOLD}Optional:${RESET}
   --tier               Tier: "byok" (default) or "managed"
@@ -146,7 +146,7 @@ ${BOLD}Optional:${RESET}
 
 ${BOLD}Environment:${RESET}
   CUSTOMERS_FILE       Path to customers.json (default: ./customers.json)
-  DOCKER_BUNDLE_URL    URL to ClawDaddy Docker bundle tarball (required)
+  DOCKER_BUNDLE_URL    URL to ClawDaddy Docker bundle tarball (optional)
   OPERATOR_API_KEY     Your Anthropic API key (required for managed tier)
   PROXY_BUNDLE_URL     URL to download the API proxy tarball (managed tier)
   REPORT_WEBHOOK_URL   Webhook URL for daily usage reporting (managed tier)
@@ -235,9 +235,11 @@ parse_args() {
     fi
 
     if [[ "${ARG_TIER}" == "byok" ]]; then
-        # BYOK: require --api-key
+        # BYOK: API key can be injected post-provision via auth flow.
+        # If not provided at checkout time, bootstrap with a placeholder key.
         if [[ -z "${ARG_API_KEY}" ]]; then
-            die "Missing required argument: --api-key (required for byok tier)"
+            warn "No --api-key provided for BYOK tier. Bootstrapping with placeholder key; customer must complete auth in onboarding."
+            ARG_API_KEY="sk-ant-pending-auth"
         fi
         if [[ ! "${ARG_API_KEY}" =~ ^sk-ant- ]]; then
             die "Invalid API key format. Must start with 'sk-ant-'."
@@ -252,10 +254,8 @@ parse_args() {
         fi
     fi
 
-    # Validate DOCKER_BUNDLE_URL
-    if [[ -z "${DOCKER_BUNDLE_URL}" ]]; then
-        die "DOCKER_BUNDLE_URL environment variable is required"
-    fi
+    # DOCKER_BUNDLE_URL is optional. If omitted, defaults bundle seed is skipped and
+    # onboarding SCP will provide personalized files later.
 
     # Validate --username if provided
     if [[ -n "${ARG_USERNAME}" ]]; then
@@ -376,12 +376,17 @@ docker pull ${ecr_image} 2>&1
 docker tag ${ecr_image} clawdaddy/openclaw:latest
 echo "Docker image pulled successfully"
 
-# Download workspace defaults (SOUL.md, USER.md, etc.)
-echo "Downloading workspace defaults..."
+# Download workspace defaults (SOUL.md, USER.md, etc.) when bundle URL provided
+echo "Preparing workspace defaults..."
 mkdir -p /opt/clawdaddy-docker/files
-curl -fsSL '${docker_bundle_url}' -o /tmp/clawdaddy-docker.tar.gz
-tar -xzf /tmp/clawdaddy-docker.tar.gz -C /opt/clawdaddy-docker --strip-components=1 2>/dev/null || true
-rm -f /tmp/clawdaddy-docker.tar.gz
+if [ -n "${docker_bundle_url}" ]; then
+  echo "Downloading defaults bundle..."
+  curl -fsSL '${docker_bundle_url}' -o /tmp/clawdaddy-docker.tar.gz
+  tar -xzf /tmp/clawdaddy-docker.tar.gz -C /opt/clawdaddy-docker --strip-components=1 2>/dev/null || true
+  rm -f /tmp/clawdaddy-docker.tar.gz
+else
+  echo "No DOCKER_BUNDLE_URL set; skipping defaults bundle download."
+fi
 
 # ---------------------------------------------------------------------------
 # Create persistent volume and run OpenClaw container
