@@ -191,6 +191,7 @@ function migrateFromJson() {
   const jsonPaths = [
     path.resolve(__dirname, '..', '..', 'customers.json'),
     path.resolve(__dirname, '..', '..', 'script', 'webhook-server', 'customers.json'),
+    path.resolve(__dirname, '..', '..', 'script', 'customers.json'),
   ];
 
   for (const jsonPath of jsonPaths) {
