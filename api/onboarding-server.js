@@ -501,9 +501,22 @@ app.get('/api/onboarding/check-username/:username', async (req, res) => {
 app.get('/api/check-username', async (req, res) => {
   const raw = (req.query.username || req.query.u || '').toLowerCase().trim();
   if (!raw) return res.status(400).json({ available: false, error: 'Missing username parameter.' });
-  // Reuse the path-param handler logic
-  req.params = { username: raw };
-  return app._router.handle({ ...req, url: `/api/onboarding/check-username/${raw}`, path: `/api/onboarding/check-username/${raw}` }, res, () => {});
+
+  const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+  if (raw.length < 3 || raw.length > 20 || !usernameRegex.test(raw)) {
+    return res.status(400).json({ available: false, error: 'Invalid username format.', suggestion: null });
+  }
+
+  const available = isUsernameAvailable(raw);
+  if (!available) {
+    let suggestion = null;
+    for (let i = 1; i <= 99; i++) {
+      const candidate = `${raw}${i}`;
+      if (candidate.length <= 20 && isUsernameAvailable(candidate)) { suggestion = candidate; break; }
+    }
+    return res.json({ available: false, suggestion });
+  }
+  return res.json({ available: true, suggestion: null });
 });
 
 app.post('/api/reserve-username', express.json(), async (req, res) => {
