@@ -239,7 +239,7 @@ This is the first message the assistant sends when the user interacts for the fi
 - Reference specific quiz results — what the assistant learned about them
 - List their style preferences in a way that shows the assistant "gets" them
 - Describe how the assistant will operate (proactivity, challenge level, emotional register — in the user's language, not technical terms)
-- List what's already set up based on their use-case tags
+- List what the user indicated they need help with, framed as "Here's what you're looking to tackle:" — NOT as pre-configured capabilities. These are areas the user flagged, not things already wired up. Add one line after the list: "I'll guide you through getting each of these going. Some I can start on right now, others may need a quick setup — I'll walk you through it." If the user says yes to one, create a follow-up task in memory so you don't drop it.
 - End with a call to action — ask what's on their plate RIGHT NOW
 - The whole message should DEMONSTRATE the personality, not describe it. If the user is casual+playful, the bootstrap should be casual and playful. If formal+serious, it should be polished and professional.
 
@@ -532,12 +532,14 @@ ${userRole && userRole !== 'Not specified' ? `**You're ${userRole}.** ` : ''}You
 - ${challenge > 0.60 ? 'You want me to push back when your thinking has gaps' : challenge < 0.40 ? 'You prefer encouragement and supportive guidance' : 'Constructive feedback when something seems off'}
 - ${humor > 0.6 ? 'Humor is welcome \u2014 keeps things human' : 'Keeping things focused and professional'}
 
-**What's set up:**
+**What you're looking to tackle:**
 ${workChecks.length > 0 || personalChecks.length > 0 ? (tags.filter(t => !t.startsWith('usage:')).map(t => {
   const parts = t.split(':');
   const area = parts[1] || parts[0];
   return '- ' + area.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }).join('\n')) : 'General assistance \u2014 tell me what you need help with.'}
+
+I'll guide you through getting each of these going. Some I can start on right now, others may need a quick setup — I'll walk you through it.
 
 What's on your plate right now? Let's get to work.
 
