@@ -59,6 +59,24 @@ function initDb() {
 
     CREATE TRIGGER IF NOT EXISTS onboarding_sessions_updated_at AFTER UPDATE ON onboarding_sessions
     BEGIN UPDATE onboarding_sessions SET updated_at = datetime('now') WHERE id = NEW.id; END;
+
+    CREATE TABLE IF NOT EXISTS username_reservations (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      username          TEXT NOT NULL,
+      stripe_session_id TEXT NOT NULL,
+      email             TEXT,
+      status            TEXT NOT NULL DEFAULT 'pending',
+      reserved_at       TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at        TEXT NOT NULL,
+      created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_reservations_active_username
+      ON username_reservations(username)
+      WHERE status = 'pending';
+
+    CREATE INDEX IF NOT EXISTS idx_reservations_stripe_session
+      ON username_reservations(stripe_session_id);
   `);
 
   migrateFromJson();
@@ -251,10 +269,79 @@ function migrateFromJson() {
   }
 }
 
+// --- username reservations ---
+
+function isUsernameAvailable(username) {
+  // Expire stale reservations first
+  getDb().prepare(`
+    UPDATE username_reservations SET status = 'expired'
+    WHERE username = ? AND status = 'pending' AND expires_at <= datetime('now')
+  `).run(username);
+
+  const row = getDb().prepare(`
+    SELECT (
+      (SELECT COUNT(*) FROM customers WHERE username = ?) +
+      (SELECT COUNT(*) FROM username_reservations WHERE username = ? AND status = 'pending')
+    ) AS taken
+  `).get(username, username);
+
+  return row.taken === 0;
+}
+
+function reserveUsername(username, stripeSessionId, email, ttlMinutes = 30) {
+  const reserve = getDb().transaction(() => {
+    // Expire stale reservations
+    getDb().prepare(`
+      UPDATE username_reservations SET status = 'expired'
+      WHERE username = ? AND status = 'pending' AND expires_at <= datetime('now')
+    `).run(username);
+
+    if (getDb().prepare('SELECT 1 FROM customers WHERE username = ?').get(username))
+      return { ok: false, reason: 'taken' };
+
+    if (getDb().prepare("SELECT 1 FROM username_reservations WHERE username = ? AND status = 'pending'").get(username))
+      return { ok: false, reason: 'taken' };
+
+    try {
+      getDb().prepare(`
+        INSERT INTO username_reservations (username, stripe_session_id, email, expires_at)
+        VALUES (?, ?, ?, datetime('now', ?))
+      `).run(username, stripeSessionId, email || null, `+${ttlMinutes} minutes`);
+      return { ok: true };
+    } catch (err) {
+      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return { ok: false, reason: 'conflict' };
+      throw err;
+    }
+  });
+  return reserve();
+}
+
+function confirmReservation(stripeSessionId) {
+  getDb().prepare(`
+    UPDATE username_reservations SET status = 'confirmed'
+    WHERE stripe_session_id = ? AND status = 'pending'
+  `).run(stripeSessionId);
+}
+
+function releaseReservation(stripeSessionId) {
+  getDb().prepare(`
+    UPDATE username_reservations SET status = 'released'
+    WHERE stripe_session_id = ? AND status = 'pending'
+  `).run(stripeSessionId);
+}
+
+function sweepExpiredReservations() {
+  return getDb().prepare(`
+    UPDATE username_reservations SET status = 'expired'
+    WHERE status = 'pending' AND expires_at <= datetime('now')
+  `).run().changes;
+}
+
 module.exports = {
   initDb, getDb, generateId,
   createCustomer, getCustomerByUsername, getCustomerByStripeSessionId,
   getCustomerById, getCustomerByStripeCustomerId,
   updateProvision, updateAuth, updateCustomer,
   createOnboardingSession, getOnboardingSession, updateOnboardingSession,
+  isUsernameAvailable, reserveUsername, confirmReservation, releaseReservation, sweepExpiredReservations,
 };

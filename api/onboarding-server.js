@@ -6,13 +6,19 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
-const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth } = require('./lib/db');
+const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations } = require('./lib/db');
 const { startAuth, completeAuth } = require('./lib/ssh-auth');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 
 initDb();
+
+// Sweep expired username reservations every 5 minutes
+setInterval(() => {
+  const swept = sweepExpiredReservations();
+  if (swept > 0) console.log(`[reservations] swept ${swept} expired`);
+}, 5 * 60 * 1000);
 
 const app = express();
 const PORT = Number(process.env.PORT || 3848);
@@ -468,14 +474,15 @@ app.get('/api/onboarding/check-username/:username', async (req, res) => {
       });
     }
 
-    const taken = !!getCustomerByUsername(raw);
+    // Check customers table AND active reservations
+    const available = isUsernameAvailable(raw);
 
-    if (taken) {
+    if (!available) {
       // Suggest alternatives: append numbers
       let suggestion = null;
       for (let i = 1; i <= 99; i++) {
         const candidate = `${raw}${i}`;
-        if (candidate.length <= 20 && !getCustomerByUsername(candidate)) {
+        if (candidate.length <= 20 && isUsernameAvailable(candidate)) {
           suggestion = candidate;
           break;
         }
@@ -487,6 +494,42 @@ app.get('/api/onboarding/check-username/:username', async (req, res) => {
   } catch (error) {
     console.error('Username check failed:', error.message);
     return res.status(500).json({ available: false, error: 'Unable to check username availability.' });
+  }
+});
+
+// Also support query param style: GET /api/check-username?username=alice
+app.get('/api/check-username', async (req, res) => {
+  const raw = (req.query.username || req.query.u || '').toLowerCase().trim();
+  if (!raw) return res.status(400).json({ available: false, error: 'Missing username parameter.' });
+  // Reuse the path-param handler logic
+  req.params = { username: raw };
+  return app._router.handle({ ...req, url: `/api/onboarding/check-username/${raw}`, path: `/api/onboarding/check-username/${raw}` }, res, () => {});
+});
+
+app.post('/api/reserve-username', express.json(), async (req, res) => {
+  try {
+    const { username, stripeSessionId, email } = req.body || {};
+
+    const raw = (username || '').toLowerCase().trim();
+    const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+    if (!raw || raw.length < 3 || raw.length > 20 || !usernameRegex.test(raw)) {
+      return res.status(400).json({ ok: false, reason: 'invalid', error: 'Invalid username format.' });
+    }
+
+    if (!stripeSessionId) {
+      return res.status(400).json({ ok: false, reason: 'missing_session', error: 'stripeSessionId is required.' });
+    }
+
+    const result = reserveUsername(raw, stripeSessionId, email);
+
+    if (!result.ok) {
+      return res.status(409).json({ ok: false, reason: result.reason });
+    }
+
+    return res.json({ ok: true, username: raw, expiresInMinutes: 30 });
+  } catch (error) {
+    console.error('Username reservation failed:', error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to reserve username.' });
   }
 });
 

@@ -91,6 +91,13 @@ export async function handle_checkout_completed(session) {
       // Create onboarding session for the frontend to use
       dbMod.createOnboardingSession({ stripeSessionId: checkout_session_id, customerId: customer_id });
       console.log(`Created customer ${customer_id} (${username}) and onboarding session for ${checkout_session_id}`);
+
+      // Confirm username reservation (if one exists from pre-checkout flow)
+      try {
+        dbMod.confirmReservation(checkout_session_id);
+      } catch (reserveErr) {
+        console.error(`Failed to confirm reservation for ${checkout_session_id}: ${reserveErr.message}`);
+      }
     } catch (err) {
       console.error(`Failed to persist customer to SQLite: ${err.message}`);
     }
