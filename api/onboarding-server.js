@@ -546,6 +546,90 @@ app.post('/api/reserve-username', express.json(), async (req, res) => {
   }
 });
 
+// --- Dynamic Stripe Checkout Session Creation ---
+const PRICE_MAP = {
+  starter: process.env.STRIPE_PRICE_STARTER || 'price_1T1TecHWqkYCAxbBTBJajC3h',
+  pro:     process.env.STRIPE_PRICE_PRO     || 'price_1T2QzwHWqkYCAxbBim5mjoks',
+  power:   process.env.STRIPE_PRICE_POWER   || 'price_1T1TehHWqkYCAxbBeh6BPWnm',
+};
+
+app.post('/api/create-checkout-session', express.json(), async (req, res) => {
+  try {
+    const { username, botName, plan, email } = req.body || {};
+
+    // Validate username
+    const raw = (username || '').toLowerCase().trim();
+    const usernameRegex = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+    if (!raw || raw.length < 3 || raw.length > 20 || !usernameRegex.test(raw)) {
+      return res.status(400).json({ ok: false, error: 'Invalid username format.' });
+    }
+
+    // Check availability
+    if (!isUsernameAvailable(raw)) {
+      return res.status(409).json({ ok: false, error: 'Username is taken.' });
+    }
+
+    // Validate plan
+    const priceId = PRICE_MAP[(plan || 'pro').toLowerCase()];
+    if (!priceId) {
+      return res.status(400).json({ ok: false, error: 'Invalid plan.' });
+    }
+
+    const stripeKey = await getStripeSecretKey();
+
+    // Create Stripe checkout session via API
+    const params = new URLSearchParams();
+    params.append('mode', 'subscription');
+    params.append('payment_method_types[0]', 'card');
+    params.append('line_items[0][price]', priceId);
+    params.append('line_items[0][quantity]', '1');
+    params.append('success_url', 'https://api.clawdaddy.sh/?session_id={CHECKOUT_SESSION_ID}');
+    params.append('cancel_url', 'https://clawdaddy.sh/#pricing');
+    params.append('metadata[username]', raw);
+    params.append('metadata[bot_name]', botName || 'Assistant');
+    params.append('metadata[tier]', (plan || 'pro').toLowerCase());
+    if (email) params.append('customer_email', email);
+
+    const sessionData = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.stripe.com',
+        path: '/v1/checkout/sessions',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${stripeKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      };
+      const request = https.request(options, (response) => {
+        let body = '';
+        response.on('data', chunk => body += chunk);
+        response.on('end', () => {
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed.error) reject(new Error(parsed.error.message));
+            else resolve(parsed);
+          } catch (e) { reject(e); }
+        });
+      });
+      request.on('error', reject);
+      request.write(params.toString());
+      request.end();
+    });
+
+    // Reserve username tied to this Stripe session
+    const reservation = reserveUsername(raw, sessionData.id, email);
+    if (!reservation.ok) {
+      // Race condition — someone grabbed it between check and reserve
+      return res.status(409).json({ ok: false, error: 'Username was just taken. Try another.' });
+    }
+
+    return res.json({ ok: true, url: sessionData.url, sessionId: sessionData.id });
+  } catch (error) {
+    console.error('Create checkout session failed:', error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to create checkout session.' });
+  }
+});
+
 app.post('/api/onboarding/quiz/:sessionId', async (req, res) => {
   const sessionId = parseSessionId(req.params.sessionId);
   if (!sessionId || !isValidSessionId(sessionId)) {

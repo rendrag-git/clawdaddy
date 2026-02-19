@@ -405,19 +405,50 @@
           <img src="assets/lobster-wave.png" alt="" class="cta-lobster hidden md:block absolute -left-20 bottom-4 z-10" style="height:280px" aria-hidden="true" />
           <div class="text-center">
             <h2 class="text-3xl font-black text-white sm:text-4xl">Start now 🦞</h2>
-            <p class="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">ClawDaddy is live. Pick your plan, run the quiz, and we&apos;ll spin up your assistant flow right away.</p>
+            <p class="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">Claim your subdomain, pick a plan, and we&apos;ll spin up your assistant.</p>
           </div>
-          <div class="mx-auto mt-8 grid max-w-3xl gap-4 sm:grid-cols-2">
-            <article class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-5">
-              <h3 class="text-lg font-bold text-white">Want the personalized setup?</h3>
-              <p class="mt-2 text-sm leading-relaxed text-zinc-300">Start with the 3-minute quiz and we&apos;ll match you with the right agent stack.</p>
-              <a href="/onboarding/index.html" class="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-lobster px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-500">Take the Quiz</a>
-            </article>
-            <article class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-5">
-              <h3 class="text-lg font-bold text-white">Already know what you need?</h3>
-              <p class="mt-2 text-sm leading-relaxed text-zinc-300">Jump straight to plans and choose Starter, Pro, or Power.</p>
-              <a href="#" data-scroll="#pricing" class="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-bold text-white transition hover:border-lobster hover:text-lobster">View Pricing</a>
-            </article>
+
+          <!-- Username + Bot Name -->
+          <div class="mx-auto mt-8 max-w-md space-y-4">
+            <div>
+              <label for="signup-username" class="block text-sm font-semibold text-zinc-200 mb-1.5">Choose your username</label>
+              <div class="flex items-center rounded-lg border border-zinc-700 bg-zinc-950/80 overflow-hidden focus-within:border-lobster transition">
+                <input id="signup-username" type="text" placeholder="yourname" maxlength="20" autocomplete="off" spellcheck="false"
+                  class="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none" />
+                <span class="pr-4 text-sm text-zinc-500">.clawdaddy.sh</span>
+              </div>
+              <p id="username-status" class="mt-1.5 text-xs text-zinc-500 h-4"></p>
+            </div>
+            <div>
+              <label for="signup-botname" class="block text-sm font-semibold text-zinc-200 mb-1.5">Name your assistant</label>
+              <input id="signup-botname" type="text" placeholder="Buddy, Jarvis, Claude..." maxlength="30"
+                class="w-full rounded-lg border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none focus:border-lobster transition" />
+            </div>
+          </div>
+
+          <!-- Plan Selection -->
+          <div class="mx-auto mt-6 grid max-w-lg gap-3 sm:grid-cols-3">
+            <button data-plan="starter" class="plan-btn rounded-xl border border-zinc-700 bg-zinc-950/80 p-4 text-center transition hover:border-lobster">
+              <p class="text-sm font-bold text-white">Starter</p>
+              <p class="text-xs text-zinc-400 mt-1">$10/mo</p>
+            </button>
+            <button data-plan="pro" class="plan-btn rounded-xl border-2 border-lobster bg-zinc-950/80 p-4 text-center ring-1 ring-lobster/30">
+              <p class="text-sm font-bold text-white">Pro BYOK</p>
+              <p class="text-xs text-zinc-400 mt-1">$35/mo</p>
+            </button>
+            <button data-plan="power" class="plan-btn rounded-xl border border-zinc-700 bg-zinc-950/80 p-4 text-center transition hover:border-lobster">
+              <p class="text-sm font-bold text-white">Power</p>
+              <p class="text-xs text-zinc-400 mt-1">$75/mo</p>
+            </button>
+          </div>
+
+          <!-- Checkout Button -->
+          <div class="mx-auto mt-6 max-w-md">
+            <button id="checkout-btn" disabled
+              class="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-6 py-3 text-base font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+              Get Started →
+            </button>
+            <p id="checkout-error" class="mt-2 text-center text-xs text-red-400 h-4"></p>
           </div>
         </div>
       </section>
@@ -653,6 +684,95 @@
       );
 
       document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+
+      // --- Username validation + Dynamic Checkout ---
+      const API = window.location.hostname === 'localhost' ? '' : 'https://api.clawdaddy.sh';
+      const usernameInput = document.getElementById('signup-username');
+      const botNameInput = document.getElementById('signup-botname');
+      const statusEl = document.getElementById('username-status');
+      const checkoutBtn = document.getElementById('checkout-btn');
+      const checkoutError = document.getElementById('checkout-error');
+      let selectedPlan = 'pro';
+      let usernameValid = false;
+      let checkTimer = null;
+
+      // Plan selection
+      document.querySelectorAll('.plan-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.plan-btn').forEach(b => {
+            b.classList.remove('border-lobster', 'border-2', 'ring-1', 'ring-lobster/30');
+            b.classList.add('border-zinc-700');
+          });
+          btn.classList.remove('border-zinc-700');
+          btn.classList.add('border-lobster', 'border-2', 'ring-1', 'ring-lobster/30');
+          selectedPlan = btn.dataset.plan;
+          updateCheckoutBtn();
+        });
+      });
+
+      // Username validation (debounced)
+      usernameInput.addEventListener('input', () => {
+        clearTimeout(checkTimer);
+        usernameValid = false;
+        updateCheckoutBtn();
+        const raw = usernameInput.value.toLowerCase().trim();
+        if (!raw) { statusEl.textContent = ''; statusEl.className = 'mt-1.5 text-xs text-zinc-500 h-4'; return; }
+        if (raw.length < 3) { statusEl.textContent = 'At least 3 characters'; statusEl.className = 'mt-1.5 text-xs text-yellow-500 h-4'; return; }
+        const re = /^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/;
+        if (!re.test(raw)) { statusEl.textContent = 'Lowercase letters, numbers, hyphens only'; statusEl.className = 'mt-1.5 text-xs text-yellow-500 h-4'; return; }
+        statusEl.textContent = 'Checking...'; statusEl.className = 'mt-1.5 text-xs text-zinc-400 h-4';
+        checkTimer = setTimeout(async () => {
+          try {
+            const r = await fetch(`${API}/api/check-username?u=${encodeURIComponent(raw)}`);
+            const d = await r.json();
+            if (d.available) {
+              statusEl.textContent = `✓ ${raw}.clawdaddy.sh is yours`;
+              statusEl.className = 'mt-1.5 text-xs text-green-400 h-4';
+              usernameValid = true;
+            } else {
+              statusEl.textContent = d.suggestion ? `Taken — try ${d.suggestion}?` : 'Taken — try another';
+              statusEl.className = 'mt-1.5 text-xs text-red-400 h-4';
+              usernameValid = false;
+            }
+          } catch { statusEl.textContent = 'Unable to check'; statusEl.className = 'mt-1.5 text-xs text-yellow-500 h-4'; }
+          updateCheckoutBtn();
+        }, 400);
+      });
+
+      function updateCheckoutBtn() {
+        checkoutBtn.disabled = !usernameValid;
+      }
+
+      // Checkout
+      checkoutBtn.addEventListener('click', async () => {
+        if (!usernameValid) return;
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Creating checkout...';
+        checkoutError.textContent = '';
+        try {
+          const r = await fetch(`${API}/api/create-checkout-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: usernameInput.value.toLowerCase().trim(),
+              botName: botNameInput.value.trim() || 'Assistant',
+              plan: selectedPlan,
+            }),
+          });
+          const d = await r.json();
+          if (d.ok && d.url) {
+            window.location.href = d.url;
+          } else {
+            checkoutError.textContent = d.error || 'Something went wrong.';
+            checkoutBtn.disabled = false;
+            checkoutBtn.textContent = 'Get Started →';
+          }
+        } catch (e) {
+          checkoutError.textContent = 'Network error. Try again.';
+          checkoutBtn.disabled = false;
+          checkoutBtn.textContent = 'Get Started →';
+        }
+      });
 
     </script>
   </body>
