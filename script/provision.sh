@@ -21,12 +21,11 @@
 #   --telegram-chat      Telegram chat ID
 #   --signal-phone       Signal phone number
 #   --region             AWS region (default: us-east-1)
-#   --stripe-customer-id Stripe customer ID (optional, persisted to customers.json)
-#   --stripe-subscription-id Stripe subscription ID (optional, persisted to customers.json)
-#   --stripe-checkout-session-id Stripe checkout session ID (optional, persisted to customers.json)
+#   --stripe-customer-id Stripe customer ID (optional)
+#   --stripe-subscription-id Stripe subscription ID (optional)
+#   --stripe-checkout-session-id Stripe checkout session ID (optional)
 #
 # Environment variables:
-#   CUSTOMERS_FILE       Path to customers.json (default: ./customers.json)
 #   INSTALL_SCRIPT_URL   URL to install-openclaw.sh
 #   OPERATOR_API_KEY     Your Anthropic API key (required for managed tier)
 #   PROXY_BUNDLE_URL     URL to download the API proxy tarball (required for managed tier)
@@ -40,7 +39,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ---------------------------------------------------------------------------
 # Configuration defaults
 # ---------------------------------------------------------------------------
-CUSTOMERS_FILE="${CUSTOMERS_FILE:-${SCRIPT_DIR}/customers-log.json}"
 DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
 PORTAL_BUNDLE_URL="${PORTAL_BUNDLE_URL:-https://clawdaddy-releases.s3.amazonaws.com/portal-v1.tar.gz}"
 ECR_IMAGE="${ECR_IMAGE:-public.ecr.aws/b0x3t9x7/clawdaddy/openclaw:latest}"
@@ -147,7 +145,6 @@ ${BOLD}Optional:${RESET}
   --help               Show this help message
 
 ${BOLD}Environment:${RESET}
-  CUSTOMERS_FILE       Path to customers.json (default: ./customers.json)
   DOCKER_BUNDLE_URL    URL to ClawDaddy Docker bundle tarball (optional)
   OPERATOR_API_KEY     Your Anthropic API key (required for managed tier)
   PROXY_BUNDLE_URL     URL to download the API proxy tarball (managed tier)
@@ -277,7 +274,7 @@ check_dependencies() {
     info "Checking dependencies..."
 
     local missing=()
-    for cmd in aws jq curl; do
+    for cmd in aws curl; do
         if ! command -v "${cmd}" > /dev/null 2>&1; then
             missing+=("${cmd}")
         fi
@@ -814,124 +811,6 @@ USERDATA_TAIL
 }
 
 # ---------------------------------------------------------------------------
-# Initialize customers.json if it doesn't exist
-# ---------------------------------------------------------------------------
-init_customers_file() {
-    if [[ ! -f "${CUSTOMERS_FILE}" ]]; then
-        info "Creating ${CUSTOMERS_FILE}..."
-        echo '{"customers":[]}' | jq '.' > "${CUSTOMERS_FILE}"
-        ok "Initialized ${CUSTOMERS_FILE}"
-    fi
-}
-
-# ---------------------------------------------------------------------------
-# Add customer record to customers.json
-# ---------------------------------------------------------------------------
-add_customer_record() {
-    local customer_id="$1"
-    local email="$2"
-    local instance_name="$3"
-    local static_ip="${4:-}"
-    local static_ip_name="${5:-}"
-    local region="$6"
-    local vnc_password="$7"
-    local status="$8"
-    local tier="${9:-byok}"
-    local budget_limit="${10:-}"
-    local model_tier="${11:-}"
-    local stripe_customer_id="${12:-}"
-    local stripe_subscription_id="${13:-}"
-    local stripe_checkout_session_id="${14:-}"
-    local username="${15:-}"
-    local dns_token="${16:-}"
-
-    local now
-    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-    local tmp_file
-    tmp_file="$(mktemp)"
-
-    jq --arg id "${customer_id}" \
-       --arg email "${email}" \
-       --arg instance "${instance_name}" \
-       --arg ip "${static_ip}" \
-       --arg ip_name "${static_ip_name}" \
-       --arg region "${region}" \
-       --arg vnc "${vnc_password}" \
-       --arg status "${status}" \
-       --arg tier "${tier}" \
-       --arg budget "${budget_limit}" \
-       --arg model "${model_tier}" \
-       --arg stripe_customer "${stripe_customer_id}" \
-       --arg stripe_subscription "${stripe_subscription_id}" \
-       --arg stripe_checkout "${stripe_checkout_session_id}" \
-       --arg username "${username}" \
-       --arg dns_token "${dns_token}" \
-       --arg now "${now}" \
-       '.customers += [{
-            id: $id,
-            email: $email,
-            stripe_customer_id: $stripe_customer,
-            stripe_subscription_id: $stripe_subscription,
-            stripe_checkout_session_id: $stripe_checkout,
-            instance_id: $instance,
-            static_ip: $ip,
-            static_ip_name: $ip_name,
-            region: $region,
-            vnc_password: $vnc,
-            status: $status,
-            tier: $tier,
-            budget_limit: (if $budget == "" then null else ($budget | tonumber) end),
-            model_tier: (if $model == "" then null else $model end),
-            created_at: $now,
-            updated_at: $now,
-            destroy_scheduled_at: null,
-            username: (if $username == "" then null else $username end),
-            dns_token: (if $dns_token == "" then null else $dns_token end)
-        }]' "${CUSTOMERS_FILE}" > "${tmp_file}"
-
-    mv "${tmp_file}" "${CUSTOMERS_FILE}"
-    log "Added customer record: ${customer_id} (tier: ${tier}, status: ${status})"
-}
-
-# ---------------------------------------------------------------------------
-# Update customer status in customers.json
-# ---------------------------------------------------------------------------
-update_customer_status() {
-    local customer_id="$1"
-    local new_status="$2"
-    local static_ip="${3:-}"
-
-    local now
-    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-    local tmp_file
-    tmp_file="$(mktemp)"
-
-    if [[ -n "${static_ip}" ]]; then
-        jq --arg id "${customer_id}" \
-           --arg status "${new_status}" \
-           --arg ip "${static_ip}" \
-           --arg now "${now}" \
-           '(.customers[] | select(.id == $id)) |= (
-                .status = $status |
-                .static_ip = $ip |
-                .updated_at = $now
-            )' "${CUSTOMERS_FILE}" > "${tmp_file}"
-    else
-        jq --arg id "${customer_id}" \
-           --arg status "${new_status}" \
-           --arg now "${now}" \
-           '(.customers[] | select(.id == $id)) |= (
-                .status = $status |
-                .updated_at = $now
-            )' "${CUSTOMERS_FILE}" > "${tmp_file}"
-    fi
-
-    mv "${tmp_file}" "${CUSTOMERS_FILE}"
-    log "Updated customer ${customer_id} status to ${new_status}"
-}
-
 # ---------------------------------------------------------------------------
 # Wait for instance to be running
 # ---------------------------------------------------------------------------
@@ -1019,7 +898,6 @@ main() {
     log "Region: ${ARG_REGION}"
 
     check_dependencies
-    init_customers_file
 
     # Generate unique identifiers
     local customer_id
@@ -1108,42 +986,16 @@ main() {
         --user-data "file://${userdata_file}" \
         --region "${ARG_REGION}" \
         >> "${LOG_FILE}" 2>&1; then
-        # Add failed record
-        local budget_val=""
-        [[ "${ARG_TIER}" == "managed" ]] && budget_val="${DEFAULT_BUDGET}"
-        local model_val=""
-        [[ "${ARG_TIER}" == "managed" ]] && model_val="sonnet"
-        add_customer_record \
-            "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
-            "" "" "${ARG_REGION}" "${vnc_password}" "failed" \
-            "${ARG_TIER}" "${budget_val}" "${model_val}" \
-            "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
-            "${ARG_USERNAME}" \
-            "${dns_token}"
         die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
     fi
 
     ok "Instance creation initiated"
-
-    # Add provisioning record immediately
-    local budget_val=""
-    [[ "${ARG_TIER}" == "managed" ]] && budget_val="${DEFAULT_BUDGET}"
-    local model_val=""
-    [[ "${ARG_TIER}" == "managed" ]] && model_val="sonnet"
-    add_customer_record \
-        "${customer_id}" "${ARG_EMAIL}" "${instance_name}" \
-        "" "" "${ARG_REGION}" "${vnc_password}" "provisioning" \
-        "${ARG_TIER}" "${budget_val}" "${model_val}" \
-        "${ARG_STRIPE_CUSTOMER_ID}" "${ARG_STRIPE_SUBSCRIPTION_ID}" "${ARG_STRIPE_CHECKOUT_SESSION_ID}" \
-        "${ARG_USERNAME}" \
-        "${dns_token}"
 
     # ------------------------------------------------------------------
     # Step 3: Wait for instance to be running
     # ------------------------------------------------------------------
     echo "STAGE=waiting_for_instance"
     if ! wait_for_instance "${instance_name}" "${ARG_REGION}"; then
-        update_customer_status "${customer_id}" "failed"
         die "Instance failed to start."
     fi
 
@@ -1172,14 +1024,10 @@ main() {
     done
 
     if [[ -z "${public_ip}" || "${public_ip}" == "None" ]]; then
-        update_customer_status "${customer_id}" "failed"
         die "Could not retrieve public IP for instance ${instance_name} (region: ${ARG_REGION})"
     fi
 
     ok "Public IP: ${public_ip}"
-
-    # Update record with IP
-    update_customer_status "${customer_id}" "provisioning" "${public_ip}"
 
     # ------------------------------------------------------------------
     # Step 4b: Create DNS record
@@ -1248,8 +1096,6 @@ DNSEOF
     # ------------------------------------------------------------------
     echo "STAGE=waiting_for_health"
     if wait_for_health "${public_ip}"; then
-        update_customer_status "${customer_id}" "active"
-
         echo ""
         echo -e "${BOLD}========================================================${RESET}"
         echo -e "${GREEN}  Provisioning Complete${RESET}"
@@ -1264,8 +1110,6 @@ DNSEOF
         echo -e "  ${BOLD}VNC:${RESET}            ${public_ip}:5901"
         echo -e "  ${BOLD}VNC Password:${RESET}   ${vnc_password}"
         echo -e "  ${BOLD}Status:${RESET}         ${GREEN}active${RESET}"
-        echo ""
-        echo -e "  ${DIM}Customer record saved to ${CUSTOMERS_FILE}${RESET}"
         echo ""
 
         # Machine-readable output for automated callers (webhook provisioner)
@@ -1285,8 +1129,6 @@ DNSEOF
 
         log "Provisioning completed successfully for ${customer_id}"
     else
-        update_customer_status "${customer_id}" "failed"
-
         echo ""
         echo -e "${BOLD}========================================================${RESET}"
         echo -e "${RED}  Provisioning Failed${RESET}"
@@ -1302,8 +1144,6 @@ DNSEOF
         echo -e "    ${CYAN}ssh ubuntu@${public_ip}${RESET}"
         echo -e "    ${CYAN}cat /var/log/openclaw-userdata.log${RESET}"
         echo -e "    ${CYAN}cat /var/log/openclaw-install.log${RESET}"
-        echo ""
-        echo -e "  ${DIM}Customer record saved to ${CUSTOMERS_FILE} with status 'failed'${RESET}"
         echo ""
 
         log "Provisioning failed for ${customer_id} - health check timeout"
