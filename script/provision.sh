@@ -40,7 +40,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ---------------------------------------------------------------------------
 # Configuration defaults
 # ---------------------------------------------------------------------------
-CUSTOMERS_FILE="${CUSTOMERS_FILE:-${SCRIPT_DIR}/customers.json}"
+CUSTOMERS_FILE="${CUSTOMERS_FILE:-${SCRIPT_DIR}/customers-log.json}"
 DOCKER_BUNDLE_URL="${DOCKER_BUNDLE_URL:-}"
 PORTAL_BUNDLE_URL="${PORTAL_BUNDLE_URL:-https://clawdaddy-releases.s3.amazonaws.com/portal-v1.tar.gz}"
 ECR_IMAGE="${ECR_IMAGE:-public.ecr.aws/b0x3t9x7/clawdaddy/openclaw:latest}"
