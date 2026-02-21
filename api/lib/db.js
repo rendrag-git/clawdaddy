@@ -31,6 +31,8 @@ function initDb() {
       provision_stage TEXT,
       auth_status TEXT DEFAULT 'pending',
       auth_provider TEXT,
+      oauth_verifier TEXT,
+      oauth_state TEXT,
       status TEXT,
       destroy_scheduled_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
@@ -78,6 +80,10 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_reservations_stripe_session
       ON username_reservations(stripe_session_id);
   `);
+
+  // Add oauth columns if missing (safe to run repeatedly)
+  try { db.exec('ALTER TABLE customers ADD COLUMN oauth_verifier TEXT'); } catch {}
+  try { db.exec('ALTER TABLE customers ADD COLUMN oauth_state TEXT'); } catch {}
 
   migrateFromJson();
   return db;
@@ -136,6 +142,18 @@ function updateAuth(customerId, { authStatus, authProvider }) {
   getDb().prepare(`
     UPDATE customers SET auth_status = ?, auth_provider = ?, updated_at = datetime('now') WHERE id = ?
   `).run(authStatus, authProvider || null, customerId);
+}
+
+function storeOAuthState(customerId, { oauthVerifier, oauthState }) {
+  getDb().prepare(`
+    UPDATE customers SET oauth_verifier = ?, oauth_state = ?, updated_at = datetime('now') WHERE id = ?
+  `).run(oauthVerifier, oauthState, customerId);
+}
+
+function clearOAuthState(customerId) {
+  getDb().prepare(`
+    UPDATE customers SET oauth_verifier = NULL, oauth_state = NULL, updated_at = datetime('now') WHERE id = ?
+  `).run(customerId);
 }
 
 function updateCustomer(customerId, updates) {
@@ -342,7 +360,7 @@ module.exports = {
   initDb, getDb, generateId,
   createCustomer, getCustomerByUsername, getCustomerByStripeSessionId,
   getCustomerById, getCustomerByStripeCustomerId,
-  updateProvision, updateAuth, updateCustomer,
+  updateProvision, updateAuth, storeOAuthState, clearOAuthState, updateCustomer,
   createOnboardingSession, getOnboardingSession, updateOnboardingSession,
   isUsernameAvailable, reserveUsername, confirmReservation, releaseReservation, sweepExpiredReservations,
 };
