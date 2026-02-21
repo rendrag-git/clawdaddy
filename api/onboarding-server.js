@@ -6,8 +6,8 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
-const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations } = require('./lib/db');
-const { startAuth, completeAuth } = require('./lib/ssh-auth');
+const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations, storeOAuthState, clearOAuthState } = require('./lib/db');
+const { startAuth, completeAuth } = require('./lib/oauth');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
@@ -759,13 +759,10 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
 
 // POST /api/onboarding/auth/start
 app.post('/api/onboarding/auth/start', async (req, res) => {
-  const { stripeSessionId, provider } = req.body || {};
+  const { stripeSessionId } = req.body || {};
 
   if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
     return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
-  }
-  if (!['anthropic', 'openai'].includes(provider)) {
-    return res.status(400).json({ ok: false, error: 'Provider must be "anthropic" or "openai".' });
   }
 
   const customer = getCustomerByStripeSessionId(stripeSessionId);
@@ -777,39 +774,37 @@ app.post('/api/onboarding/auth/start', async (req, res) => {
   }
 
   try {
-    const { authSessionId, oauthUrl } = await startAuth(provider, customer.server_ip, customer.ssh_key_path);
-    return res.json({ ok: true, authSessionId, oauthUrl });
+    const { url } = startAuth(customer, { storeOAuthState });
+    return res.json({ ok: true, url });
   } catch (error) {
     console.error(`Auth start failed for ${stripeSessionId}: ${error.message}`);
-    const status = error.message.includes('Timed out') ? 504 : 502;
-    return res.status(status).json({ ok: false, error: error.message });
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 
 // POST /api/onboarding/auth/complete
 app.post('/api/onboarding/auth/complete', async (req, res) => {
-  const { authSessionId, code, stripeSessionId } = req.body || {};
+  const { codeState, stripeSessionId } = req.body || {};
 
-  if (!authSessionId || !code || !stripeSessionId) {
-    return res.status(400).json({ ok: false, error: 'authSessionId, code, and stripeSessionId are required.' });
+  if (!codeState || !stripeSessionId) {
+    return res.status(400).json({ ok: false, error: 'codeState and stripeSessionId are required.' });
+  }
+
+  const customer = getCustomerByStripeSessionId(stripeSessionId);
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: 'Customer not found.' });
   }
 
   try {
-    const result = await completeAuth(authSessionId, code);
-
-    // Update customer auth status in DB
-    const customer = getCustomerByStripeSessionId(stripeSessionId);
-    if (customer) {
-      updateAuth(customer.id, { authStatus: 'complete', authProvider: result.provider });
-      updateOnboardingSession(stripeSessionId, { step: 'complete' });
-    }
-
-    return res.json(result);
+    const result = await completeAuth(customer, codeState, { clearOAuthState, updateAuth });
+    updateOnboardingSession(stripeSessionId, { step: 'complete' });
+    return res.json({ ok: true, success: true });
   } catch (error) {
     console.error(`Auth complete failed: ${error.message}`);
-    const status = error.message.includes('not found') ? 404
-      : error.message.includes('Timed out') ? 504
-      : 400;
+    const status = error.message.includes('State mismatch') ? 400
+      : error.message.includes('No pending') ? 404
+      : error.message.includes('timed out') ? 504
+      : 502;
     return res.status(status).json({ ok: false, error: error.message });
   }
 });
