@@ -514,43 +514,6 @@
         line-height: 1.5;
       }
 
-      /* Provider buttons */
-      .provider-buttons {
-        display: grid;
-        gap: 0.8rem;
-        margin-top: 1.2rem;
-      }
-
-      .provider-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.6rem;
-        min-height: 56px;
-        border-radius: 14px;
-        border: 1px solid rgba(149, 171, 255, 0.25);
-        background: var(--input-bg);
-        color: var(--text);
-        font-size: 1.05rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .provider-btn:hover {
-        transform: translateY(-1px);
-      }
-
-      .provider-btn.anthropic:hover {
-        border-color: #D4A574;
-        box-shadow: 0 0 20px rgba(212, 165, 116, 0.15);
-      }
-
-      .provider-btn.openai:hover {
-        border-color: #10A37F;
-        box-shadow: 0 0 20px rgba(16, 163, 127, 0.15);
-      }
-
       /* Success state */
       .success-state {
         text-align: center;
@@ -1045,7 +1008,6 @@
           serverStatus: 'queued',
           serverReady: false,
           authComplete: false,
-          authSessionId: null,
           initRetries: 0,
           webchatUrl: ''
         };
@@ -1549,38 +1511,30 @@
           }
 
           step3Content.innerHTML = `
-            <p class="copy">Connect your AI provider so your assistant can think.</p>
-            <div class="provider-buttons" id="provider-buttons">
-              <button class="provider-btn anthropic" data-provider="anthropic">
-                Connect Claude (Anthropic)
-              </button>
-              <button class="provider-btn openai" data-provider="openai">
-                Connect OpenAI
-              </button>
-            </div>
+            <p class="copy">Connect your Claude account so your assistant can think.</p>
+            <button class="button" id="connect-claude-btn" style="margin-top: 1.2rem; width: 100%;">
+              Connect Claude (Anthropic)
+            </button>
             <div id="auth-flow-area" class="hidden"></div>
             <p id="auth-error" class="error"></p>
           `;
 
-          step3Content.querySelectorAll('.provider-btn').forEach(btn => {
-            btn.addEventListener('click', () => selectProvider(btn.dataset.provider));
-          });
+          document.getElementById('connect-claude-btn').addEventListener('click', startAuthFlow);
         }
 
-        async function selectProvider(provider) {
-          const providerButtons = document.getElementById('provider-buttons');
+        async function startAuthFlow() {
+          const connectBtn = document.getElementById('connect-claude-btn');
           const flowArea = document.getElementById('auth-flow-area');
           const authError = document.getElementById('auth-error');
 
-          // Disable buttons while starting
-          providerButtons.querySelectorAll('.provider-btn').forEach(b => b.disabled = true);
+          connectBtn.disabled = true;
           authError.textContent = '';
 
           try {
             const response = await fetch(`${API_BASE}/api/onboarding/auth/start`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ stripeSessionId: sessionId, provider })
+              body: JSON.stringify({ stripeSessionId: sessionId })
             });
             const payload = await readJson(response);
 
@@ -1588,32 +1542,25 @@
               throw new Error(payload.error || 'Failed to start auth.');
             }
 
-            state.authSessionId = payload.authSessionId;
-
-            // Hide provider buttons, show auth flow
-            providerButtons.classList.add('hidden');
+            // Hide connect button, show paste flow
+            connectBtn.classList.add('hidden');
             flowArea.classList.remove('hidden');
-
-            const isAnthropic = provider === 'anthropic';
-            const instructions = isAnthropic
-              ? `Click the link below to sign in with Anthropic. After authorizing, you'll see a code that looks like <code>ABC123#xyz789</code>. Copy the <strong>full code including the # part</strong> and paste it below.`
-              : `Click the link below to sign in with OpenAI. After authorizing, your browser will try to load a page that won't work — that's expected. Copy the <strong>full URL from your address bar</strong> and paste it below.`;
-
-            const placeholder = isAnthropic
-              ? 'Paste your CODE#STATE here'
-              : 'Paste the full redirect URL here';
 
             flowArea.innerHTML = `
               <div style="margin: 1.2rem 0;">
-                <p class="copy" style="margin-bottom: 1rem;">${instructions}</p>
-                <a href="${escapeHtml(payload.oauthUrl)}" target="_blank" rel="noopener"
+                <p class="copy" style="margin-bottom: 1rem;">
+                  Click the link below to sign in with Anthropic. After authorizing,
+                  you'll see a code that looks like <code>ABC123#xyz789</code>.
+                  Copy the <strong>full code including the # part</strong> and paste it below.
+                </p>
+                <a href="${escapeHtml(payload.url)}" target="_blank" rel="noopener"
                    class="button" style="display: inline-block; text-decoration: none; text-align: center; width: 100%;">
-                  Sign in with ${isAnthropic ? 'Anthropic' : 'OpenAI'} &rarr;
+                  Sign in with Anthropic &rarr;
                 </a>
               </div>
               <div class="field" style="margin-top: 1.2rem;">
-                <label class="label" for="auth-code-input">${isAnthropic ? 'Authorization code' : 'Redirect URL'}</label>
-                <input class="input" id="auth-code-input" type="text" placeholder="${placeholder}" autocomplete="off" />
+                <label class="label" for="auth-code-input">Authorization code</label>
+                <input class="input" id="auth-code-input" type="text" placeholder="Paste your CODE#STATE here" autocomplete="off" />
               </div>
               <button class="button" id="auth-submit-btn" style="margin-top: 0.8rem;" disabled>
                 Complete Setup
@@ -1631,21 +1578,21 @@
               submitBtn.disabled = !codeInput.value.trim();
             });
 
-            submitBtn.addEventListener('click', () => submitAuthCode(provider));
+            submitBtn.addEventListener('click', submitAuthCode);
           } catch (error) {
             authError.textContent = error.message;
-            providerButtons.querySelectorAll('.provider-btn').forEach(b => b.disabled = false);
+            connectBtn.disabled = false;
           }
         }
 
-        async function submitAuthCode(provider) {
+        async function submitAuthCode() {
           const codeInput = document.getElementById('auth-code-input');
           const submitBtn = document.getElementById('auth-submit-btn');
           const progress = document.getElementById('auth-progress');
           const authError = document.getElementById('auth-error');
 
-          const code = codeInput.value.trim();
-          if (!code) return;
+          const codeState = codeInput.value.trim();
+          if (!codeState) return;
 
           submitBtn.disabled = true;
           codeInput.disabled = true;
@@ -1656,11 +1603,7 @@
             const response = await fetch(`${API_BASE}/api/onboarding/auth/complete`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({
-                authSessionId: state.authSessionId,
-                code,
-                stripeSessionId: sessionId
-              })
+              body: JSON.stringify({ codeState, stripeSessionId: sessionId })
             });
             const payload = await readJson(response);
 
@@ -1668,8 +1611,7 @@
               throw new Error(payload.error || 'Authorization failed.');
             }
 
-            // Success
-            document.getElementById('auth-progress-text').textContent = `${provider === 'anthropic' ? 'Claude' : 'OpenAI'} connected!`;
+            document.getElementById('auth-progress-text').textContent = 'Claude connected!';
             progress.classList.add('confirmed');
 
             setTimeout(() => {
