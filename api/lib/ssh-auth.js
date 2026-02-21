@@ -109,10 +109,12 @@ function completeAnthropic(authSessionId, codeWithState) {
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
+        const clean = stripAnsi(rawBuffer).replace(/\n/g, '');
+        console.error(`[auth-debug] Token timeout. Raw buffer (last 500): ${clean.slice(-500)}`);
         cleanup(authSessionId);
         reject(new Error('Timed out waiting for Anthropic token'));
       }
-    }, 30_000); // 30s for token exchange (was 15s)
+    }, 45_000); // 45s for token exchange
 
     // Replace stdout handler — use raw buffer + ANSI stripping like startAnthropic
     session.proc.stdout.removeAllListeners('data');
@@ -154,7 +156,7 @@ function completeAnthropic(authSessionId, codeWithState) {
     // Write code to stdin after delay
     setTimeout(() => {
       if (!resolved) {
-        session.proc.stdin.write(codeWithState + '\n');
+        session.proc.stdin.write(codeWithState + '\r');
       }
     }, STDIN_DELAY_MS);
   });
