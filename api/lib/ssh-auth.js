@@ -2,7 +2,7 @@ const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const URL_WAIT_TIMEOUT_MS = 20 * 1000;  // 20s for URL to appear
+const URL_WAIT_TIMEOUT_MS = 30 * 1000;  // 30s for URL to appear (claude setup-token takes ~10-12s)
 const CODE_WAIT_TIMEOUT_MS = 15 * 1000; // 15s for token after code submitted
 const STDIN_DELAY_MS = 500;              // delay before writing to stdin
 
@@ -33,7 +33,7 @@ function startAnthropic(serverIp, sshKeyPath) {
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'ConnectTimeout=10',
       `ubuntu@${serverIp}`,
-      'claude setup-token'
+      'sudo docker exec -it openclaw claude setup-token'
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
     let resolved = false;
@@ -164,7 +164,7 @@ function startOpenai(serverIp, sshKeyPath) {
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'ConnectTimeout=10',
       `ubuntu@${serverIp}`,
-      'openclaw onboard --auth-choice openai-codex'
+      'sudo docker exec -it openclaw openclaw onboard --auth-choice openai-codex'
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
     let resolved = false;
@@ -312,11 +312,12 @@ function writeAuthProfile(serverIp, sshKeyPath, provider, token) {
     const updatePayload = JSON.stringify({ profileName, profileEntry, orderKey });
 
     // Remote node script: reads JSON from stdin, merges into each auth-profiles.json
-    const remoteScript = `
+    // Runs inside Docker container where openclaw stores auth profiles
+    const containerScript = `
       node -e '
         const fs = require("fs");
         const { profileName, profileEntry, orderKey } = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
-        const glob = require("child_process").execSync("ls /home/ubuntu/.openclaw/agents/*/agent/auth-profiles.json 2>/dev/null || true", { encoding: "utf8" }).trim().split("\\n").filter(Boolean);
+        const glob = require("child_process").execSync("ls /home/clawd/.openclaw/agents/*/agent/auth-profiles.json 2>/dev/null || true", { encoding: "utf8" }).trim().split("\\n").filter(Boolean);
         let wrote = 0;
         for (const f of glob) {
           let existing = { version: 1, profiles: {}, order: {} };
@@ -332,7 +333,9 @@ function writeAuthProfile(serverIp, sshKeyPath, provider, token) {
         }
         console.log("AUTH_PROFILE_WRITTEN:" + wrote);
       '
-    `.trim();
+    `.trim().replace(/'/g, "'\\''");
+
+    const remoteScript = `sudo docker exec -i openclaw bash -c '${containerScript}'`;
 
     const proc = spawn('ssh', [
       '-i', sshKeyPath,

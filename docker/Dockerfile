@@ -34,10 +34,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dbus-x11 \
     fonts-liberation \
     fonts-noto-color-emoji \
+    # Build tools for native modules (@discordjs/opus)
+    python3 \
+    build-essential \
+    libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenClaw globally
-RUN npm install -g openclaw
+# Install OpenClaw, Claude Code CLI, and Codex CLI globally
+RUN npm install -g openclaw @anthropic-ai/claude-code @openai/codex
 
 # Create non-root user for running OpenClaw
 RUN useradd -m -s /bin/bash clawd

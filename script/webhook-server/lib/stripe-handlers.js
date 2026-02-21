@@ -30,7 +30,8 @@ export async function handle_checkout_completed(session) {
   const stripe_customer_id = normalize_stripe_id(session.customer);
   const stripe_subscription_id = normalize_stripe_id(session.subscription);
 
-  const tier = metadata.tier || 'byok';
+  const plan = metadata.tier || 'byok';  // starter, pro, power, byok, managed
+  const tier = plan === 'managed' ? 'managed' : 'byok';
 
   const custom_fields = session.custom_fields || [];
   const username_field = custom_fields.find(f => f.key === 'username');
@@ -57,6 +58,7 @@ export async function handle_checkout_completed(session) {
 
   const params = {
     email: customer_email,
+    username,
     api_key: metadata.api_key,
     discord_token: metadata.discord_token,
     discord_channel: metadata.discord_channel,

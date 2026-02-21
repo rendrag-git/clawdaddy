@@ -30,6 +30,10 @@ export function spawn_provision(params) {
       '--email', params.email,
     ];
 
+    if (params.username) {
+      args.push('--username', params.username);
+    }
+
     if (params.tier) {
       args.push('--tier', params.tier);
     }
@@ -86,16 +90,20 @@ export function spawn_provision(params) {
 
     child.on('close', async (code) => {
       if (code === 0) {
-        // Parse output for IP and VNC password
+        // Parse machine-readable output
         const ip_match = stdout.match(/SERVER_IP=(.+)/);
         const vnc_match = stdout.match(/VNC_PASSWORD=(.+)/);
         const cid_match = stdout.match(/CUSTOMER_ID=(.+)/);
+        const ssh_match = stdout.match(/SSH_KEY_PATH=(.+)/);
+        const dns_match = stdout.match(/DNS_HOSTNAME=(.+)/);
 
         resolve({
           success: true,
           ip: ip_match ? ip_match[1].trim() : 'unknown',
           vnc_password: vnc_match ? vnc_match[1].trim() : 'unknown',
           customer_id: cid_match ? cid_match[1].trim() : null,
+          ssh_key_path: ssh_match ? ssh_match[1].trim() : null,
+          dns_hostname: dns_match ? dns_match[1].trim() : null,
         });
       } else {
         const msg = `Provision failed for ${params.email} (exit code ${code}): ${stderr.slice(-500)}`;
