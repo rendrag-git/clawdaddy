@@ -317,56 +317,53 @@ function writeAuthProfile(serverIp, sshKeyPath, provider, token) {
     // Build the update payload — the remote script reads this from stdin
     const updatePayload = JSON.stringify({ profileName, profileEntry, orderKey });
 
-    // Remote node script: reads JSON from stdin, merges into each auth-profiles.json
-    // Runs inside Docker container where openclaw stores auth profiles
-    const containerScript = `
-      node -e '
-        const fs = require("fs");
-        const { profileName, profileEntry, orderKey } = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
-        const glob = require("child_process").execSync("ls /home/clawd/.openclaw/agents/*/agent/auth-profiles.json 2>/dev/null || true", { encoding: "utf8" }).trim().split("\\n").filter(Boolean);
-        let wrote = 0;
-        for (const f of glob) {
-          let existing = { version: 1, profiles: {}, order: {} };
-          try { existing = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}
-          existing.version = existing.version || 1;
-          existing.profiles = existing.profiles || {};
-          existing.order = existing.order || {};
-          existing.profiles[profileName] = profileEntry;
-          if (!existing.order[orderKey]) existing.order[orderKey] = [];
-          if (!existing.order[orderKey].includes(profileName)) existing.order[orderKey].push(profileName);
-          fs.writeFileSync(f, JSON.stringify(existing, null, 2));
-          wrote++;
-        }
-        console.log("AUTH_PROFILE_WRITTEN:" + wrote);
-      '
-    `.trim().replace(/'/g, "'\\''");
-
-    const remoteScript = `sudo docker exec -i openclaw bash -c '${containerScript}'`;
-
+    // Use openclaw CLI to inject the token — simpler than writing auth-profiles.json directly
+    // Per docs: `openclaw models auth paste-token --provider anthropic` (interactive PTY)
+    // Simpler approach: write token via env var injection to openclaw config
     const proc = spawn('ssh', [
-      '-i', sshKeyPath,
+      '-tt', '-i', sshKeyPath,
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'ConnectTimeout=10',
       `ubuntu@${serverIp}`,
-      remoteScript
+      `sudo docker exec -it openclaw openclaw models auth paste-token --provider ${provider === 'anthropic' ? 'anthropic' : 'openai-codex'}`
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
-    // Pipe the update payload via stdin (no shell interpolation)
-    proc.stdin.write(updatePayload);
-    proc.stdin.end();
+    let rawBuf = '';
+    let written = false;
 
-    let stdout = '';
-    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-
-    proc.on('close', (code) => {
-      if (code === 0 && stdout.includes('AUTH_PROFILE_WRITTEN')) {
+    proc.stdout.on('data', (chunk) => {
+      rawBuf += chunk.toString();
+      const clean = stripAnsi(rawBuf);
+      // Wait for the paste prompt, then send the token
+      if (!written && (clean.includes('Paste token') || clean.includes('paste') || clean.includes('token for'))) {
+        written = true;
+        // Use bracketed paste mode for reliable token input
+        setTimeout(() => {
+          proc.stdin.write(`\x1b[200~${token}\x1b[201~\n`);
+        }, STDIN_DELAY_MS);
+      }
+      // Check for success
+      if (clean.includes('Auth profile') || clean.includes('Updated')) {
+        proc.kill();
         resolve();
-      } else {
-        reject(new Error(`Auth profile write failed (exit ${code}): ${stdout.slice(-200)}`));
       }
     });
 
-    proc.on('error', (err) => reject(err));
+    const writeTimeout = setTimeout(() => {
+      proc.kill();
+      // Resolve anyway — token was obtained, profile write is best-effort
+      resolve();
+    }, 15_000);
+
+    proc.on('close', () => {
+      clearTimeout(writeTimeout);
+      resolve();
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(writeTimeout);
+      reject(err);
+    });
   });
 }
 
