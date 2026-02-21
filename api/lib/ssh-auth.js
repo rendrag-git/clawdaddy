@@ -23,6 +23,13 @@ function createLineBuffer(onLine) {
   };
 }
 
+// --- helpers ---
+
+// Strip ANSI escape codes and carriage returns from PTY output
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[?0-9;]*[a-zA-Z]/g, '').replace(/\x1b[()][0-9A-B]/g, '').replace(/\r/g, '');
+}
+
 // --- Anthropic flow ---
 
 function startAnthropic(serverIp, sshKeyPath) {
@@ -37,6 +44,7 @@ function startAnthropic(serverIp, sshKeyPath) {
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
     let resolved = false;
+    let rawBuffer = '';
     const stdoutLines = [];
 
     const timeout = setTimeout(() => {
@@ -47,9 +55,12 @@ function startAnthropic(serverIp, sshKeyPath) {
       }
     }, URL_WAIT_TIMEOUT_MS);
 
-    const onLine = (line) => {
-      stdoutLines.push(line);
-      const urlMatch = line.match(/(https:\/\/claude\.ai\/oauth\/authorize[^\s]*)/);
+    // Accumulate raw output, strip ANSI, scan full buffer for URL
+    // PTY word-wraps long URLs across multiple lines — can't match per-line
+    proc.stdout.on('data', (chunk) => {
+      rawBuffer += chunk.toString();
+      const clean = stripAnsi(rawBuffer).replace(/\n/g, '');
+      const urlMatch = clean.match(/(https:\/\/claude\.ai\/oauth\/authorize[^\s]*state=[^\s]*)/);
       if (urlMatch && !resolved) {
         resolved = true;
         clearTimeout(timeout);
@@ -61,16 +72,11 @@ function startAnthropic(serverIp, sshKeyPath) {
           stdoutLines,
           createdAt: Date.now(),
           timeoutHandle: setTimeout(() => cleanup(authSessionId), AUTH_TIMEOUT_MS),
-          _onLine: onLine,
-          _lineHandler: null,
         };
         sessions.set(authSessionId, session);
         resolve({ authSessionId, oauthUrl: urlMatch[1] });
       }
-    };
-
-    const lineHandler = createLineBuffer(onLine);
-    proc.stdout.on('data', lineHandler);
+    });
     proc.stderr.on('data', () => {}); // ignore stderr
 
     proc.on('error', (err) => {
@@ -98,6 +104,7 @@ function completeAnthropic(authSessionId, codeWithState) {
     if (session.provider !== 'anthropic') return reject(new Error('Wrong provider for this session'));
 
     let resolved = false;
+    let rawBuffer = '';
 
     const timeout = setTimeout(() => {
       if (!resolved) {
@@ -105,12 +112,15 @@ function completeAnthropic(authSessionId, codeWithState) {
         cleanup(authSessionId);
         reject(new Error('Timed out waiting for Anthropic token'));
       }
-    }, CODE_WAIT_TIMEOUT_MS);
+    }, 30_000); // 30s for token exchange (was 15s)
 
-    // Listen for token in stdout
-    const onLine = (line) => {
-      session.stdoutLines.push(line);
-      const tokenMatch = line.match(/(sk-ant-oat01-[^\s]+)/);
+    // Replace stdout handler — use raw buffer + ANSI stripping like startAnthropic
+    session.proc.stdout.removeAllListeners('data');
+    session.proc.stdout.on('data', (chunk) => {
+      rawBuffer += chunk.toString();
+      const clean = stripAnsi(rawBuffer).replace(/\n/g, '');
+
+      const tokenMatch = clean.match(/(sk-ant-oat01-[^\s]+)/);
       if (tokenMatch && !resolved) {
         resolved = true;
         clearTimeout(timeout);
@@ -133,17 +143,13 @@ function completeAnthropic(authSessionId, codeWithState) {
       }
 
       // Check for error
-      if (line.includes('OAuth error') && !resolved) {
+      if (clean.includes('OAuth error') && !resolved) {
         resolved = true;
         clearTimeout(timeout);
         cleanup(authSessionId);
-        reject(new Error(`Anthropic auth error: ${line.trim()}`));
+        reject(new Error(`Anthropic auth error: ${clean.slice(-200)}`));
       }
-    };
-
-    // Replace stdout handler
-    session.proc.stdout.removeAllListeners('data');
-    session.proc.stdout.on('data', createLineBuffer(onLine));
+    });
 
     // Write code to stdin after delay
     setTimeout(() => {
