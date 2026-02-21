@@ -1,11 +1,29 @@
 import 'dotenv/config';
 import express from 'express';
 import Stripe from 'stripe';
-import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { init as initDb } from './lib/customers.js';
 initDb();
+
+// --- Secret loading (file-first, env fallback) ---
+const SECRETS_DIR = process.env.SECRETS_DIR || '/home/ubuntu/clawdaddy/.secrets';
+
+function readSecret(filename, envVar) {
+  if (process.env[envVar]) return process.env[envVar];
+  try {
+    return readFileSync(path.join(SECRETS_DIR, filename), 'utf8').trim();
+  } catch {
+    return undefined;
+  }
+}
+
+const STRIPE_SECRET_KEY = readSecret('stripe-key', 'STRIPE_SECRET_KEY');
+const WEBHOOK_SECRET = readSecret('stripe-webhook-secret', 'STRIPE_WEBHOOK_SECRET');
+
+if (!STRIPE_SECRET_KEY) console.error('WARNING: No Stripe secret key found (checked .secrets/stripe-key and STRIPE_SECRET_KEY env)');
+if (!WEBHOOK_SECRET) console.error('WARNING: No Stripe webhook secret found (checked .secrets/stripe-webhook-secret and STRIPE_WEBHOOK_SECRET env)');
 
 // Lazy-load stripe handlers to prevent email.js from crashing startup
 let stripe_handlers = null;
@@ -19,10 +37,9 @@ async function getStripeHandlers() {
 const PORT = process.env.PORT || 3000;
 let stripe = null;
 function getStripe() {
-  if (!stripe) stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  if (!stripe) stripe = new Stripe(STRIPE_SECRET_KEY);
   return stripe;
 }
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 const app = express();
 

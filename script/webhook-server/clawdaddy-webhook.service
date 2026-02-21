@@ -1,0 +1,21 @@
+[Unit]
+Description=ClawDaddy Webhook Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/clawdaddy/script/webhook-server
+ExecStart=/usr/bin/node /home/ubuntu/clawdaddy/script/webhook-server/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clawdaddy-webhook
+
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=PATH=/usr/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target

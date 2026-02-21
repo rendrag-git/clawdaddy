@@ -584,7 +584,7 @@ app.post('/api/create-checkout-session', express.json(), async (req, res) => {
     params.append('payment_method_types[0]', 'card');
     params.append('line_items[0][price]', priceId);
     params.append('line_items[0][quantity]', '1');
-    params.append('success_url', 'https://api.clawdaddy.sh/?session_id={CHECKOUT_SESSION_ID}');
+    params.append('success_url', 'https://clawdaddy.sh/onboarding/?session_id={CHECKOUT_SESSION_ID}');
     params.append('cancel_url', 'https://clawdaddy.sh/#pricing');
     params.append('metadata[username]', raw);
     params.append('metadata[bot_name]', botName || 'Assistant');

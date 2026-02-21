@@ -470,7 +470,7 @@
               <li>Discord, Telegram, Signal, WhatsApp, and iMessage bridges</li>
               <li>Daily backups, monitoring, and email support</li>
             </ul>
-            <a href="/onboarding/index.html" class="mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Get Starter</a>
+            <a href="#signup" data-plan="starter" class="pricing-cta mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Get Starter</a>
           </article>
 
           <article class="relative flex flex-col rounded-2xl border border-lobster bg-zinc-900 p-6 shadow-glow">
@@ -484,7 +484,7 @@
               <li>Ready in about 10 minutes; cancel anytime</li>
             </ul>
             <p class="mt-4 text-xs text-zinc-400">Transparent AI spend: you pay Anthropic directly for usage.</p>
-            <a href="/onboarding/index.html" class="mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-4 py-3 font-bold text-white transition hover:bg-red-500">Get Pro</a>
+            <a href="#signup" data-plan="pro" class="pricing-cta mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl bg-lobster px-4 py-3 font-bold text-white transition hover:bg-red-500">Get Pro</a>
           </article>
 
           <article class="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
@@ -495,7 +495,7 @@
               <li>Priority support for advanced setup and migrations</li>
               <li>Dedicated onboarding and migration help</li>
             </ul>
-            <a href="/onboarding/index.html" class="mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Get Power</a>
+            <a href="#signup" data-plan="power" class="pricing-cta mt-6 inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-bold text-white transition hover:border-lobster hover:text-lobster">Get Power</a>
           </article>
         </div>
       </section>
@@ -707,6 +707,17 @@
           btn.classList.add('border-lobster', 'border-2', 'ring-1', 'ring-lobster/30');
           selectedPlan = btn.dataset.plan;
           updateCheckoutBtn();
+        });
+      });
+
+      // Pricing CTA → pre-select plan in signup
+      document.querySelectorAll('.pricing-cta').forEach(link => {
+        link.addEventListener('click', () => {
+          const plan = link.dataset.plan;
+          if (plan) {
+            const btn = document.querySelector(`.plan-btn[data-plan="${plan}"]`);
+            if (btn) btn.click();
+          }
         });
       });
 
