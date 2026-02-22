@@ -6,7 +6,7 @@ const https = require('https');
 const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
-const { initDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations, storeOAuthState, clearOAuthState } = require('./lib/db');
+const { initDb, getDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations, storeOAuthState, clearOAuthState } = require('./lib/db');
 const { startAuth, completeAuth } = require('./lib/oauth');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
@@ -87,6 +87,53 @@ async function getStripeSecretKey() {
   return cachedStripeKey;
 }
 
+
+const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1472970106089898016/hl88EjM5QcO7NpDCtTc17NbYcvyNXFvv3cb0CckcxS8zBj6uV0-KleMQBSGTsbm2-c7V';
+
+function sendDiscordAlert(message) {
+  const body = JSON.stringify({ content: message });
+  const url = new URL(DISCORD_WEBHOOK_URL);
+  const req = https.request({
+    hostname: url.hostname,
+    path: url.pathname,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+  }, () => {});
+  req.on('error', (err) => console.error('Discord alert failed:', err.message));
+  req.write(body);
+  req.end();
+}
+
+async function tryDeployIfReady(sessionId) {
+  const customer = getCustomerByStripeSessionId(sessionId);
+  if (!customer || customer.provision_status !== 'ready') return;
+
+  const session = getOnboardingSession(sessionId);
+  if (!session || !session.generated_files) return;
+
+  // Idempotent check-and-set: only one caller wins
+  const result = getDb().prepare(
+    "UPDATE onboarding_sessions SET deploy_status = 'deploying' WHERE stripe_session_id = ? AND deploy_status = 'pending'"
+  ).run(sessionId);
+  if (result.changes !== 1) return; // Another trigger already claimed it
+
+  try {
+    const deployResult = await deployFilesToInstance(sessionId);
+    if (deployResult.ok && deployResult.deployed) {
+      updateOnboardingSession(sessionId, { deploy_status: 'deployed' });
+      console.log(`[auto-deploy] Files deployed for ${customer.username} (session ${sessionId})`);
+    } else {
+      updateOnboardingSession(sessionId, { deploy_status: 'failed' });
+      const errMsg = deployResult.error || 'deploy returned ok=false';
+      console.error(`[auto-deploy] Failed for ${customer.username}: ${errMsg}`);
+      sendDiscordAlert(`Deploy failed for ${customer.username} (session ${sessionId}): ${errMsg}`);
+    }
+  } catch (err) {
+    updateOnboardingSession(sessionId, { deploy_status: 'failed' });
+    console.error(`[auto-deploy] Exception for ${customer.username}: ${err.message}`);
+    sendDiscordAlert(`Deploy failed for ${customer.username} (session ${sessionId}): ${err.message}`);
+  }
+}
 
 async function deployFilesToInstance(sessionId) {
   const customer = getCustomerByStripeSessionId(sessionId);
@@ -456,6 +503,13 @@ app.get('/api/onboarding/status/:sessionId', async (req, res) => {
     return res.status(404).json({ ok: false, error: 'Session not found.' });
   }
 
+  const session = getOnboardingSession(sessionId);
+
+  // Trigger auto-deploy check when provision is ready (second trigger point)
+  if (customer.provision_status === 'ready' && session?.generated_files && (!session.deploy_status || session.deploy_status === 'pending')) {
+    void tryDeployIfReady(sessionId);
+  }
+
   return res.json({
     username: customer.username,
     botName: customer.bot_name,
@@ -463,6 +517,7 @@ app.get('/api/onboarding/status/:sessionId', async (req, res) => {
     provisionStage: customer.provision_stage,
     authStatus: customer.auth_status,
     webchatUrl: customer.dns_hostname ? `https://${customer.dns_hostname}` : null,
+    deployStatus: session?.deploy_status || 'pending',
   });
 });
 
@@ -720,10 +775,8 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
       step: 'auth',
     });
 
-    // Try auto-deploy files (in case provisioning already completed)
-    void deployFilesToInstance(sessionId).catch(err =>
-      console.error(`Auto-deploy failed for ${sessionId}: ${err.message}`)
-    );
+    // Try auto-deploy (fires if provisioning is also complete)
+    void tryDeployIfReady(sessionId);
 
     const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
     if (agentsMd) fileList.push('AGENTS.md');
