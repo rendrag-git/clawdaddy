@@ -66,6 +66,10 @@
             <div class="action-icon">&#x2699;&#xfe0f;</div>
             <div class="action-label">Settings</div>
           </button>
+          <button class="action-card" id="link-providers">
+            <div class="action-icon">&#x1f511;</div>
+            <div class="action-label">Providers</div>
+          </button>
           <button class="action-card" id="link-config">
             <div class="action-icon">&#x1f527;</div>
             <div class="action-label">Configuration</div>
@@ -163,6 +167,34 @@
           </div>
         </details>
 
+      </main>
+    </div>
+
+    <!-- Providers View -->
+    <div id="view-providers" class="view" hidden>
+      <header class="portal-header">
+        <button id="btn-providers-back" class="btn-icon" title="Back">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13 4l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="settings-title">AI Providers</h2>
+        <div></div>
+      </header>
+      <main class="portal-main">
+        <p class="text-muted" style="margin-bottom:1.5rem">Connect your AI provider accounts. Use OAuth sign-in where available, or paste an API key.</p>
+        <div id="provider-grid" class="provider-grid"></div>
+
+        <!-- Expanded provider detail (shown when a provider card is clicked) -->
+        <div id="provider-detail" class="provider-detail" hidden>
+          <div class="provider-detail-header">
+            <div class="provider-detail-icon" id="provider-detail-icon"></div>
+            <div>
+              <h3 id="provider-detail-name"></h3>
+              <span id="provider-detail-status" class="provider-detail-status"></span>
+            </div>
+          </div>
+          <div id="provider-detail-actions" class="provider-detail-actions"></div>
+          <div id="provider-detail-feedback" class="key-feedback" hidden></div>
+        </div>
       </main>
     </div>
 

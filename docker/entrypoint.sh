@@ -65,6 +65,8 @@ if [[ -n "${TELEGRAM_TOKEN}" && -n "${TELEGRAM_CHAT}" ]]; then
 fi
 
 INIT_MARKER="${CONFIG_DIR}/.initialized"
+IS_FIRST_BOOT="false"
+[[ ! -f "${INIT_MARKER}" ]] && IS_FIRST_BOOT="true"
 
 if [[ ! -f "${INIT_MARKER}" ]]; then
     # ── First boot: write full config from env vars ──
@@ -114,17 +116,16 @@ else
     # ── Subsequent boot: merge env-driven values into existing config ──
     echo "📝 Restarting — merging env updates into existing config..."
 
-    MODEL="${MODEL}" GW_TOKEN="${GW_TOKEN}" CHANNELS="${CHANNELS}" \
+    GW_TOKEN="${GW_TOKEN}" \
       node -e "
       const fs = require('fs');
       const p = process.argv[1];
       const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
 
-      // Update model if env changed
+      // Model is NOT overwritten on subsequent boot — user may have changed it via portal/UI.
+      // It is only seeded on first boot from OPENCLAW_MODEL env var.
+
       if (!cfg.agents) cfg.agents = {};
-      if (!cfg.agents.defaults) cfg.agents.defaults = {};
-      if (!cfg.agents.defaults.model) cfg.agents.defaults.model = {};
-      cfg.agents.defaults.model.primary = process.env.MODEL;
 
       // Ensure gateway auth token is current
       if (!cfg.gateway) cfg.gateway = {};
@@ -136,12 +137,9 @@ else
       if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
       cfg.gateway.http.endpoints.chatCompletions = { enabled: true };
 
-      // Update channels from env (additive — does not remove old channels)
-      const channels = JSON.parse(process.env.CHANNELS || '{}');
-      if (Object.keys(channels).length > 0) {
-        if (!cfg.channels) cfg.channels = {};
-        Object.assign(cfg.channels, channels);
-      }
+      // Channels are NOT merged on subsequent boot.
+      // On-disk config is authoritative — user may have disconnected channels via portal.
+      // Channels are only seeded on first boot from env vars.
 
       fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
       console.log('   Config merged successfully');
@@ -149,20 +147,26 @@ else
         echo "⚠️  Config merge failed — continuing with existing config" >&2
     }
 
-    # Update API key in auth-profiles (merge, don't overwrite)
+    # Auth-profiles.json is NOT overwritten on subsequent boot.
+    # OAuth flow writes tokens there and those are authoritative.
+    # Only seeded on first boot from ANTHROPIC_API_KEY env var.
     AUTH_PROF="${CONFIG_DIR}/agents/main/agent/auth-profiles.json"
     if [[ -f "${AUTH_PROF}" ]]; then
+        echo "   Auth profiles exist — skipping (OAuth tokens are authoritative)"
+    else
+        echo "   Auth profiles missing — recreating from env"
+        mkdir -p "${CONFIG_DIR}/agents/main/agent"
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" node -e "
           const fs = require('fs');
-          const p = process.argv[1];
-          const prof = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (prof.profiles && prof.profiles['anthropic:manual']) {
-            prof.profiles['anthropic:manual'].token = process.env.ANTHROPIC_API_KEY;
-          }
-          fs.writeFileSync(p, JSON.stringify(prof, null, 2) + '\n');
-          console.log('   Auth profiles updated');
+          const prof = {
+            version: 1,
+            profiles: { 'anthropic:manual': { type: 'token', provider: 'anthropic', token: process.env.ANTHROPIC_API_KEY } },
+            order: { anthropic: ['anthropic:manual'] }
+          };
+          fs.writeFileSync(process.argv[1], JSON.stringify(prof, null, 2) + '\n');
+          console.log('   Auth profiles recreated from env');
         " "${AUTH_PROF}" || {
-            echo "⚠️  Auth profile merge failed — continuing with existing profile" >&2
+            echo "⚠️  Auth profile creation failed" >&2
         }
     fi
 fi
@@ -229,7 +233,7 @@ chmod 600 "${CONFIG_DIR}/openclaw.json" "${CONFIG_DIR}/agents/main/agent/auth-pr
 echo "🔍 Discovering sub-agents..."
 
 if [[ -d "${WORKSPACE}/agents" ]]; then
-    MODEL="${MODEL}" WORKSPACE="${WORKSPACE}" CONFIG_DIR="${CONFIG_DIR}" node -e "
+    IS_FIRST_BOOT="${IS_FIRST_BOOT}" MODEL="${MODEL}" WORKSPACE="${WORKSPACE}" CONFIG_DIR="${CONFIG_DIR}" node -e "
       const fs = require('fs');
       const path = require('path');
       const cfgPath = process.argv[1];
@@ -237,6 +241,7 @@ if [[ -d "${WORKSPACE}/agents" ]]; then
       const workspace = process.env.WORKSPACE;
       const configDir = process.env.CONFIG_DIR;
       const model = process.env.MODEL;
+      const isFirstBoot = process.env.IS_FIRST_BOOT === 'true';
 
       // Discover agent directories
       const agentsDir = path.join(workspace, 'agents');
@@ -253,32 +258,70 @@ if [[ -d "${WORKSPACE}/agents" ]]; then
         process.exit(0);
       }
 
-      // Build agents config
       if (!cfg.agents) cfg.agents = {};
       cfg.agents.skipBootstrap = true;
 
-      const list = [
-        { id: 'main', default: true, workspace: workspace, model: { primary: model } }
-      ];
+      if (isFirstBoot) {
+        // First boot: full rebuild of agent list from scratch
+        const list = [
+          { id: 'main', default: true, workspace: workspace, model: { primary: model } }
+        ];
 
+        for (const name of agentNames) {
+          list.push({
+            id: name,
+            workspace: path.join(workspace, 'agents', name),
+            model: { primary: model }
+          });
+        }
+
+        cfg.agents.list = list;
+        console.log('   Registered agents: main, ' + agentNames.join(', '));
+      } else {
+        // Subsequent boot: additive only — discover NEW agents, preserve existing configs
+        const existingList = cfg.agents.list || [];
+        const existingIds = new Set(existingList.map(a => a.id));
+        let added = [];
+
+        // Ensure 'main' exists in the list (safety net)
+        if (!existingIds.has('main')) {
+          existingList.unshift({ id: 'main', default: true, workspace: workspace });
+          existingIds.add('main');
+        }
+
+        for (const name of agentNames) {
+          if (!existingIds.has(name)) {
+            // New agent discovered — add it with current model as default
+            existingList.push({
+              id: name,
+              workspace: path.join(workspace, 'agents', name),
+              model: { primary: model }
+            });
+            added.push(name);
+          }
+          // Existing agents are NOT touched — preserves user customizations
+        }
+
+        cfg.agents.list = existingList;
+        if (added.length > 0) {
+          console.log('   New agents added: ' + added.join(', '));
+        } else {
+          console.log('   No new agents discovered');
+        }
+      }
+
+      // Ensure config dirs, auth, and sessions exist for all agents (both boots)
       for (const name of agentNames) {
-        list.push({
-          id: name,
-          workspace: path.join(workspace, 'agents', name),
-          model: { primary: model }
-        });
-
-        // Create config directory and copy auth from main
         const agentConfigDir = path.join(configDir, 'agents', name, 'agent');
         fs.mkdirSync(agentConfigDir, { recursive: true });
 
         const mainAuth = path.join(configDir, 'agents', 'main', 'agent', 'auth-profiles.json');
         const agentAuth = path.join(agentConfigDir, 'auth-profiles.json');
-        if (fs.existsSync(mainAuth)) {
+        if (fs.existsSync(mainAuth) && !fs.existsSync(agentAuth)) {
+          // Only copy auth if sub-agent doesn't have its own yet
           fs.copyFileSync(mainAuth, agentAuth);
         }
 
-        // Create sessions directory
         const sessionsDir = path.join(configDir, 'agents', name, 'sessions');
         fs.mkdirSync(sessionsDir, { recursive: true });
         const sessionsFile = path.join(sessionsDir, 'sessions.json');
@@ -287,10 +330,7 @@ if [[ -d "${WORKSPACE}/agents" ]]; then
         }
       }
 
-      cfg.agents.list = list;
-
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
-      console.log('   Registered agents: main, ' + agentNames.join(', '));
     " "${CONFIG_DIR}/openclaw.json" || {
         echo "⚠️  Agent discovery failed (non-fatal)" >&2
     }

@@ -9,27 +9,30 @@ function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
-// Lazy load API key (OpenRouter)
+// Lazy load API key (Anthropic)
 async function getApiKey() {
   if (cachedApiKey) return cachedApiKey;
 
   // Try environment variable first
-  if (process.env.OPENROUTER_API_KEY) {
-    cachedApiKey = process.env.OPENROUTER_API_KEY;
-    return cachedApiKey;
-  }
-
-  // Fallback to Anthropic key env/file
   if (process.env.ANTHROPIC_API_KEY) {
     cachedApiKey = process.env.ANTHROPIC_API_KEY;
     return cachedApiKey;
   }
 
+  // Try Anthropic key file
+  try {
+    cachedApiKey = (await fs.readFile('/home/ubuntu/clawdaddy/.secrets/anthropic-key', 'utf8')).trim();
+    return cachedApiKey;
+  } catch (err) {
+    // Fall through to legacy path
+  }
+
+  // Fallback to old OpenRouter key path for backwards compat
   try {
     cachedApiKey = (await fs.readFile('/home/ubuntu/clawdaddy/.secrets/openrouter-key', 'utf8')).trim();
     return cachedApiKey;
   } catch (err) {
-    throw new Error('OPENROUTER_API_KEY not found in environment or /home/ubuntu/clawdaddy/.secrets/openrouter-key');
+    throw new Error('ANTHROPIC_API_KEY not found in environment, /home/ubuntu/clawdaddy/.secrets/anthropic-key, or /home/ubuntu/clawdaddy/.secrets/openrouter-key');
   }
 }
 
@@ -45,24 +48,23 @@ const AGENT_MAP = {
   'personal:health': { name: 'pulse', displayName: 'Pulse', emoji: '\u{1F4AA}', focus: 'health tracking, medication reminders, fitness nudges, wellness check-ins' }
 };
 
-// Call OpenRouter API (OpenAI-compatible)
-function callOpenRouter(apiKey, model, messages, maxTokens, timeoutMs) {
+// Call Anthropic Messages API directly
+function callAnthropic(apiKey, model, messages, maxTokens, timeoutMs) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model,
-      messages,
-      max_tokens: maxTokens
+      max_tokens: maxTokens,
+      messages
     });
 
     const req = https.request({
-      hostname: 'openrouter.ai',
-      path: '/api/v1/chat/completions',
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://clawdaddy.sh',
-        'X-Title': 'ClawDaddy Onboarding'
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
       }
     }, (res) => {
       let data = '';
@@ -70,23 +72,24 @@ function callOpenRouter(apiKey, model, messages, maxTokens, timeoutMs) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          if (parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
-          resolve(parsed.choices[0].message.content);
+          if (parsed.type === 'error') return reject(new Error(parsed.error?.message || JSON.stringify(parsed.error)));
+          if (!parsed.content || !parsed.content[0]) return reject(new Error(`Unexpected Anthropic response shape: ${data.slice(0, 200)}`));
+          resolve(parsed.content[0].text);
         } catch (e) {
-          reject(new Error(`Failed to parse OpenRouter response: ${data.slice(0, 200)}`));
+          reject(new Error(`Failed to parse Anthropic response: ${data.slice(0, 200)}`));
         }
       });
     });
 
     req.on('error', reject);
-    req.setTimeout(timeoutMs || 120000, () => { req.destroy(); reject(new Error('OpenRouter request timed out')); });
+    req.setTimeout(timeoutMs || 120000, () => { req.destroy(); reject(new Error('Anthropic API request timed out')); });
     req.write(body);
     req.end();
   });
 }
 
-// Generate profile using OpenRouter API
-async function generateWithClaude(quizResults, username, botName) {
+// Generate profile using Anthropic Messages API
+async function generateWithClaude(quizResults, username, botName, { onProgress } = {}) {
   const apiKey = await getApiKey();
 
   const scores = quizResults.dimensionScores || {};
@@ -275,9 +278,11 @@ Output the six files separated by these exact markers (markers must appear on th
 
 Generate all six files now. Make them deeply personal, specific, and immediately useful. Every section should reflect THIS user's actual quiz results — not generic advice.`;
 
-  const responseText = await callOpenRouter(
+  if (onProgress) onProgress({ stage: 'generating', message: 'Building personality profile...' });
+
+  const responseText = await callAnthropic(
     apiKey,
-    'anthropic/claude-opus-4.6',
+    'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
     15000,
     120000
@@ -678,9 +683,9 @@ Output the two files separated by these exact markers:
 
 Generate both files now. Make them specific to ${agent.displayName}'s domain.`;
 
-  const responseText = await callOpenRouter(
+  const responseText = await callAnthropic(
     apiKey,
-    'anthropic/claude-opus-4.6',
+    'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
     3000,
     60000
@@ -869,11 +874,13 @@ ${agents.map(a => `### ${a.displayName} ${a.emoji}
 }
 
 // Main export
-async function generateProfile(quizResults, username, botName) {
+async function generateProfile(quizResults, username, botName, { onProgress } = {}) {
+  if (onProgress) onProgress({ stage: 'analyzing', message: 'Analyzing your responses...' });
+
   let result;
   try {
     // Try Claude API first
-    result = await generateWithClaude(quizResults, username, botName);
+    result = await generateWithClaude(quizResults, username, botName, { onProgress });
   } catch (err) {
     // Log error and fall back to template
     console.error('Claude API generation failed, using fallback:', err.message);
@@ -881,8 +888,10 @@ async function generateProfile(quizResults, username, botName) {
   }
 
   // Generate sub-agents from use-case tags (parallel Opus calls per agent)
+  if (onProgress) onProgress({ stage: 'agents', message: 'Creating agent configuration...' });
   const { agents, multiAgentMd } = await generateSubAgents(quizResults, botName, result.userMd);
 
+  if (onProgress) onProgress({ stage: 'complete', message: 'Profile generation complete!' });
   return { ...result, agents, multiAgentMd };
 }
 

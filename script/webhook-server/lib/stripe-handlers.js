@@ -138,6 +138,7 @@ export async function handle_checkout_completed(session) {
           serverIp: result.ip,
           sshKeyPath: result.ssh_key_path || (username ? `/home/ubuntu/.ssh/customer-keys/openclaw-${username}` : null),
           dnsHostname: username ? `${username}.clawdaddy.sh` : null,
+          dnsToken: result.dns_token || null,
           provisionStatus: 'ready',
         });
       } else {
@@ -154,6 +155,18 @@ export async function handle_checkout_completed(session) {
         await email.provisioning_complete_managed(customer_email, details);
       } else {
         await email.provisioning_complete(customer_email, details);
+      }
+
+      // Trigger full nginx map sync as backup (non-blocking)
+      try {
+        const syncScript = path.resolve(
+          path.dirname(process.env.PROVISION_SCRIPT || '../provision.sh'),
+          'sync-nginx-map.sh'
+        );
+        spawn('bash', [syncScript], { stdio: 'ignore' });
+        console.log('nginx map sync triggered');
+      } catch (err) {
+        console.error(`nginx map sync failed (non-fatal): ${err.message}`);
       }
     })
     .catch(async (err) => {

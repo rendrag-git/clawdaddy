@@ -207,6 +207,15 @@ async function deployFilesToInstance(sessionId) {
       `chmod 644 ${chmodPaths}`
     ]);
 
+    // Fix ownership so container's clawd user (uid 1001) can read the files
+    await execFileAsync('ssh', [
+      '-i', sshKeyPath,
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'ConnectTimeout=10',
+      `ubuntu@${serverIp}`,
+      'sudo', 'chown', '-R', '1001:1001', '/home/ubuntu/clawd/'
+    ], { timeout: 15000 });
+
     filesDeployed = true;
     console.log(`Files deployed to ${serverIp} for session ${sessionId}`);
 
