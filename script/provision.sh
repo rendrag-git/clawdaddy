@@ -119,6 +119,7 @@ ARG_STRIPE_CUSTOMER_ID=""
 ARG_STRIPE_SUBSCRIPTION_ID=""
 ARG_STRIPE_CHECKOUT_SESSION_ID=""
 ARG_USERNAME=""
+ARG_SNAPSHOT_NAME=""
 
 usage() {
     cat <<EOF
@@ -142,6 +143,7 @@ ${BOLD}Optional:${RESET}
   --stripe-subscription-id Stripe subscription ID (optional)
   --stripe-checkout-session-id Stripe checkout session ID (optional)
   --username           Customer username for DNS and instance naming (3-20 chars, lowercase alphanumeric + hyphens)
+  --snapshot-name      Lightsail snapshot name (uses snapshot instead of base Ubuntu blueprint)
   --help               Show this help message
 
 ${BOLD}Environment:${RESET}
@@ -211,6 +213,10 @@ parse_args() {
                 ;;
             --username)
                 ARG_USERNAME="${2:?--username requires a value}"
+                shift 2
+                ;;
+            --snapshot-name)
+                ARG_SNAPSHOT_NAME="${2:?--snapshot-name requires a value}"
                 shift 2
                 ;;
             --help|-h)
@@ -403,7 +409,7 @@ mkdir -p /home/ubuntu/clawd
 cp /opt/clawdaddy-docker/files/SOUL.md /home/ubuntu/clawd/ 2>/dev/null || true
 cp /opt/clawdaddy-docker/files/USER.md /home/ubuntu/clawd/ 2>/dev/null || true
 cp /opt/clawdaddy-docker/files/AGENTS.md /home/ubuntu/clawd/ 2>/dev/null || true
-chown -R 1001:1001 /home/ubuntu/clawd
+chown -R ubuntu:ubuntu /home/ubuntu/clawd
 
 echo "Starting OpenClaw container..."
 DOCKER_ARGS="-d --name openclaw --restart unless-stopped"
@@ -581,6 +587,20 @@ set -eu
 
 MAX_RETRIES=3
 RETRY_DELAY=5
+
+# Wait for Docker container to be running and env vars to be populated
+echo "Waiting for OpenClaw container to be ready..."
+for i in $(seq 1 30); do
+    if docker inspect openclaw --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+        echo "Container is running (attempt $i)"
+        break
+    fi
+    echo "Container not ready, waiting... (attempt $i/30)"
+    sleep 2
+done
+
+# Additional wait for env vars to be populated after container start
+sleep 3
 
 # Read env vars from Docker container
 DNS_TOKEN=$(docker exec openclaw printenv DNS_TOKEN 2>/dev/null || echo "")
@@ -978,15 +998,29 @@ main() {
     echo "STAGE=creating_instance"
     info "Creating Lightsail instance..."
 
-    if ! aws lightsail create-instances \
-        --instance-names "${instance_name}" \
-        --availability-zone "${ARG_REGION}a" \
-        --blueprint-id "ubuntu_24_04" \
-        --bundle-id "small_3_0" \
-        --user-data "file://${userdata_file}" \
-        --region "${ARG_REGION}" \
-        >> "${LOG_FILE}" 2>&1; then
-        die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
+    if [[ -n "${ARG_SNAPSHOT_NAME}" ]]; then
+        info "Using snapshot: ${ARG_SNAPSHOT_NAME}"
+        if ! aws lightsail create-instances-from-snapshot \
+            --instance-names "${instance_name}" \
+            --availability-zone "${ARG_REGION}a" \
+            --instance-snapshot-name "${ARG_SNAPSHOT_NAME}" \
+            --bundle-id "small_3_0" \
+            --user-data "file://${userdata_file}" \
+            --region "${ARG_REGION}" \
+            >> "${LOG_FILE}" 2>&1; then
+            die "Failed to create Lightsail instance from snapshot. Check ${LOG_FILE} for details."
+        fi
+    else
+        if ! aws lightsail create-instances \
+            --instance-names "${instance_name}" \
+            --availability-zone "${ARG_REGION}a" \
+            --blueprint-id "ubuntu_24_04" \
+            --bundle-id "small_3_0" \
+            --user-data "file://${userdata_file}" \
+            --region "${ARG_REGION}" \
+            >> "${LOG_FILE}" 2>&1; then
+            die "Failed to create Lightsail instance. Check ${LOG_FILE} for details."
+        fi
     fi
 
     ok "Instance creation initiated"
@@ -1123,6 +1157,7 @@ DNSEOF
         if [[ -n "${ssh_key_path}" ]]; then
             echo "SSH_KEY_PATH=${ssh_key_path}"
         fi
+        echo "DNS_TOKEN=${dns_token}"
         if [[ "${dns_created}" == "true" ]]; then
             echo "DNS_HOSTNAME=${ARG_USERNAME}.clawdaddy.sh"
         fi

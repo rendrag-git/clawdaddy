@@ -12,17 +12,20 @@
 # Commands:
 #   list                          Show all customers (formatted table)
 #   health                        Ping health endpoint on all active instances
+#   health-all                    Alias for health
 #   stop    <id_or_email>         Stop a customer's Lightsail instance
 #   start   <id_or_email>         Start a customer's Lightsail instance
 #   restart <id_or_email>         Restart (stop + start) a customer's instance
 #   destroy <id_or_email>         Snapshot, archive, and delete an instance
-#   update-all                    Update openclaw on every active instance
+#   update  <id_or_email>         Update Docker image on a single instance
+#   update-all                    Update Docker image on every active instance
 #   ssh     <id_or_email>         SSH into a customer's instance
 #   logs    <id_or_email>         Tail openclaw service logs on instance
 #   usage   <id_or_email>         Show API usage stats for a customer
 #   budget  <id_or_email> <amt>   Update a customer's monthly budget limit
 #   usage-report                  Show usage report for all managed customers
 #   margins                       Show margin analysis for all customers
+#   sync-nginx                    Rebuild nginx customers.map from SQLite
 #
 # Requirements: bash 4+, jq, aws cli (configured), curl, ssh
 ###############################################################################
@@ -180,6 +183,30 @@ get_email() {
 # Extract tier field; defaults to "byok" for legacy records.
 get_tier() {
     echo "$1" | jq -r '.tier // "byok"'
+}
+
+# get_username <customer_json>
+get_username() {
+    echo "$1" | jq -r '.username // empty'
+}
+
+# get_ssh_key <customer_json>
+# Resolves the SSH key path for a customer. Docker-era instances use per-customer
+# keys at ~/.ssh/customer-keys/openclaw-<username>. Falls back to the legacy
+# shared key if per-customer key is not found.
+get_ssh_key() {
+    local customer_json="$1"
+    local username
+    username=$(echo "${customer_json}" | jq -r '.username // empty')
+    if [[ -n "${username}" ]]; then
+        local per_customer_key="${HOME}/.ssh/customer-keys/openclaw-${username}"
+        if [[ -f "${per_customer_key}" ]]; then
+            echo "${per_customer_key}"
+            return
+        fi
+    fi
+    # Fallback to legacy key
+    echo "${SSH_KEY}"
 }
 
 # ssh_curl_stats <ip>
@@ -531,11 +558,47 @@ cmd_destroy() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: update <id_or_email>
+# ---------------------------------------------------------------------------
+cmd_update() {
+    local query="${1:?Usage: manage.sh update <customer_id_or_email>}"
+
+    require_jq
+    require_customers_file
+
+    local customer ip id email username ssh_key
+    customer=$(find_customer "${query}")
+    ip=$(get_ip "${customer}")
+    id=$(get_id "${customer}")
+    email=$(get_email "${customer}")
+    username=$(get_username "${customer}")
+    ssh_key=$(get_ssh_key "${customer}")
+
+    if [[ -z "${ip}" || "${ip}" == "null" ]]; then
+        die "No IP address for customer ${email} (${id})"
+    fi
+
+    info "Updating Docker image on ${BOLD}${email}${RESET} (${ip})..."
+    info "Using SSH key: ${ssh_key}"
+
+    info "Deploying update.sh to instance..."
+    scp -i "${ssh_key}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        "${SCRIPT_DIR}/update.sh" "ubuntu@${ip}:/tmp/update.sh" \
+        || die "Failed to SCP update.sh to ${ip}"
+
+    info "Running update on ${ip}..."
+    ssh -i "${ssh_key}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        "ubuntu@${ip}" "sudo bash /tmp/update.sh" \
+        || die "Update failed on ${ip}"
+
+    ok "Docker image updated on ${email} (${ip})"
+}
+
+# ---------------------------------------------------------------------------
 # Subcommand: update-all
 # ---------------------------------------------------------------------------
 cmd_update_all() {
     require_jq
-    require_aws
     require_customers_file
 
     local active_count
@@ -547,15 +610,15 @@ cmd_update_all() {
     fi
 
     echo ""
-    echo -e "${BOLD}  Updating OpenClaw on ${active_count} active instance(s)${RESET}"
+    echo -e "${BOLD}  Updating Docker image on ${active_count} active instance(s)${RESET}"
     echo ""
 
     local success=0
     local failed=0
     local idx=0
 
-    jq -r '.customers[] | select(.status == "active") | [.id, .email, (.static_ip // ""), (.region // "us-east-1")] | @tsv' \
-        "${CUSTOMERS_FILE}" | while IFS=$'\t' read -r id email ip region; do
+    jq -r '.customers[] | select(.status == "active") | [.id, .email, (.static_ip // .ip // ""), (.region // "us-east-1"), (.username // "")] | @tsv' \
+        "${CUSTOMERS_FILE}" | while IFS=$'\t' read -r id email ip region username; do
 
         idx=$((idx + 1))
         echo -e "  ${BOLD}[${idx}/${active_count}]${RESET} ${email} (${ip})"
@@ -566,11 +629,28 @@ cmd_update_all() {
             continue
         fi
 
-        info "    Connecting via SSH..."
-        if ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            "ubuntu@${ip}" \
-            "sudo npm update -g openclaw && sudo systemctl restart openclaw" 2>&1; then
-            ok "    Updated and restarted successfully"
+        # Resolve per-customer SSH key
+        local ssh_key="${SSH_KEY}"
+        if [[ -n "${username}" ]]; then
+            local per_key="${HOME}/.ssh/customer-keys/openclaw-${username}"
+            if [[ -f "${per_key}" ]]; then
+                ssh_key="${per_key}"
+            fi
+        fi
+
+        info "    Deploying update.sh..."
+        if ! scp -i "${ssh_key}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "${SCRIPT_DIR}/update.sh" "ubuntu@${ip}:/tmp/update.sh" 2>&1; then
+            fail "    Failed to SCP update.sh to ${ip}"
+            failed=$((failed + 1))
+            echo ""
+            continue
+        fi
+
+        info "    Running Docker update..."
+        if ssh -i "${ssh_key}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "ubuntu@${ip}" "sudo bash /tmp/update.sh" 2>&1; then
+            ok "    Updated successfully"
             success=$((success + 1))
         else
             fail "    Update failed on ${ip}"
@@ -974,6 +1054,18 @@ cmd_margins() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: sync-nginx
+# ---------------------------------------------------------------------------
+cmd_sync_nginx() {
+    local sync_script="${SCRIPT_DIR}/sync-nginx-map.sh"
+    if [[ ! -f "${sync_script}" ]]; then
+        die "sync-nginx-map.sh not found at ${sync_script}"
+    fi
+    info "Syncing nginx customers.map from SQLite..."
+    bash "${sync_script}"
+}
+
+# ---------------------------------------------------------------------------
 # Usage / help
 # ---------------------------------------------------------------------------
 show_usage() {
@@ -987,13 +1079,16 @@ ${BOLD}USAGE${RESET}
 ${BOLD}COMMANDS${RESET}
     ${CYAN}list${RESET}                            Show all customers in a formatted table
     ${CYAN}health${RESET}                          Ping health endpoint on all active instances
+    ${CYAN}health-all${RESET}                      Alias for health
     ${CYAN}stop${RESET}    <id_or_email>           Stop a customer's Lightsail instance
     ${CYAN}start${RESET}   <id_or_email>           Start a customer's Lightsail instance
     ${CYAN}restart${RESET} <id_or_email>           Restart (stop then start) an instance
     ${CYAN}destroy${RESET} <id_or_email>           Snapshot, archive, and delete an instance
-    ${CYAN}update-all${RESET}                      Update openclaw on every active instance
+    ${CYAN}update${RESET}  <id_or_email>           Update Docker image on a single instance
+    ${CYAN}update-all${RESET}                      Update Docker image on every active instance
     ${CYAN}ssh${RESET}     <id_or_email>           SSH into a customer's instance
     ${CYAN}logs${RESET}    <id_or_email>           Tail openclaw service logs on an instance
+    ${CYAN}sync-nginx${RESET}                      Rebuild nginx customers.map from SQLite
 
   ${BOLD}Managed Tier${RESET}
     ${CYAN}usage${RESET}   <id_or_email>           Show API usage stats for a managed customer
@@ -1010,16 +1105,20 @@ ${BOLD}EXAMPLES${RESET}
     bash manage.sh stop cust_abc123
     bash manage.sh start user@example.com
     bash manage.sh destroy cust_abc123
+    bash manage.sh update user@example.com
+    bash manage.sh update-all
     bash manage.sh ssh user@example.com
     bash manage.sh logs cust_abc123
     bash manage.sh usage cust_abc123
     bash manage.sh budget cust_abc123 50.00
     bash manage.sh usage-report
     bash manage.sh margins
+    bash manage.sh sync-nginx
 
 ${BOLD}FILES${RESET}
     customers.json                  Customer database (created by provision.sh)
-    ~/.ssh/lightsail_key            SSH private key for instance access
+    ~/.ssh/lightsail_key            SSH private key for legacy instance access
+    ~/.ssh/customer-keys/           Per-customer SSH keys (Docker-era instances)
 
 USAGEEOF
 }
@@ -1036,7 +1135,7 @@ main() {
             require_jq
             cmd_list
             ;;
-        health)
+        health|health-all)
             require_jq
             cmd_health
             ;;
@@ -1051,6 +1150,9 @@ main() {
             ;;
         destroy)
             cmd_destroy "$@"
+            ;;
+        update)
+            cmd_update "$@"
             ;;
         update-all)
             cmd_update_all
@@ -1072,6 +1174,9 @@ main() {
             ;;
         margins)
             cmd_margins
+            ;;
+        sync-nginx)
+            cmd_sync_nginx
             ;;
         --help|-h)
             show_usage

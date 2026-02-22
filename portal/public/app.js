@@ -172,6 +172,370 @@
     msg.hidden = false;
   }
 
+  // --- Provider Grid ---
+
+  // Client-side provider config (mirrors server PROVIDER_CONFIG)
+  var PROVIDERS = [
+    {
+      id: 'anthropic',
+      name: 'Anthropic',
+      supportsOAuth: true,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'sk-ant-...',
+      logoFallback: 'A',
+    },
+    {
+      id: 'openai',
+      name: 'OpenAI',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'sk-...',
+      logoFallback: 'O',
+    },
+    {
+      id: 'openrouter',
+      name: 'OpenRouter',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'sk-or-...',
+      logoFallback: 'OR',
+    },
+    {
+      id: 'google',
+      name: 'Google Gemini',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'AI...',
+      logoFallback: 'G',
+    },
+    {
+      id: 'xai',
+      name: 'xAI',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'xai-...',
+      logoFallback: 'X',
+    },
+    {
+      id: 'groq',
+      name: 'Groq',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      apiKeyPlaceholder: 'gsk_...',
+      logoFallback: 'GQ',
+    },
+  ];
+
+  var providerStatuses = {}; // { providerId: { configured: bool, masked: string } }
+  var selectedProvider = null;
+
+  async function loadProviderStatuses() {
+    try {
+      var data = await api('GET', '/portal/api/config/keys');
+      if (data.ok && data.providers) {
+        providerStatuses = {};
+        for (var i = 0; i < data.providers.length; i++) {
+          var p = data.providers[i];
+          providerStatuses[p.provider] = { configured: p.configured, masked: p.masked || '' };
+        }
+      }
+    } catch (e) {
+      // Silently fail -- grid will show all as unconfigured
+    }
+  }
+
+  function renderProviderGrid() {
+    var grid = document.getElementById('provider-grid');
+    grid.innerHTML = '';
+
+    for (var i = 0; i < PROVIDERS.length; i++) {
+      var prov = PROVIDERS[i];
+      var status = providerStatuses[prov.id];
+      var isConnected = status && status.configured;
+
+      var card = document.createElement('div');
+      card.className = 'provider-card' + (isConnected ? ' active' : '');
+      card.dataset.provider = prov.id;
+
+      var logo = document.createElement('div');
+      logo.className = 'provider-card-logo';
+      var img = document.createElement('img');
+      img.src = '/assets/providers/' + prov.id + '.svg';
+      img.alt = prov.name;
+      img.onerror = function() {
+        // Fallback to text if SVG not found
+        this.parentNode.textContent = this.parentNode.dataset.fallback || '?';
+      };
+      logo.dataset.fallback = prov.logoFallback;
+      logo.appendChild(img);
+      card.appendChild(logo);
+
+      var name = document.createElement('div');
+      name.className = 'provider-card-name';
+      name.textContent = prov.name;
+      card.appendChild(name);
+
+      if (isConnected) {
+        var badge = document.createElement('span');
+        badge.className = 'provider-card-badge badge-connected';
+        badge.textContent = 'Connected';
+        card.appendChild(badge);
+      } else if (prov.supportsOAuth) {
+        var badge = document.createElement('span');
+        badge.className = 'provider-card-badge badge-oauth';
+        badge.textContent = 'OAuth';
+        card.appendChild(badge);
+      } else {
+        var badge = document.createElement('span');
+        badge.className = 'provider-card-badge badge-key';
+        badge.textContent = 'API Key';
+        card.appendChild(badge);
+      }
+
+      (function(providerObj) {
+        card.addEventListener('click', function() {
+          showProviderDetail(providerObj);
+        });
+      })(prov);
+
+      grid.appendChild(card);
+    }
+  }
+
+  function showProviderDetail(prov) {
+    selectedProvider = prov;
+    var detail = document.getElementById('provider-detail');
+    detail.hidden = false;
+
+    // Header
+    var iconEl = document.getElementById('provider-detail-icon');
+    iconEl.innerHTML = '';
+    var img = document.createElement('img');
+    img.src = '/assets/providers/' + prov.id + '.svg';
+    img.alt = prov.name;
+    img.onerror = function() { this.parentNode.textContent = prov.logoFallback; };
+    iconEl.appendChild(img);
+
+    document.getElementById('provider-detail-name').textContent = prov.name;
+
+    var status = providerStatuses[prov.id];
+    var statusEl = document.getElementById('provider-detail-status');
+    if (status && status.configured) {
+      statusEl.innerHTML = '<span class="status-dot status-online"></span> Connected' + (status.masked ? ' (' + status.masked + ')' : '');
+    } else {
+      statusEl.innerHTML = '<span class="status-dot status-offline"></span> Not connected';
+    }
+
+    // Actions
+    var actionsEl = document.getElementById('provider-detail-actions');
+    actionsEl.innerHTML = '';
+
+    // Feedback
+    var feedbackEl = document.getElementById('provider-detail-feedback');
+    feedbackEl.hidden = true;
+    feedbackEl.textContent = '';
+
+    // OAuth button (if supported)
+    if (prov.supportsOAuth) {
+      var oauthSection = document.createElement('div');
+      oauthSection.className = 'provider-auth-method';
+
+      var oauthLabel = document.createElement('label');
+      oauthLabel.textContent = 'Sign in with ' + prov.name;
+      oauthSection.appendChild(oauthLabel);
+
+      var oauthBtn = document.createElement('button');
+      oauthBtn.className = 'btn-primary';
+      oauthBtn.textContent = 'Sign in with OAuth';
+      oauthBtn.style.maxWidth = '280px';
+      oauthBtn.addEventListener('click', function() {
+        startProviderOAuth(prov);
+      });
+      oauthSection.appendChild(oauthBtn);
+
+      // OAuth paste field (hidden until OAuth started)
+      var oauthPasteRow = document.createElement('div');
+      oauthPasteRow.className = 'provider-auth-row';
+      oauthPasteRow.id = 'oauth-paste-row';
+      oauthPasteRow.hidden = true;
+
+      var oauthInput = document.createElement('input');
+      oauthInput.type = 'text';
+      oauthInput.id = 'oauth-code-input';
+      oauthInput.placeholder = 'Paste CODE#STATE here';
+      oauthInput.autocomplete = 'off';
+
+      var oauthSubmitBtn = document.createElement('button');
+      oauthSubmitBtn.className = 'btn-primary';
+      oauthSubmitBtn.textContent = 'Complete';
+      oauthSubmitBtn.addEventListener('click', function() {
+        completeProviderOAuth(prov);
+      });
+
+      oauthPasteRow.appendChild(oauthInput);
+      oauthPasteRow.appendChild(oauthSubmitBtn);
+      oauthSection.appendChild(oauthPasteRow);
+
+      actionsEl.appendChild(oauthSection);
+
+      // Divider
+      if (prov.supportsApiKey) {
+        var divider = document.createElement('div');
+        divider.className = 'provider-divider';
+        divider.textContent = 'or';
+        actionsEl.appendChild(divider);
+      }
+    }
+
+    // API Key input (if supported)
+    if (prov.supportsApiKey) {
+      var keySection = document.createElement('div');
+      keySection.className = 'provider-auth-method';
+
+      var keyLabel = document.createElement('label');
+      keyLabel.textContent = 'API Key';
+      keySection.appendChild(keyLabel);
+
+      var keyRow = document.createElement('div');
+      keyRow.className = 'provider-auth-row';
+
+      var keyInput = document.createElement('input');
+      keyInput.type = 'password';
+      keyInput.id = 'provider-key-input';
+      keyInput.placeholder = prov.apiKeyPlaceholder;
+      keyInput.autocomplete = 'off';
+
+      var keySaveBtn = document.createElement('button');
+      keySaveBtn.className = 'btn-primary';
+      keySaveBtn.textContent = 'Save Key';
+      keySaveBtn.addEventListener('click', function() {
+        saveProviderApiKey(prov);
+      });
+
+      keyRow.appendChild(keyInput);
+      keyRow.appendChild(keySaveBtn);
+      keySection.appendChild(keyRow);
+      actionsEl.appendChild(keySection);
+    }
+
+    // Disconnect button (if connected)
+    if (status && status.configured) {
+      var disconnectBtn = document.createElement('button');
+      disconnectBtn.className = 'btn-text';
+      disconnectBtn.textContent = 'Disconnect ' + prov.name;
+      disconnectBtn.style.marginTop = '0.5rem';
+      disconnectBtn.style.color = 'var(--accent)';
+      disconnectBtn.addEventListener('click', function() {
+        disconnectProvider(prov);
+      });
+      actionsEl.appendChild(disconnectBtn);
+    }
+
+    // Scroll detail into view
+    detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function setProviderFeedback(message, className) {
+    var el = document.getElementById('provider-detail-feedback');
+    el.textContent = message;
+    el.className = 'key-feedback ' + (className || '');
+    el.hidden = false;
+  }
+
+  async function startProviderOAuth(prov) {
+    setProviderFeedback('Starting OAuth...', '');
+    try {
+      var data = await api('POST', '/portal/api/providers/' + prov.id + '/oauth/start');
+      if (data.ok && data.url) {
+        // Open the OAuth URL
+        window.open(data.url, '_blank');
+        setProviderFeedback('OAuth window opened. Authorize, then paste the CODE#STATE below.', 'feedback-success');
+        // Show the paste row
+        var pasteRow = document.getElementById('oauth-paste-row');
+        if (pasteRow) {
+          pasteRow.hidden = false;
+          document.getElementById('oauth-code-input').focus();
+        }
+      } else {
+        setProviderFeedback(data.error || 'Failed to start OAuth', 'feedback-error');
+      }
+    } catch (e) {
+      setProviderFeedback('Connection error', 'feedback-error');
+    }
+  }
+
+  async function completeProviderOAuth(prov) {
+    var codeInput = document.getElementById('oauth-code-input');
+    var codeState = codeInput ? codeInput.value.trim() : '';
+    if (!codeState) {
+      setProviderFeedback('Please paste the CODE#STATE value', 'feedback-error');
+      return;
+    }
+
+    setProviderFeedback('Completing OAuth...', '');
+    try {
+      var data = await api('POST', '/portal/api/providers/' + prov.id + '/oauth/complete', { codeState: codeState });
+      if (data.ok) {
+        toast(prov.name + ' connected via OAuth');
+        setProviderFeedback('Connected successfully!', 'feedback-success');
+        // Refresh statuses and re-render
+        await loadProviderStatuses();
+        renderProviderGrid();
+        showProviderDetail(prov);
+      } else {
+        setProviderFeedback(data.error || 'OAuth completion failed', 'feedback-error');
+      }
+    } catch (e) {
+      setProviderFeedback('Connection error', 'feedback-error');
+    }
+  }
+
+  async function saveProviderApiKey(prov) {
+    var keyInput = document.getElementById('provider-key-input');
+    var key = keyInput ? keyInput.value.trim() : '';
+    if (!key) {
+      setProviderFeedback('Please enter an API key', 'feedback-error');
+      return;
+    }
+
+    setProviderFeedback('Saving key...', '');
+    try {
+      var data = await api('POST', '/portal/api/config/keys', { provider: prov.id, key: key });
+      if (data.ok) {
+        toast(prov.name + ' key saved');
+        setProviderFeedback('Key saved successfully!', 'feedback-success');
+        keyInput.value = '';
+        // Refresh statuses and re-render
+        await loadProviderStatuses();
+        renderProviderGrid();
+        showProviderDetail(prov);
+      } else {
+        setProviderFeedback(data.error || 'Failed to save key', 'feedback-error');
+      }
+    } catch (e) {
+      setProviderFeedback('Connection error', 'feedback-error');
+    }
+  }
+
+  async function disconnectProvider(prov) {
+    setProviderFeedback('Disconnecting...', '');
+    try {
+      var data = await api('DELETE', '/portal/api/config/keys/' + prov.id);
+      if (data.ok) {
+        toast(prov.name + ' disconnected');
+        await loadProviderStatuses();
+        renderProviderGrid();
+        // Hide detail panel
+        document.getElementById('provider-detail').hidden = true;
+        selectedProvider = null;
+      } else {
+        setProviderFeedback(data.error || 'Failed to disconnect', 'feedback-error');
+      }
+    } catch (e) {
+      setProviderFeedback('Connection error', 'feedback-error');
+    }
+  }
+
   // --- Config View ---
   async function loadKeys() {
     var container = document.getElementById('keys-container');
@@ -519,6 +883,20 @@
     document.getElementById('link-discord').addEventListener('click', (e) => {
       e.preventDefault();
       toast('Discord setup coming soon');
+    });
+
+    // Providers view navigation
+    document.getElementById('link-providers').addEventListener('click', function() {
+      showView('providers');
+      loadProviderStatuses().then(function() {
+        renderProviderGrid();
+      });
+      // Reset detail panel
+      document.getElementById('provider-detail').hidden = true;
+      selectedProvider = null;
+    });
+    document.getElementById('btn-providers-back').addEventListener('click', function() {
+      showView('home');
     });
 
     // Config view navigation

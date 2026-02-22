@@ -3,8 +3,17 @@ import express from 'express';
 import Stripe from 'stripe';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { init as initDb } from './lib/customers.js';
+
+const execFileAsync = promisify(execFile);
+
+// Load db module (CommonJS) via createRequire — same pattern as stripe-handlers
+const require_cjs = createRequire(import.meta.url);
+const dbMod = require_cjs('../../api/lib/db.js');
 initDb();
 
 // --- Secret loading (file-first, env fallback) ---
@@ -22,8 +31,19 @@ function readSecret(filename, envVar) {
 const STRIPE_SECRET_KEY = readSecret('stripe-key', 'STRIPE_SECRET_KEY');
 const WEBHOOK_SECRET = readSecret('stripe-webhook-secret', 'STRIPE_WEBHOOK_SECRET');
 
+const ADMIN_TOKEN = readSecret('admin-token', 'ADMIN_TOKEN');
+
 if (!STRIPE_SECRET_KEY) console.error('WARNING: No Stripe secret key found (checked .secrets/stripe-key and STRIPE_SECRET_KEY env)');
 if (!WEBHOOK_SECRET) console.error('WARNING: No Stripe webhook secret found (checked .secrets/stripe-webhook-secret and STRIPE_WEBHOOK_SECRET env)');
+if (!ADMIN_TOKEN) console.error('WARNING: No admin token found (checked .secrets/admin-token and ADMIN_TOKEN env)');
+
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'] || req.query.token;
+  if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
 
 // Lazy-load stripe handlers to prevent email.js from crashing startup
 let stripe_handlers = null;
@@ -164,6 +184,150 @@ app.post('/api/waitlist', express.json(), async (req, res) => {
     log(`Waitlist error: ${err.message}`);
     // Don't fail the signup — log it and return success
     res.json({ ok: true, note: 'Signup recorded (CRM sync pending)' });
+  }
+});
+
+// --- Admin API endpoints (JSON-parsed, token-gated) ---
+
+// List all customers
+app.get('/api/admin/customers', requireAdmin, async (req, res) => {
+  log(`Admin API: GET /api/admin/customers`);
+  try {
+    const rows = dbMod.getDb().prepare('SELECT * FROM customers ORDER BY created_at DESC').all();
+    res.json({ customers: rows, count: rows.length });
+  } catch (err) {
+    log(`Admin API error (list customers): ${err.message}`);
+    res.status(500).json({ error: 'Failed to query customers', detail: err.message });
+  }
+});
+
+// Get single customer by username
+app.get('/api/admin/customers/:username', requireAdmin, async (req, res) => {
+  const { username } = req.params;
+  log(`Admin API: GET /api/admin/customers/${username}`);
+  try {
+    const customer = dbMod.getCustomerByUsername(username);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found', username });
+    }
+
+    // Also fetch onboarding session if one exists
+    let onboarding = null;
+    if (customer.stripe_session_id) {
+      onboarding = dbMod.getOnboardingSession(customer.stripe_session_id);
+    }
+
+    res.json({ customer, onboarding });
+  } catch (err) {
+    log(`Admin API error (get customer ${username}): ${err.message}`);
+    res.status(500).json({ error: 'Failed to query customer', detail: err.message });
+  }
+});
+
+// Reboot a customer's Lightsail instance
+app.post('/api/admin/instances/:username/reboot', requireAdmin, express.json(), async (req, res) => {
+  const { username } = req.params;
+  log(`Admin API: POST /api/admin/instances/${username}/reboot`);
+  try {
+    const customer = dbMod.getCustomerByUsername(username);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found', username });
+    }
+
+    const instanceName = `openclaw-${username}`;
+    // Region is not stored in DB; accept from request body or default to us-east-1
+    const region = req.body?.region || 'us-east-1';
+
+    log(`Rebooting Lightsail instance ${instanceName} in ${region}`);
+
+    const { stdout, stderr } = await execFileAsync('aws', [
+      'lightsail', 'reboot-instance',
+      '--instance-name', instanceName,
+      '--region', region,
+      '--profile', 'clawdaddy',
+    ], { timeout: 30000 });
+
+    log(`Reboot succeeded for ${instanceName}: ${stdout || '(no output)'}`);
+    res.json({
+      success: true,
+      instance: instanceName,
+      region,
+      message: `Instance ${instanceName} is rebooting`,
+    });
+  } catch (err) {
+    log(`Admin API error (reboot ${username}): ${err.message}`);
+    const status = err.code === 'ENOENT' ? 500 : 502;
+    res.status(status).json({
+      error: 'Reboot failed',
+      detail: err.stderr || err.message,
+      instance: `openclaw-${username}`,
+    });
+  }
+});
+
+// Trigger Docker image update on a customer's instance
+app.post('/api/admin/instances/:username/update', requireAdmin, express.json(), async (req, res) => {
+  const { username } = req.params;
+  log(`Admin API: POST /api/admin/instances/${username}/update`);
+  try {
+    const customer = dbMod.getCustomerByUsername(username);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found', username });
+    }
+
+    const ip = customer.server_ip;
+    if (!ip) {
+      return res.status(400).json({ error: 'Customer has no server IP', username });
+    }
+
+    const sshKeyPath = customer.ssh_key_path || `/home/ubuntu/.ssh/customer-keys/openclaw-${username}`;
+    if (!existsSync(sshKeyPath)) {
+      return res.status(400).json({ error: 'SSH key not found', path: sshKeyPath });
+    }
+
+    const updateScript = path.resolve('update-instance.sh');
+    if (!existsSync(updateScript)) {
+      return res.status(500).json({ error: 'update-instance.sh not found on control plane' });
+    }
+
+    const sshOpts = [
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'UserKnownHostsFile=/dev/null',
+      '-o', 'ConnectTimeout=10',
+      '-i', sshKeyPath,
+    ];
+
+    // Step 1: SCP the update script to the instance
+    log(`SCP update script to ${ip}...`);
+    await execFileAsync('scp', [
+      ...sshOpts,
+      updateScript,
+      `ubuntu@${ip}:/tmp/update-instance.sh`,
+    ], { timeout: 30000 });
+
+    // Step 2: SSH in and run the update script
+    log(`Running update script on ${ip}...`);
+    const { stdout, stderr } = await execFileAsync('ssh', [
+      ...sshOpts,
+      `ubuntu@${ip}`,
+      'sudo', 'bash', '/tmp/update-instance.sh',
+    ], { timeout: 120000 });
+
+    log(`Update completed for ${username} (${ip}): ${stdout.slice(0, 200)}`);
+    res.json({
+      success: true,
+      username,
+      ip,
+      stdout: stdout.slice(0, 2000),
+      stderr: stderr.slice(0, 2000),
+    });
+  } catch (err) {
+    log(`Admin API error (update ${username}): ${err.message}`);
+    res.status(502).json({
+      error: 'Update failed',
+      detail: err.stderr || err.message,
+      username,
+    });
   }
 });
 

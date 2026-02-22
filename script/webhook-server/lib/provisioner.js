@@ -96,6 +96,7 @@ export function spawn_provision(params) {
         const cid_match = stdout.match(/CUSTOMER_ID=(.+)/);
         const ssh_match = stdout.match(/SSH_KEY_PATH=(.+)/);
         const dns_match = stdout.match(/DNS_HOSTNAME=(.+)/);
+        const dns_token_match = stdout.match(/DNS_TOKEN=(.+)/);
 
         resolve({
           success: true,
@@ -104,6 +105,7 @@ export function spawn_provision(params) {
           customer_id: cid_match ? cid_match[1].trim() : null,
           ssh_key_path: ssh_match ? ssh_match[1].trim() : null,
           dns_hostname: dns_match ? dns_match[1].trim() : null,
+          dns_token: dns_token_match ? dns_token_match[1].trim() : null,
         });
       } else {
         const msg = `Provision failed for ${params.email} (exit code ${code}): ${stderr.slice(-500)}`;

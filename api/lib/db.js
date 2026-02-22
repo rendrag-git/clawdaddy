@@ -125,12 +125,13 @@ function getCustomerByStripeCustomerId(stripeCustomerId) {
   return getDb().prepare('SELECT * FROM customers WHERE stripe_customer_id = ?').get(stripeCustomerId);
 }
 
-function updateProvision(customerId, { serverIp, sshKeyPath, dnsHostname, provisionStatus, provisionStage }) {
+function updateProvision(customerId, { serverIp, sshKeyPath, dnsHostname, dnsToken, provisionStatus, provisionStage }) {
   const fields = [];
   const values = [];
   if (serverIp !== undefined) { fields.push('server_ip = ?'); values.push(serverIp); }
   if (sshKeyPath !== undefined) { fields.push('ssh_key_path = ?'); values.push(sshKeyPath); }
   if (dnsHostname !== undefined) { fields.push('dns_hostname = ?'); values.push(dnsHostname); }
+  if (dnsToken !== undefined) { fields.push('dns_token = ?'); values.push(dnsToken); }
   if (provisionStatus !== undefined) { fields.push('provision_status = ?'); values.push(provisionStatus); }
   if (provisionStage !== undefined) { fields.push('provision_stage = ?'); values.push(provisionStage); }
   fields.push("updated_at = datetime('now')");

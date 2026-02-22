@@ -91,6 +91,7 @@ function spawnProvision(params, onStageChange) {
           sshKeyPath: (stdout.match(/SSH_KEY_PATH=(.+)/) || [])[1]?.trim() || null,
           username: (stdout.match(/USERNAME=(.+)/) || [])[1]?.trim() || null,
           dnsHostname: (stdout.match(/DNS_HOSTNAME=(.+)/) || [])[1]?.trim() || null,
+          dnsToken: (stdout.match(/DNS_TOKEN=(.+)/) || [])[1]?.trim() || null,
           tier: (stdout.match(/TIER=(.+)/) || [])[1]?.trim() || null,
         };
         logAppend(logFile, `Provisioning complete: ${JSON.stringify(result)}`);
