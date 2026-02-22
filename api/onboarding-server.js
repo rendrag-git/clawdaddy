@@ -982,6 +982,62 @@ app.post('/api/onboarding/auth/api-key', async (req, res) => {
   }
 });
 
+// POST /api/onboarding/auth/verify — lightweight key validation
+app.post('/api/onboarding/auth/verify', async (req, res) => {
+  const { provider, apiKey } = req.body || {};
+
+  if (!provider || !apiKey) {
+    return res.status(400).json({ ok: false, error: 'provider and apiKey are required.' });
+  }
+
+  // Provider-specific verification endpoints (lightweight list-models or similar)
+  const VERIFY_ENDPOINTS = {
+    anthropic: { hostname: 'api.anthropic.com', path: '/v1/models', headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' } },
+    openai: { hostname: 'api.openai.com', path: '/v1/models?limit=1', headers: { 'Authorization': `Bearer ${apiKey}` } },
+    openrouter: { hostname: 'openrouter.ai', path: '/api/v1/models?limit=1', headers: { 'Authorization': `Bearer ${apiKey}` } },
+    google: { hostname: 'generativelanguage.googleapis.com', path: `/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1`, headers: {} },
+    xai: { hostname: 'api.x.ai', path: '/v1/models', headers: { 'Authorization': `Bearer ${apiKey}` } },
+    groq: { hostname: 'api.groq.com', path: '/openai/v1/models', headers: { 'Authorization': `Bearer ${apiKey}` } },
+  };
+
+  const endpoint = VERIFY_ENDPOINTS[provider];
+  if (!endpoint) {
+    return res.status(400).json({ ok: false, error: `Unknown provider: ${provider}` });
+  }
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const request = https.request({
+        hostname: endpoint.hostname,
+        path: endpoint.path,
+        method: 'GET',
+        headers: { ...endpoint.headers, 'Accept': 'application/json' },
+        timeout: 8000,
+      }, (response) => {
+        let body = '';
+        response.on('data', (chunk) => { body += chunk; });
+        response.on('end', () => {
+          resolve({ statusCode: response.statusCode, body });
+        });
+      });
+      request.on('error', reject);
+      request.on('timeout', () => { request.destroy(); reject(new Error('Verification timed out')); });
+      request.end();
+    });
+
+    if (result.statusCode >= 200 && result.statusCode < 300) {
+      return res.json({ ok: true, valid: true });
+    } else if (result.statusCode === 401 || result.statusCode === 403) {
+      return res.json({ ok: true, valid: false, error: 'Invalid API key.' });
+    } else {
+      return res.json({ ok: true, valid: false, error: `Provider returned status ${result.statusCode}.` });
+    }
+  } catch (err) {
+    console.error(`Key verify failed for ${provider}: ${err.message}`);
+    return res.json({ ok: true, valid: false, error: 'Could not verify key. Try saving it anyway.' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`ClawDaddy onboarding API listening on port ${PORT}`);
   console.log(`Stripe key path: ${STRIPE_KEY_PATH}`);
