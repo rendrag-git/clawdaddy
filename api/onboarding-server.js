@@ -7,7 +7,7 @@ const path = require('path');
 const { promises: fs } = require('fs');
 const { generateProfile } = require('./lib/profile-generator');
 const { initDb, getDb, getCustomerByStripeSessionId, getCustomerByUsername, getOnboardingSession, updateOnboardingSession, updateAuth, isUsernameAvailable, reserveUsername, sweepExpiredReservations, storeOAuthState, clearOAuthState } = require('./lib/db');
-const { startAuth, completeAuth } = require('./lib/oauth');
+const { startAuth, completeAuth, authWithApiKey, getProviderList } = require('./lib/oauth');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
@@ -896,9 +896,14 @@ app.post('/api/onboarding/write-files/:sessionId', async (req, res) => {
   }
 });
 
+// GET /api/providers — list available auth providers
+app.get('/api/providers', (_req, res) => {
+  return res.json({ ok: true, providers: getProviderList() });
+});
+
 // POST /api/onboarding/auth/start
 app.post('/api/onboarding/auth/start', async (req, res) => {
-  const { stripeSessionId } = req.body || {};
+  const { stripeSessionId, provider } = req.body || {};
 
   if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
     return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
@@ -913,7 +918,7 @@ app.post('/api/onboarding/auth/start', async (req, res) => {
   }
 
   try {
-    const { url } = startAuth(customer, { storeOAuthState });
+    const { url } = startAuth(customer, provider || 'anthropic', { storeOAuthState });
     return res.json({ ok: true, url });
   } catch (error) {
     console.error(`Auth start failed for ${stripeSessionId}: ${error.message}`);
@@ -923,7 +928,7 @@ app.post('/api/onboarding/auth/start', async (req, res) => {
 
 // POST /api/onboarding/auth/complete
 app.post('/api/onboarding/auth/complete', async (req, res) => {
-  const { codeState, stripeSessionId } = req.body || {};
+  const { codeState, stripeSessionId, provider } = req.body || {};
 
   if (!codeState || !stripeSessionId) {
     return res.status(400).json({ ok: false, error: 'codeState and stripeSessionId are required.' });
@@ -935,7 +940,7 @@ app.post('/api/onboarding/auth/complete', async (req, res) => {
   }
 
   try {
-    const result = await completeAuth(customer, codeState, { clearOAuthState, updateAuth });
+    const result = await completeAuth(customer, codeState, provider || 'anthropic', { clearOAuthState, updateAuth });
     updateOnboardingSession(stripeSessionId, { step: 'complete' });
     return res.json({ ok: true, success: true });
   } catch (error) {
@@ -945,6 +950,35 @@ app.post('/api/onboarding/auth/complete', async (req, res) => {
       : error.message.includes('timed out') ? 504
       : 502;
     return res.status(status).json({ ok: false, error: error.message });
+  }
+});
+
+// POST /api/onboarding/auth/api-key — save API key for a provider
+app.post('/api/onboarding/auth/api-key', async (req, res) => {
+  const { stripeSessionId, provider, apiKey } = req.body || {};
+
+  if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
+  if (!provider || !apiKey) {
+    return res.status(400).json({ ok: false, error: 'provider and apiKey are required.' });
+  }
+
+  const customer = getCustomerByStripeSessionId(stripeSessionId);
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: 'Customer not found.' });
+  }
+  if (customer.provision_status !== 'ready') {
+    return res.status(409).json({ ok: false, error: 'Instance not provisioned yet.' });
+  }
+
+  try {
+    await authWithApiKey(customer, provider, apiKey, { updateAuth });
+    updateOnboardingSession(stripeSessionId, { step: 'complete' });
+    return res.json({ ok: true, success: true });
+  } catch (error) {
+    console.error(`API key auth failed for ${stripeSessionId}: ${error.message}`);
+    return res.status(400).json({ ok: false, error: error.message });
   }
 });
 
