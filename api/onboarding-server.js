@@ -721,6 +721,83 @@ app.post('/api/onboarding/quiz/:sessionId', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// SSE endpoint for profile generation with progress events
+app.get('/api/onboarding/generate-profile/:sessionId/stream', async (req, res) => {
+  const sessionId = parseSessionId(req.params.sessionId);
+  if (!sessionId || !isValidSessionId(sessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
+
+  const session = getOnboardingSession(sessionId);
+  if (!session) {
+    return res.status(404).json({ ok: false, error: 'Session not found.' });
+  }
+
+  if (!session.quiz_results) {
+    return res.status(400).json({ ok: false, error: 'Quiz results not found.' });
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // nginx proxy buffering off
+  res.flushHeaders();
+
+  // Reconnect handling: if profile already generated, send complete immediately
+  if (session.generated_files) {
+    try {
+      const existing = JSON.parse(session.generated_files);
+      if (existing.soulMd) {
+        res.write(`data: ${JSON.stringify({ stage: 'complete', message: 'Profile generation complete!' })}\n\n`);
+        res.end();
+        return;
+      }
+    } catch (_) {}
+  }
+
+  const customer = getCustomerByStripeSessionId(sessionId);
+  const username = customer?.username || 'assistant';
+  const botName = customer?.bot_name || 'Assistant';
+  const quizResults = JSON.parse(session.quiz_results);
+
+  // Handle client disconnect
+  let clientDisconnected = false;
+  req.on('close', () => { clientDisconnected = true; });
+
+  function sendEvent(data) {
+    if (!clientDisconnected) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+  }
+
+  try {
+    const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd } = await generateProfile(
+      quizResults, username, botName, {
+        onProgress: (progress) => sendEvent(progress),
+      }
+    );
+
+    // Store generated files
+    updateOnboardingSession(sessionId, {
+      generated_files: JSON.stringify({ soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd }),
+      step: 'auth',
+    });
+
+    sendEvent({ stage: 'complete', message: 'Profile generation complete!' });
+    res.end();
+
+    // Trigger auto-deploy
+    void tryDeployIfReady(sessionId);
+
+    console.log(`[SSE] Profile generated for ${username} (${agents ? agents.length : 0} sub-agents)`);
+  } catch (err) {
+    console.error(`[SSE] Profile generation failed for ${sessionId}:`, err.message);
+    sendEvent({ stage: 'error', message: 'Profile generation failed. Please try again.' });
+    res.end();
+  }
+});
+
 app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
   const sessionId = parseSessionId(req.params.sessionId);
 
