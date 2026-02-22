@@ -81,9 +81,10 @@ function initDb() {
       ON username_reservations(stripe_session_id);
   `);
 
-  // Add oauth columns if missing (safe to run repeatedly)
+  // Add columns if missing (safe to run repeatedly)
   try { db.exec('ALTER TABLE customers ADD COLUMN oauth_verifier TEXT'); } catch {}
   try { db.exec('ALTER TABLE customers ADD COLUMN oauth_state TEXT'); } catch {}
+  try { db.exec('ALTER TABLE customers ADD COLUMN dns_token TEXT'); } catch (_) {}
 
   migrateFromJson();
   return db;

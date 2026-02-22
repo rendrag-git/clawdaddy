@@ -282,7 +282,7 @@ Generate all six files now. Make them deeply personal, specific, and immediately
 
   const responseText = await callAnthropic(
     apiKey,
-    'claude-opus-4-6-20250515',
+    'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
     15000,
     120000
@@ -685,7 +685,7 @@ Generate both files now. Make them specific to ${agent.displayName}'s domain.`;
 
   const responseText = await callAnthropic(
     apiKey,
-    'claude-opus-4-6-20250515',
+    'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
     3000,
     60000

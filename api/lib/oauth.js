@@ -233,15 +233,22 @@ function writeAuthProfileDirect(serverIp, sshKeyPath, token) {
 }
 
 function writeApiKeyToInstance(serverIp, sshKeyPath, provider, apiKey) {
+  // Validate provider against known config to prevent injection via provider name
+  if (!PROVIDER_CONFIG[provider]) {
+    return Promise.reject(new Error(`Unknown provider: ${provider}`));
+  }
+  // Shell-escape the API key (replace single quotes)
+  const escapedKey = apiKey.replace(/'/g, "'\\''");
+
   return new Promise((resolve, reject) => {
     console.log(`[oauth] Writing ${provider} API key via openclaw onboard --non-interactive...`);
 
     // For anthropic, use --auth-choice token --token; for others, use provider-specific flag
     let cmd;
     if (provider === 'anthropic') {
-      cmd = `sudo docker exec openclaw openclaw onboard --non-interactive --accept-risk --auth-choice token --token '${apiKey}' --token-provider anthropic --skip-channels --skip-daemon --skip-skills --skip-ui --skip-health`;
+      cmd = `sudo docker exec openclaw openclaw onboard --non-interactive --accept-risk --auth-choice token --token '${escapedKey}' --token-provider anthropic --skip-channels --skip-daemon --skip-skills --skip-ui --skip-health`;
     } else {
-      cmd = `sudo docker exec openclaw openclaw onboard --non-interactive --accept-risk --auth-choice ${provider}-api-key --${provider}-api-key '${apiKey}' --token-provider ${provider} --skip-channels --skip-daemon --skip-skills --skip-ui --skip-health`;
+      cmd = `sudo docker exec openclaw openclaw onboard --non-interactive --accept-risk --auth-choice ${provider}-api-key --${provider}-api-key '${escapedKey}' --token-provider ${provider} --skip-channels --skip-daemon --skip-skills --skip-ui --skip-health`;
     }
 
     const proc = spawn('ssh', [
@@ -290,10 +297,10 @@ function writeApiKeyToInstance(serverIp, sshKeyPath, provider, apiKey) {
 }
 
 function writeEnvVarToInstance(serverIp, sshKeyPath, envVar, value) {
-  // Fallback: write env var to .env file inside the container
-  const escapedValue = value.replace(/'/g, "'\\''");
+  // Encode as base64 to avoid any shell interpretation of special characters
+  const b64 = Buffer.from(`${envVar}=${value}\n`).toString('base64');
   return sshExec(serverIp, sshKeyPath, [
-    `sudo docker exec openclaw sh -c 'echo "${envVar}=${escapedValue}" >> /home/clawd/.env'`,
+    `echo '${b64}' | sudo docker exec -i openclaw sh -c 'base64 -d >> /home/clawd/.env'`,
     `sudo docker exec openclaw chown clawd:clawd /home/clawd/.env`,
   ].join(' && '), 15_000).then((result) => {
     if (result.code !== 0) throw new Error(`Env var write failed: ${result.stderr.slice(0, 200)}`);

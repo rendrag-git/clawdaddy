@@ -38,7 +38,7 @@ if (!WEBHOOK_SECRET) console.error('WARNING: No Stripe webhook secret found (che
 if (!ADMIN_TOKEN) console.error('WARNING: No admin token found (checked .secrets/admin-token and ADMIN_TOKEN env)');
 
 function requireAdmin(req, res, next) {
-  const token = req.headers['x-admin-token'] || req.query.token;
+  const token = req.headers['x-admin-token'];
   if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -285,10 +285,7 @@ app.post('/api/admin/instances/:username/update', requireAdmin, express.json(), 
       return res.status(400).json({ error: 'SSH key not found', path: sshKeyPath });
     }
 
-    const updateScript = path.resolve('update-instance.sh');
-    if (!existsSync(updateScript)) {
-      return res.status(500).json({ error: 'update-instance.sh not found on control plane' });
-    }
+    const updateScript = new URL('../../script/update.sh', import.meta.url).pathname;
 
     const sshOpts = [
       '-o', 'StrictHostKeyChecking=no',
@@ -302,7 +299,7 @@ app.post('/api/admin/instances/:username/update', requireAdmin, express.json(), 
     await execFileAsync('scp', [
       ...sshOpts,
       updateScript,
-      `ubuntu@${ip}:/tmp/update-instance.sh`,
+      `ubuntu@${ip}:/tmp/update.sh`,
     ], { timeout: 30000 });
 
     // Step 2: SSH in and run the update script
@@ -310,7 +307,7 @@ app.post('/api/admin/instances/:username/update', requireAdmin, express.json(), 
     const { stdout, stderr } = await execFileAsync('ssh', [
       ...sshOpts,
       `ubuntu@${ip}`,
-      'sudo', 'bash', '/tmp/update-instance.sh',
+      'sudo', 'bash', '/tmp/update.sh',
     ], { timeout: 120000 });
 
     log(`Update completed for ${username} (${ip}): ${stdout.slice(0, 200)}`);
