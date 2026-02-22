@@ -85,6 +85,7 @@ function initDb() {
   try { db.exec('ALTER TABLE customers ADD COLUMN oauth_verifier TEXT'); } catch {}
   try { db.exec('ALTER TABLE customers ADD COLUMN oauth_state TEXT'); } catch {}
   try { db.exec('ALTER TABLE customers ADD COLUMN dns_token TEXT'); } catch (_) {}
+  try { db.exec("ALTER TABLE onboarding_sessions ADD COLUMN deploy_status TEXT DEFAULT 'pending'"); } catch (_) {}
 
   migrateFromJson();
   return db;
@@ -189,7 +190,7 @@ function getOnboardingSession(stripeSessionId) {
 }
 
 function updateOnboardingSession(stripeSessionId, updates) {
-  const allowed = ['quiz_results', 'generated_files', 'gateway_token', 'portal_password', 'step'];
+  const allowed = ['quiz_results', 'generated_files', 'gateway_token', 'portal_password', 'step', 'deploy_status'];
   const fields = [];
   const values = [];
   for (const [key, val] of Object.entries(updates)) {
