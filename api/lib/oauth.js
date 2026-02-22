@@ -165,7 +165,7 @@ function sshExec(serverIp, sshKeyPath, command, timeoutMs = 15_000) {
 
 // --- Instance write functions ---
 
-function writeTokenToInstance(serverIp, sshKeyPath, token) {
+function writeTokenToInstance(serverIp, sshKeyPath, token, refreshToken, expiresIn) {
   return new Promise((resolve, reject) => {
     console.log('[oauth] Writing token via openclaw onboard --non-interactive...');
     const cmd = `sudo docker exec openclaw openclaw onboard --non-interactive --accept-risk --auth-choice token --token '${token}' --token-provider anthropic --skip-channels --skip-daemon --skip-skills --skip-ui --skip-health`;
@@ -196,7 +196,7 @@ function writeTokenToInstance(serverIp, sshKeyPath, token) {
         resolve();
       } else {
         console.log('[oauth] openclaw onboard failed, falling back to direct file write...');
-        writeAuthProfileDirect(serverIp, sshKeyPath, token)
+        writeAuthProfileDirect(serverIp, sshKeyPath, token, refreshToken, expiresIn)
           .then(resolve)
           .catch(reject);
       }
@@ -209,10 +209,21 @@ function writeTokenToInstance(serverIp, sshKeyPath, token) {
   });
 }
 
-function writeAuthProfileDirect(serverIp, sshKeyPath, token) {
+function writeAuthProfileDirect(serverIp, sshKeyPath, token, refreshToken, expiresIn) {
+  // Build profile based on whether we have OAuth tokens or just an access token
+  let profile;
+  if (refreshToken) {
+    // OAuth profile with auto-refresh support
+    const expiresMs = expiresIn ? Date.now() + (expiresIn * 1000) : Date.now() + (8 * 60 * 60 * 1000); // default 8h
+    profile = { type: 'oauth', provider: 'anthropic', access: token, refresh: refreshToken, expires: expiresMs };
+  } else {
+    // Fallback: token-only profile (no refresh)
+    profile = { type: 'token', provider: 'anthropic', token };
+  }
+
   const authProfiles = JSON.stringify({
     version: 1,
-    profiles: { 'anthropic:manual': { type: 'token', provider: 'anthropic', token } },
+    profiles: { 'anthropic:manual': profile },
     order: { anthropic: ['anthropic:manual'] },
   }, null, 2) + '\n';
 
@@ -375,12 +386,14 @@ async function completeAuth(customer, codeState, providerOrCallbacks, maybeCallb
 
   const tokenResponse = await exchangeCodeForToken(authCode, customer.oauth_verifier, returnedState, provider);
   const accessToken = tokenResponse.access_token;
+  const refreshToken = tokenResponse.refresh_token || null;
+  const expiresIn = tokenResponse.expires_in || null; // seconds from now
 
   // Clear ephemeral PKCE state immediately
   clearOAuthState(customer.id);
 
-  // Write token to customer instance
-  await writeTokenToInstance(customer.server_ip, customer.ssh_key_path, accessToken);
+  // Write token to customer instance (including refresh token for auto-refresh)
+  await writeTokenToInstance(customer.server_ip, customer.ssh_key_path, accessToken, refreshToken, expiresIn);
 
   // Update auth status
   updateAuth(customer.id, { authStatus: 'active', authProvider: provider });
