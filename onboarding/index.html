@@ -703,6 +703,68 @@
         0%, 100% { box-shadow: 0 0 12px rgba(230,57,70,0.5); }
         50% { box-shadow: 0 0 24px rgba(230,57,70,0.8); }
       }
+
+      .provider-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin: 1.2rem 0;
+      }
+
+      .provider-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.85rem;
+        border-radius: 12px;
+        border: 1px solid rgba(63,63,70,0.8);
+        background: rgba(24,24,27,0.75);
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+      }
+
+      .provider-card:hover { border-color: rgba(113,113,122,0.8); }
+      .provider-card.active { border-color: #E63946; background: rgba(230,57,70,0.08); }
+      .provider-card.connected { border-color: #4ade80; }
+
+      .provider-icon {
+        width: 36px; height: 36px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem; color: #fff;
+        flex-shrink: 0;
+      }
+
+      .provider-name { font-weight: 600; font-size: 0.9rem; }
+
+      .provider-badge {
+        margin-left: auto;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .provider-badge.connected { background: rgba(74,222,128,0.15); color: #4ade80; }
+      .provider-badge.disconnected { background: rgba(161,161,170,0.1); color: #71717a; }
+
+      .provider-detail {
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid rgba(63,63,70,0.6);
+        background: rgba(24,24,27,0.6);
+        margin-bottom: 0.75rem;
+      }
+
+      .provider-divider {
+        display: flex; align-items: center; gap: 0.75rem;
+        margin: 0.75rem 0; color: #71717a; font-size: 0.82rem;
+      }
+      .provider-divider::before, .provider-divider::after {
+        content: ''; flex: 1; height: 1px; background: rgba(63,63,70,0.6);
+      }
+
+      @media (max-width: 480px) {
+        .provider-grid { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
@@ -1674,142 +1736,242 @@
         }
 
         // ======== Step 3: Connect Your AI ========
-        function renderStep3() {
-          // Check if provisioning is ready
+        const PROVIDER_COLORS = {
+          anthropic: '#D4A373', openai: '#10A37F', openrouter: '#6366F1',
+          google: '#4285F4', xai: '#a1a1aa', groq: '#F55036',
+        };
+        const connectedProviders = new Set();
+        let providerList = [];
+
+        async function renderStep3() {
           if (!state.serverReady) {
             step3Content.innerHTML = `
-              <div class="waiting-state">
+              <div style="text-align:center;padding:2rem 0;">
                 <div class="provision-chip">
                   <span class="pulse-dot"></span>
                   <span>Waiting for your server to finish setting up...</span>
                 </div>
-                <p style="color: var(--text-muted);">This usually takes 2-3 minutes. We'll continue automatically when it's ready.</p>
+                <p style="color:#a1a1aa;margin-top:0.5rem;">This usually takes 2-3 minutes.</p>
               </div>
             `;
             const checkInterval = setInterval(() => {
-              if (state.serverReady) {
-                clearInterval(checkInterval);
-                renderStep3();
-              }
+              if (state.serverReady) { clearInterval(checkInterval); renderStep3(); }
             }, 1000);
             return;
           }
 
+          // Fetch providers
+          if (providerList.length === 0) {
+            try {
+              const res = await fetch(`${API_BASE}/api/providers`);
+              const data = await res.json();
+              providerList = data.providers || [];
+            } catch (_) {
+              providerList = [
+                { id: 'anthropic', name: 'Anthropic', supportsOAuth: true, supportsApiKey: true },
+                { id: 'openai', name: 'OpenAI', supportsOAuth: false, supportsApiKey: true },
+              ];
+            }
+          }
+
           step3Content.innerHTML = `
-            <p class="copy">Connect your Claude account so your assistant can think.</p>
-            <button class="button" id="connect-claude-btn" style="margin-top: 1.2rem; width: 100%;">
-              Connect Claude (Anthropic)
-            </button>
-            <div id="auth-flow-area" class="hidden"></div>
-            <p id="auth-error" class="error"></p>
+            <p style="color:#d4d4d8;line-height:1.6;">Connect at least one AI provider so your assistant can think. You can add more later.</p>
+            <div class="provider-grid" id="provider-grid"></div>
+            <div id="provider-detail-area"></div>
+            <button class="button" id="auth-continue-btn" disabled style="margin-top:1rem;width:100%;">Continue</button>
           `;
 
-          document.getElementById('connect-claude-btn').addEventListener('click', startAuthFlow);
+          renderProviderGrid();
+
+          document.getElementById('auth-continue-btn').addEventListener('click', () => {
+            showStep(4);
+            renderSetupComplete();
+          });
         }
 
-        async function startAuthFlow() {
-          const connectBtn = document.getElementById('connect-claude-btn');
-          const flowArea = document.getElementById('auth-flow-area');
-          const authError = document.getElementById('auth-error');
-
-          connectBtn.disabled = true;
-          authError.textContent = '';
-
-          try {
-            const response = await fetch(`${API_BASE}/api/onboarding/auth/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ stripeSessionId: sessionId })
-            });
-            const payload = await readJson(response);
-
-            if (!response.ok || !payload.ok) {
-              throw new Error(payload.error || 'Failed to start auth.');
-            }
-
-            // Hide connect button, show paste flow
-            connectBtn.classList.add('hidden');
-            flowArea.classList.remove('hidden');
-
-            flowArea.innerHTML = `
-              <div style="margin: 1.2rem 0;">
-                <p class="copy" style="margin-bottom: 1rem;">
-                  Click the link below to sign in with Anthropic. After authorizing,
-                  you'll see a code that looks like <code>ABC123#xyz789</code>.
-                  Copy the <strong>full code including the # part</strong> and paste it below.
-                </p>
-                <a href="${escapeHtml(payload.url)}" target="_blank" rel="noopener"
-                   class="button" style="display: inline-block; text-decoration: none; text-align: center; width: 100%;">
-                  Sign in with Anthropic &rarr;
-                </a>
-              </div>
-              <div class="field" style="margin-top: 1.2rem;">
-                <label class="label" for="auth-code-input">Authorization code</label>
-                <input class="input" id="auth-code-input" type="text" placeholder="Paste your CODE#STATE here" autocomplete="off" />
-              </div>
-              <button class="button" id="auth-submit-btn" style="margin-top: 0.8rem;" disabled>
-                Complete Setup
-              </button>
-              <div class="auth-status hidden" id="auth-progress">
-                <span class="pulse-dot"></span>
-                <span id="auth-progress-text">Verifying...</span>
+        function renderProviderGrid() {
+          const grid = document.getElementById('provider-grid');
+          grid.innerHTML = providerList.map(p => {
+            const initial = p.name.charAt(0);
+            const color = PROVIDER_COLORS[p.id] || '#71717a';
+            const isConnected = connectedProviders.has(p.id);
+            return `
+              <div class="provider-card ${isConnected ? 'connected' : ''}" data-provider="${p.id}">
+                <div class="provider-icon" style="background:${color}">${initial}</div>
+                <div class="provider-name">${escapeHtml(p.name)}</div>
+                <span class="provider-badge ${isConnected ? 'connected' : 'disconnected'}">${isConnected ? 'Connected' : 'Not set'}</span>
               </div>
             `;
+          }).join('');
 
-            const codeInput = document.getElementById('auth-code-input');
-            const submitBtn = document.getElementById('auth-submit-btn');
+          grid.querySelectorAll('.provider-card').forEach(card => {
+            card.addEventListener('click', () => {
+              const providerId = card.dataset.provider;
+              const provider = providerList.find(p => p.id === providerId);
+              if (provider) showProviderDetail(provider);
+              grid.querySelectorAll('.provider-card').forEach(c => c.classList.remove('active'));
+              card.classList.add('active');
+            });
+          });
 
-            codeInput.addEventListener('input', () => {
-              submitBtn.disabled = !codeInput.value.trim();
+          // Update continue button
+          const btn = document.getElementById('auth-continue-btn');
+          if (btn) btn.disabled = connectedProviders.size === 0;
+        }
+
+        function showProviderDetail(provider) {
+          const area = document.getElementById('provider-detail-area');
+          const isConnected = connectedProviders.has(provider.id);
+
+          let html = `<div class="provider-detail">`;
+          html += `<h3 style="font-size:1rem;font-weight:700;margin:0 0 0.75rem;">${escapeHtml(provider.name)}</h3>`;
+
+          if (isConnected) {
+            html += `<p style="color:#4ade80;font-size:0.9rem;">Connected</p>`;
+            html += `</div>`;
+            area.innerHTML = html;
+            return;
+          }
+
+          if (provider.supportsOAuth) {
+            html += `
+              <button class="button" id="oauth-start-btn" style="width:100%;">Sign in with ${escapeHtml(provider.name)}</button>
+              <div id="oauth-paste-area" class="hidden" style="margin-top:0.75rem;">
+                <p style="color:#d4d4d8;font-size:0.88rem;margin-bottom:0.5rem;">
+                  After authorizing, paste the <strong>CODE#STATE</strong> below:
+                </p>
+                <input class="input" id="oauth-code-input" type="text" placeholder="Paste CODE#STATE here" autocomplete="off" />
+                <button class="button" id="oauth-submit-btn" disabled style="margin-top:0.5rem;width:100%;">Verify</button>
+              </div>
+            `;
+          }
+
+          if (provider.supportsOAuth && provider.supportsApiKey) {
+            html += `<div class="provider-divider">or</div>`;
+          }
+
+          if (provider.supportsApiKey) {
+            html += `
+              <div>
+                <input class="input" id="api-key-input" type="password" placeholder="Paste your API key" autocomplete="off" />
+                <button class="button" id="api-key-submit-btn" style="margin-top:0.5rem;width:100%;">Save Key</button>
+              </div>
+            `;
+          }
+
+          html += `<p id="provider-feedback" style="min-height:1.4rem;font-size:0.88rem;margin-top:0.5rem;"></p>`;
+          html += `</div>`;
+          area.innerHTML = html;
+
+          // OAuth flow
+          if (provider.supportsOAuth) {
+            document.getElementById('oauth-start-btn').addEventListener('click', async () => {
+              const btn = document.getElementById('oauth-start-btn');
+              btn.disabled = true;
+              btn.textContent = 'Opening...';
+              try {
+                const res = await fetch(`${API_BASE}/api/onboarding/auth/start`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ stripeSessionId: sessionId, provider: provider.id })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error);
+                window.open(data.url, '_blank');
+                document.getElementById('oauth-paste-area').classList.remove('hidden');
+                btn.textContent = 'Link opened \u2014 paste code below';
+              } catch (err) {
+                showFeedback(err.message, true);
+                btn.disabled = false;
+                btn.textContent = `Sign in with ${provider.name}`;
+              }
             });
 
-            submitBtn.addEventListener('click', submitAuthCode);
-          } catch (error) {
-            authError.textContent = error.message;
-            connectBtn.disabled = false;
+            const codeInput = document.getElementById('oauth-code-input');
+            const submitBtn = document.getElementById('oauth-submit-btn');
+            if (codeInput && submitBtn) {
+              codeInput.addEventListener('input', () => { submitBtn.disabled = !codeInput.value.trim(); });
+              submitBtn.addEventListener('click', async () => {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Verifying...';
+                try {
+                  const res = await fetch(`${API_BASE}/api/onboarding/auth/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stripeSessionId: sessionId, codeState: codeInput.value.trim(), provider: provider.id })
+                  });
+                  const data = await res.json();
+                  if (!data.ok) throw new Error(data.error);
+                  markProviderConnected(provider.id);
+                } catch (err) {
+                  showFeedback(err.message, true);
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Verify';
+                }
+              });
+            }
+          }
+
+          // API key flow
+          if (provider.supportsApiKey) {
+            const keyInput = document.getElementById('api-key-input');
+            const keyBtn = document.getElementById('api-key-submit-btn');
+            keyBtn.addEventListener('click', async () => {
+              const key = keyInput.value.trim();
+              if (!key) return;
+              keyBtn.disabled = true;
+              keyBtn.textContent = 'Verifying...';
+              showFeedback('');
+
+              // Verify key first
+              try {
+                const verifyRes = await fetch(`${API_BASE}/api/onboarding/auth/verify`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ provider: provider.id, apiKey: key })
+                });
+                const verifyData = await verifyRes.json();
+                if (verifyData.ok && !verifyData.valid) {
+                  showFeedback(verifyData.error || 'Invalid key \u2014 check and try again.', true);
+                  keyBtn.disabled = false;
+                  keyBtn.textContent = 'Save Key';
+                  return;
+                }
+              } catch (_) {
+                // Verification endpoint failed — proceed anyway
+              }
+
+              // Save key
+              try {
+                const res = await fetch(`${API_BASE}/api/onboarding/auth/api-key`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ stripeSessionId: sessionId, provider: provider.id, apiKey: key })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error);
+                markProviderConnected(provider.id);
+              } catch (err) {
+                showFeedback(err.message, true);
+                keyBtn.disabled = false;
+                keyBtn.textContent = 'Save Key';
+              }
+            });
           }
         }
 
-        async function submitAuthCode() {
-          const codeInput = document.getElementById('auth-code-input');
-          const submitBtn = document.getElementById('auth-submit-btn');
-          const progress = document.getElementById('auth-progress');
-          const authError = document.getElementById('auth-error');
-
-          const codeState = codeInput.value.trim();
-          if (!codeState) return;
-
-          submitBtn.disabled = true;
-          codeInput.disabled = true;
-          progress.classList.remove('hidden');
-          authError.textContent = '';
-
-          try {
-            const response = await fetch(`${API_BASE}/api/onboarding/auth/complete`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ codeState, stripeSessionId: sessionId })
-            });
-            const payload = await readJson(response);
-
-            if (!response.ok || !payload.ok) {
-              throw new Error(payload.error || 'Authorization failed.');
-            }
-
-            document.getElementById('auth-progress-text').textContent = 'Claude connected!';
-            progress.classList.add('confirmed');
-
-            setTimeout(() => {
-              state.authComplete = true;
-              showStep(4);
-              renderSetupComplete();
-            }, 1500);
-          } catch (error) {
-            authError.textContent = error.message + ' Please try again.';
-            submitBtn.disabled = false;
-            codeInput.disabled = false;
-            progress.classList.add('hidden');
+        function showFeedback(message, isError) {
+          const el = document.getElementById('provider-feedback');
+          if (el) {
+            el.textContent = message;
+            el.style.color = isError ? '#fca5a5' : '#4ade80';
           }
+        }
+
+        function markProviderConnected(providerId) {
+          connectedProviders.add(providerId);
+          renderProviderGrid();
+          showProviderDetail(providerList.find(p => p.id === providerId));
         }
 
         // ======== Step 4: Setup Complete (post-quiz) ========
