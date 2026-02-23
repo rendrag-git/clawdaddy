@@ -791,6 +791,25 @@
 
             // Update UI with customer info
             document.getElementById('session-preview').textContent = `${payload.username}`;
+
+            // If server says we're past quiz step, don't restore localStorage
+            if (payload.step && payload.step !== 'quiz') {
+              clearQuizState();
+              document.getElementById('welcome-screen').style.display = 'none';
+              document.getElementById('wizard-content').style.display = '';
+              if (payload.step === 'auth' || payload.step === 'profile') {
+                showStep(3);
+                startPolling();
+                renderStep3();
+              } else if (payload.step === 'complete') {
+                showStep(4);
+                renderSetupComplete();
+              }
+              return;
+            }
+
+            // Try restoring quiz state from localStorage
+            state.quizRestored = restoreQuizState();
           } catch (error) {
             console.error('Init failed:', error);
           }
@@ -1013,6 +1032,43 @@
           initRetries: 0,
           webchatUrl: ''
         };
+
+        // ======== Quiz State Persistence ========
+        const STORAGE_KEY = `clawdaddy_quiz_${sessionId}`;
+        const STORAGE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+        function saveQuizState() {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              quizIndex: state.quizIndex,
+              answers: state.answers,
+              perQuestionContext: state.perQuestionContext,
+              savedAt: Date.now(),
+            }));
+          } catch (_) {} // localStorage may be unavailable
+        }
+
+        function restoreQuizState() {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+            const saved = JSON.parse(raw);
+            if (Date.now() - saved.savedAt > STORAGE_MAX_AGE) {
+              localStorage.removeItem(STORAGE_KEY);
+              return false;
+            }
+            state.quizIndex = saved.quizIndex || 0;
+            state.answers = saved.answers || {};
+            state.perQuestionContext = saved.perQuestionContext || {};
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+
+        function clearQuizState() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+        }
 
         // ======== DOM References ========
         const step2Container = document.getElementById('step-2');
@@ -1250,6 +1306,7 @@
             optEl.addEventListener('click', () => {
               const optionId = optEl.dataset.optionId;
               state.answers[q.id] = optionId;
+              saveQuizState();
 
               options.forEach(o => o.classList.remove('selected'));
               optEl.classList.add('selected');
@@ -1283,6 +1340,7 @@
               }
 
               state.answers[q.id] = selected;
+              saveQuizState();
             });
           });
 
@@ -1295,6 +1353,7 @@
           const input = document.getElementById('short-text-input');
           input.addEventListener('input', (e) => {
             state.answers[q.id] = e.target.value.trim();
+            saveQuizState();
           });
 
           input.addEventListener('keypress', (e) => {
@@ -1317,6 +1376,7 @@
           const textarea = document.getElementById('final-textarea');
           textarea.addEventListener('input', (e) => {
             state.answers['FINAL_SCREEN'] = e.target.value.trim();
+            saveQuizState();
           });
 
           attachBackButton();
@@ -1346,6 +1406,7 @@
 
           textarea.addEventListener('input', (e) => {
             state.perQuestionContext[q.id] = e.target.value.trim();
+            saveQuizState();
           });
         }
 
@@ -1376,6 +1437,7 @@
 
             setTimeout(() => {
               state.quizIndex++;
+              saveQuizState();
               renderQuestion();
             }, 300);
           }
@@ -1390,6 +1452,7 @@
 
             setTimeout(() => {
               state.quizIndex--;
+              saveQuizState();
               renderQuestion();
             }, 300);
           }
@@ -1424,6 +1487,7 @@
               })
             });
             if (!quizRes.ok) throw new Error('Failed to save quiz results.');
+            clearQuizState();
 
             const profileRes = await fetch(`${API_BASE}/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
