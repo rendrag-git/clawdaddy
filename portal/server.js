@@ -180,18 +180,42 @@ function maskKey(key) {
   return key.slice(0, 7) + '...' + key.slice(-4);
 }
 
-async function readSoulMd() {
-  try {
-    const content = await fs.readFile(SOUL_MD_PATH, 'utf-8');
-    // Extract the bold opening summary paragraph from SOUL.md
-    const match = content.match(/\*\*(.+?)\*\*/s);
-    if (match) {
-      return match[1].trim();
+// TODO: Replace with structured profile format when available
+async function readSoulProfile() {
+  const soulPaths = [
+    SOUL_MD_PATH,                   // primary: host path (env-configurable, default /home/ubuntu/clawd/SOUL.md)
+    '/home/clawd/clawd/SOUL.md',    // fallback: container path (future-proofing)
+  ].filter((p, i, arr) => arr.indexOf(p) === i); // deduplicate in case env matches fallback
+
+  for (const soulPath of soulPaths) {
+    try {
+      const content = await fs.readFile(soulPath, 'utf-8');
+
+      const nameMatch      = content.match(/^-\s+Name:\s*(.+)$/m);
+      const summaryMatch   = content.match(/^-\s+Core summary:\s*(.+)$/m);
+      const toneMatch      = content.match(/^-\s+Default tone:\s*(.+)$/m);
+      const casualnessMatch = content.match(/^-\s+Casualness\s*\([^)]*\):\s*([\d.]+)/m);
+      const humorMatch     = content.match(/^-\s+Humor\s*\([^)]*\):\s*([\d.]+)/m);
+      const proactivityMatch = content.match(/^-\s+Proactivity\s*\([^)]*\):\s*([\d.]+)/m);
+
+      // Require at minimum a Name field to consider the file valid
+      if (!nameMatch) return { configured: false };
+
+      return {
+        name:        nameMatch[1].trim(),
+        summary:     summaryMatch   ? summaryMatch[1].trim()           : null,
+        tone:        toneMatch      ? toneMatch[1].trim()              : null,
+        casualness:  casualnessMatch ? parseFloat(casualnessMatch[1])  : null,
+        humor:       humorMatch     ? parseFloat(humorMatch[1])        : null,
+        proactivity: proactivityMatch ? parseFloat(proactivityMatch[1]) : null,
+        configured:  true,
+      };
+    } catch {
+      // File not found or unreadable — try next path
     }
-    return 'Personality not configured yet.';
-  } catch {
-    return 'Personality not configured yet.';
   }
+
+  return { configured: false };
 }
 
 async function checkHealth() {
@@ -446,13 +470,18 @@ app.get('/portal/api/portal/profile', requireAuth, async (_req, res) => {
   try {
     const [config, personality, instanceHealthy] = await Promise.all([
       readConfig(),
-      readSoulMd(),
+      readSoulProfile(),
       checkHealth(),
     ]);
 
+    // Prefer the Name from SOUL.md; fall back to config.json botName
+    const botName = (personality.configured && personality.name)
+      ? personality.name
+      : (config.botName || 'Clawd');
+
     return res.json({
       username: config.username,
-      botName: config.botName,
+      botName,
       tier: config.tier,
       personality,
       apiKeyConfigured: config.apiKeyConfigured,
