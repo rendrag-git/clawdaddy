@@ -679,6 +679,30 @@
           padding: 1rem 0.85rem;
         }
       }
+
+      .profile-progress { text-align: center; padding: 2rem 0; }
+      .profile-stages { display: flex; justify-content: center; gap: 1.5rem; margin: 1.5rem 0; }
+      .profile-stage { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+      .profile-stage-dot {
+        width: 12px; height: 12px; border-radius: 50%;
+        background: rgba(161,161,170,0.3);
+        transition: all 0.4s ease;
+      }
+      .profile-stage-dot.active {
+        background: #E63946;
+        box-shadow: 0 0 12px rgba(230,57,70,0.5);
+        animation: stagePulse 1.8s ease-in-out infinite;
+      }
+      .profile-stage-dot.done { background: #4ade80; }
+      .profile-stage-label { font-size: 0.75rem; color: #a1a1aa; white-space: nowrap; }
+      .profile-stage-label.active { color: #f4f4f5; }
+      .profile-stage-label.done { color: #4ade80; }
+      .profile-message { font-size: 1rem; color: #d4d4d8; margin-top: 1rem; }
+
+      @keyframes stagePulse {
+        0%, 100% { box-shadow: 0 0 12px rgba(230,57,70,0.5); }
+        50% { box-shadow: 0 0 24px rgba(230,57,70,0.8); }
+      }
     </style>
   </head>
   <body>
@@ -1461,19 +1485,44 @@
         async function submitQuiz() {
           const scores = calculateScores(state.answers, state.perQuestionContext);
 
-          // Include "anything else" free text from final screen
           const anythingElse = state.answers['FINAL_SCREEN'] || '';
           if (anythingElse) {
             scores.freeText.anything_else = anythingElse;
           }
 
+          // Show progress UI
+          const stages = ['analyzing', 'generating', 'agents', 'complete'];
+          const stageLabels = { analyzing: 'Analyze', generating: 'Generate', agents: 'Agents', complete: 'Done' };
+
           quizQuestionArea.innerHTML = `
-            <div class="waiting-state">
-              <p>Generating your profile...</p>
+            <div class="profile-progress">
+              <p class="profile-message">Submitting quiz...</p>
+              <div class="profile-stages">
+                ${stages.map(s => `
+                  <div class="profile-stage" data-stage="${s}">
+                    <div class="profile-stage-dot"></div>
+                    <div class="profile-stage-label">${stageLabels[s]}</div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           `;
 
+          function updateStage(currentStage) {
+            stages.forEach(s => {
+              const stageEl = quizQuestionArea.querySelector(`[data-stage="${s}"]`);
+              if (!stageEl) return;
+              const dot = stageEl.querySelector('.profile-stage-dot');
+              const label = stageEl.querySelector('.profile-stage-label');
+              const idx = stages.indexOf(s);
+              const currentIdx = stages.indexOf(currentStage);
+              dot.className = 'profile-stage-dot' + (idx < currentIdx ? ' done' : idx === currentIdx ? ' active' : '');
+              label.className = 'profile-stage-label' + (idx < currentIdx ? ' done' : idx === currentIdx ? ' active' : '');
+            });
+          }
+
           try {
+            // Submit quiz results
             const quizRes = await fetch(`${API_BASE}/api/onboarding/quiz/${encodeURIComponent(sessionId)}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -1487,22 +1536,77 @@
               })
             });
             if (!quizRes.ok) throw new Error('Failed to save quiz results.');
+
             clearQuizState();
 
-            const profileRes = await fetch(`${API_BASE}/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
-              method: 'POST',
-              headers: { Accept: 'application/json' }
-            });
-            if (!profileRes.ok) throw new Error('Failed to generate profile.');
+            // Try SSE for profile generation
+            let sseSucceeded = false;
+            try {
+              await new Promise((resolve, reject) => {
+                const url = `${API_BASE}/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}/stream`;
+                const es = new EventSource(url);
+                let gotFirstEvent = false;
 
-            // After quiz + profile, go to auth step
-            showStep(3);
-            renderStep3();
+                const timeout = setTimeout(() => {
+                  if (!gotFirstEvent) {
+                    es.close();
+                    reject(new Error('SSE timeout'));
+                  }
+                }, 10000);
+
+                es.onmessage = (event) => {
+                  gotFirstEvent = true;
+                  clearTimeout(timeout);
+                  try {
+                    const data = JSON.parse(event.data);
+                    if (data.stage === 'error') {
+                      es.close();
+                      reject(new Error(data.message));
+                      return;
+                    }
+                    updateStage(data.stage);
+                    const msgEl = quizQuestionArea.querySelector('.profile-message');
+                    if (msgEl) msgEl.textContent = data.message;
+                    if (data.stage === 'complete') {
+                      es.close();
+                      sseSucceeded = true;
+                      resolve();
+                    }
+                  } catch (_) {}
+                };
+
+                es.onerror = () => {
+                  if (!gotFirstEvent) {
+                    clearTimeout(timeout);
+                    es.close();
+                    reject(new Error('SSE connection failed'));
+                  }
+                  // If we already got events, EventSource will auto-reconnect
+                };
+              });
+            } catch (sseErr) {
+              // Fallback to synchronous POST
+              console.warn('SSE failed, falling back to sync:', sseErr.message);
+              const msgEl = quizQuestionArea.querySelector('.profile-message');
+              if (msgEl) msgEl.textContent = 'Building your profile (this takes about 2 minutes)...';
+              updateStage('generating');
+              const profileRes = await fetch(`${API_BASE}/api/onboarding/generate-profile/${encodeURIComponent(sessionId)}`, {
+                method: 'POST',
+                headers: { Accept: 'application/json' }
+              });
+              if (!profileRes.ok) throw new Error('Failed to generate profile.');
+              sseSucceeded = true;
+            }
+
+            if (sseSucceeded) {
+              showStep(3);
+              renderStep3();
+            }
           } catch (error) {
             quizQuestionArea.innerHTML = `
-              <div class="waiting-state">
-                <p style="color: #fca5a5;">Error submitting quiz. Please try again.</p>
-                <button class="button" onclick="location.reload()">Retry</button>
+              <div style="text-align:center;padding:2rem 0;">
+                <p style="color:#fca5a5;margin-bottom:1rem;">${escapeHtml(error.message || 'Error submitting quiz.')}</p>
+                <button class="button" onclick="location.reload()">Try Again</button>
               </div>
             `;
           }
