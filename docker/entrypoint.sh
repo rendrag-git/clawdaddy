@@ -259,7 +259,6 @@ if [[ -d "${WORKSPACE}/agents" ]]; then
       }
 
       if (!cfg.agents) cfg.agents = {};
-      cfg.agents.skipBootstrap = true;
 
       if (isFirstBoot) {
         // First boot: full rebuild of agent list from scratch
