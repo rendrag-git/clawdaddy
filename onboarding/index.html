@@ -1616,12 +1616,19 @@
                   }
                 }, 10000);
 
+                // Absolute timeout: 5 minutes max for entire profile generation
+                const totalTimeout = setTimeout(() => {
+                  es.close();
+                  reject(new Error('SSE total timeout'));
+                }, 300000);
+
                 es.onmessage = (event) => {
                   gotFirstEvent = true;
                   clearTimeout(timeout);
                   try {
                     const data = JSON.parse(event.data);
                     if (data.stage === 'error') {
+                      clearTimeout(totalTimeout);
                       es.close();
                       reject(new Error(data.message));
                       return;
@@ -1630,6 +1637,7 @@
                     const msgEl = quizQuestionArea.querySelector('.profile-message');
                     if (msgEl) msgEl.textContent = data.message;
                     if (data.stage === 'complete') {
+                      clearTimeout(totalTimeout);
                       es.close();
                       sseSucceeded = true;
                       resolve();
@@ -1640,6 +1648,7 @@
                 es.onerror = () => {
                   if (!gotFirstEvent) {
                     clearTimeout(timeout);
+                    clearTimeout(totalTimeout);
                     es.close();
                     reject(new Error('SSE connection failed'));
                   }
@@ -1928,7 +1937,7 @@
                 const verifyRes = await fetch(`${API_BASE}/api/onboarding/auth/verify`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ provider: provider.id, apiKey: key })
+                  body: JSON.stringify({ stripeSessionId: sessionId, provider: provider.id, apiKey: key })
                 });
                 const verifyData = await verifyRes.json();
                 if (verifyData.ok && !verifyData.valid) {

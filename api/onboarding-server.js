@@ -38,6 +38,7 @@ const allowedOrigins = new Set([
 ]);
 
 const SESSION_ID_REGEX = /^cs_[a-zA-Z0-9_]+$/;
+const ALLOWED_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter', 'google', 'xai', 'groq']);
 
 function isValidIPv4(ip) {
   return /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) &&
@@ -45,6 +46,7 @@ function isValidIPv4(ip) {
 }
 
 const dnsUpdateLastCall = new Map(); // username -> timestamp
+const activeGenerations = new Set(); // sessionId -> in-flight profile gen guard
 
 let cachedStripeKey = null;
 
@@ -88,9 +90,10 @@ async function getStripeSecretKey() {
 }
 
 
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1472970106089898016/hl88EjM5QcO7NpDCtTc17NbYcvyNXFvv3cb0CckcxS8zBj6uV0-KleMQBSGTsbm2-c7V';
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_OPS_WEBHOOK_URL || '';
 
 function sendDiscordAlert(message) {
+  if (!DISCORD_WEBHOOK_URL) return;
   const body = JSON.stringify({ content: message });
   const url = new URL(DISCORD_WEBHOOK_URL);
   const req = https.request({
@@ -756,6 +759,14 @@ app.get('/api/onboarding/generate-profile/:sessionId/stream', async (req, res) =
     } catch (_) {}
   }
 
+  // Concurrency guard: only one generation per session at a time
+  if (activeGenerations.has(sessionId)) {
+    res.write(`data: ${JSON.stringify({ stage: 'generating', message: 'Profile generation in progress...' })}\n\n`);
+    res.end();
+    return;
+  }
+  activeGenerations.add(sessionId);
+
   const customer = getCustomerByStripeSessionId(sessionId);
   const username = customer?.username || 'assistant';
   const botName = customer?.bot_name || 'Assistant';
@@ -795,6 +806,8 @@ app.get('/api/onboarding/generate-profile/:sessionId/stream', async (req, res) =
     console.error(`[SSE] Profile generation failed for ${sessionId}:`, err.message);
     sendEvent({ stage: 'error', message: 'Profile generation failed. Please try again.' });
     res.end();
+  } finally {
+    activeGenerations.delete(sessionId);
   }
 });
 
@@ -837,38 +850,48 @@ app.post('/api/onboarding/generate-profile/:sessionId', async (req, res) => {
       }
     }
 
+    // Concurrency guard: only one generation per session at a time
+    if (activeGenerations.has(sessionId)) {
+      return res.status(409).json({ ok: false, error: 'Profile generation already in progress.' });
+    }
+    activeGenerations.add(sessionId);
+
     const customer = getCustomerByStripeSessionId(sessionId);
     const username = customer?.username || 'assistant';
     const botName = customer?.bot_name || 'Assistant';
 
-    const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd } = await generateProfile(
-      quizResults,
-      username,
-      botName
-    );
+    try {
+      const { soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd } = await generateProfile(
+        quizResults,
+        username,
+        botName
+      );
 
-    updateOnboardingSession(sessionId, {
-      generated_files: JSON.stringify({ soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd }),
-      step: 'auth',
-    });
+      updateOnboardingSession(sessionId, {
+        generated_files: JSON.stringify({ soulMd, userMd, identityMd, heartbeatMd, bootstrapMd, agentsMd, agents, multiAgentMd }),
+        step: 'auth',
+      });
 
-    // Try auto-deploy (fires if provisioning is also complete)
-    void tryDeployIfReady(sessionId);
+      // Try auto-deploy (fires if provisioning is also complete)
+      void tryDeployIfReady(sessionId);
 
-    const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
-    if (agentsMd) fileList.push('AGENTS.md');
-    if (agents && agents.length > 0) {
-      fileList.push('MULTI-AGENT.md');
-      for (const agent of agents) {
-        fileList.push(`agents/${agent.name}/SOUL.md`);
-        if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
-        if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
-        if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
+      const fileList = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md', 'BOOTSTRAP.md'];
+      if (agentsMd) fileList.push('AGENTS.md');
+      if (agents && agents.length > 0) {
+        fileList.push('MULTI-AGENT.md');
+        for (const agent of agents) {
+          fileList.push(`agents/${agent.name}/SOUL.md`);
+          if (agent.agentsMd) fileList.push(`agents/${agent.name}/AGENTS.md`);
+          if (agent.heartbeatMd) fileList.push(`agents/${agent.name}/HEARTBEAT.md`);
+          if (agent.userMd) fileList.push(`agents/${agent.name}/USER.md`);
+        }
       }
-    }
 
-    console.log(`Profile generated for session ${sessionId} (${agents ? agents.length : 0} sub-agents)`);
-    return res.json({ ok: true, files: fileList });
+      console.log(`Profile generated for session ${sessionId} (${agents ? agents.length : 0} sub-agents)`);
+      return res.json({ ok: true, files: fileList });
+    } finally {
+      activeGenerations.delete(sessionId);
+    }
   } catch (error) {
     console.error(`Profile generation failed for ${sessionId}:`, error.message);
     return res.status(500).json({ ok: false, error: 'Unable to generate profile.' });
@@ -908,6 +931,9 @@ app.post('/api/onboarding/auth/start', async (req, res) => {
   if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
     return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
   }
+  if (provider && !ALLOWED_PROVIDERS.has(provider)) {
+    return res.status(400).json({ ok: false, error: 'Unknown provider.' });
+  }
 
   const customer = getCustomerByStripeSessionId(stripeSessionId);
   if (!customer) {
@@ -932,6 +958,9 @@ app.post('/api/onboarding/auth/complete', async (req, res) => {
 
   if (!codeState || !stripeSessionId) {
     return res.status(400).json({ ok: false, error: 'codeState and stripeSessionId are required.' });
+  }
+  if (provider && !ALLOWED_PROVIDERS.has(provider)) {
+    return res.status(400).json({ ok: false, error: 'Unknown provider.' });
   }
 
   const customer = getCustomerByStripeSessionId(stripeSessionId);
@@ -963,6 +992,9 @@ app.post('/api/onboarding/auth/api-key', async (req, res) => {
   if (!provider || !apiKey) {
     return res.status(400).json({ ok: false, error: 'provider and apiKey are required.' });
   }
+  if (!ALLOWED_PROVIDERS.has(provider)) {
+    return res.status(400).json({ ok: false, error: 'Unknown provider.' });
+  }
 
   const customer = getCustomerByStripeSessionId(stripeSessionId);
   if (!customer) {
@@ -984,10 +1016,21 @@ app.post('/api/onboarding/auth/api-key', async (req, res) => {
 
 // POST /api/onboarding/auth/verify — lightweight key validation
 app.post('/api/onboarding/auth/verify', async (req, res) => {
-  const { provider, apiKey } = req.body || {};
+  const { provider, apiKey, stripeSessionId } = req.body || {};
 
+  if (!stripeSessionId || !isValidSessionId(stripeSessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session ID.' });
+  }
   if (!provider || !apiKey) {
     return res.status(400).json({ ok: false, error: 'provider and apiKey are required.' });
+  }
+  if (!ALLOWED_PROVIDERS.has(provider)) {
+    return res.status(400).json({ ok: false, error: 'Unknown provider.' });
+  }
+
+  const customer = getCustomerByStripeSessionId(stripeSessionId);
+  if (!customer) {
+    return res.status(404).json({ ok: false, error: 'Customer not found.' });
   }
 
   // Provider-specific verification endpoints (lightweight list-models or similar)
