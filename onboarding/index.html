@@ -4,30 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClawDaddy Onboarding</title>
-    <meta
-      name="description"
-      content="Complete your ClawDaddy setup and get your OpenClaw webchat URL."
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="description" content="Complete your ClawDaddy setup and get your OpenClaw webchat URL." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              lobster: "#E63946",
+            },
+            boxShadow: {
+              glow: "0 0 0 1px rgba(230,57,70,0.25), 0 12px 34px rgba(230,57,70,0.2)",
+            },
+          },
+        },
+      };
+    </script>
     <style>
       :root {
-        --bg: #050714;
-        --bg-soft: #0b1024;
-        --panel: rgba(12, 16, 38, 0.78);
-        --panel-border: rgba(140, 168, 255, 0.22);
-        --text: #e6ecff;
-        --text-muted: #a7b3d8;
-        --input-bg: rgba(8, 12, 30, 0.9);
-        --accent: #7c8cff;
-        --accent-2: #3ee7ff;
-        --success: #45e4a5;
-        --pending: #7a82a8;
-        --shadow: 0 20px 50px rgba(8, 14, 40, 0.5);
+        --bg: #090b10;
+        --bg-soft: #111318;
+        --panel: rgba(24, 24, 27, 0.75);
+        --panel-border: rgba(63, 63, 70, 0.8);
+        --text: #f4f4f5;
+        --text-muted: #a1a1aa;
+        --input-bg: rgba(24, 24, 27, 0.9);
+        --accent: #E63946;
+        --accent-2: #ef4444;
+        --success: #4ade80;
+        --pending: #71717a;
+        --shadow: 0 0 0 1px rgba(230,57,70,0.25), 0 12px 34px rgba(230,57,70,0.2);
       }
 
       * {
@@ -42,12 +48,11 @@
 
       body {
         min-height: 100vh;
-        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
         color: var(--text);
         background:
-          radial-gradient(circle at 10% 0%, rgba(121, 103, 255, 0.35), transparent 34%),
-          radial-gradient(circle at 90% 15%, rgba(56, 180, 255, 0.32), transparent 30%),
-          radial-gradient(circle at 50% 120%, rgba(35, 49, 112, 0.4), transparent 48%),
+          radial-gradient(circle at 10% 0%, rgba(230, 57, 70, 0.2), transparent 34%),
+          radial-gradient(circle at 90% 20%, rgba(230, 57, 70, 0.12), transparent 30%),
           var(--bg);
       }
 
@@ -78,7 +83,7 @@
       }
 
       .panel {
-        background: linear-gradient(180deg, rgba(17, 24, 55, 0.82), rgba(9, 13, 31, 0.88));
+        background: rgba(24, 24, 27, 0.75);
         border: 1px solid var(--panel-border);
         border-radius: 20px;
         padding: clamp(1.2rem, 2.2vw, 2rem);
@@ -90,10 +95,10 @@
         align-items: center;
         gap: 0.45rem;
         border-radius: 999px;
-        border: 1px solid rgba(164, 182, 255, 0.34);
-        background: rgba(18, 27, 64, 0.85);
+        border: 1px solid rgba(63, 63, 70, 0.6);
+        background: rgba(24, 24, 27, 0.85);
         padding: 0.4rem 0.7rem;
-        color: #c9d4ff;
+        color: #a1a1aa;
         font-size: 0.82rem;
         letter-spacing: 0.01em;
       }
@@ -123,14 +128,14 @@
 
       .label {
         font-size: 0.9rem;
-        color: #d4deff;
+        color: #d4d4d8;
         font-weight: 600;
       }
 
       .input {
         width: 100%;
         border-radius: 12px;
-        border: 1px solid rgba(149, 171, 255, 0.34);
+        border: 1px solid rgba(63, 63, 70, 0.8);
         background: var(--input-bg);
         color: var(--text);
         font-size: 1rem;
@@ -140,15 +145,15 @@
       }
 
       .input:focus {
-        border-color: rgba(112, 200, 255, 0.85);
-        box-shadow: 0 0 0 3px rgba(72, 176, 255, 0.2);
+        border-color: rgba(230, 57, 70, 0.85);
+        box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.2);
       }
 
       .button {
         border: 0;
         border-radius: 12px;
-        background: linear-gradient(110deg, var(--accent), var(--accent-2));
-        color: #020512;
+        background: #E63946;
+        color: #fff;
         font-size: 1rem;
         font-weight: 800;
         letter-spacing: 0.01em;
@@ -170,7 +175,7 @@
 
       .error {
         margin-top: 0.95rem;
-        color: #ffb3cb;
+        color: #fca5a5;
         min-height: 1.2rem;
         font-size: 0.9rem;
       }
@@ -187,7 +192,7 @@
       }
 
       .footer a {
-        color: #9fd9ff;
+        color: #E63946;
       }
 
       /* Step transitions */
@@ -215,11 +220,11 @@
       }
 
       .username-check.taken {
-        color: #ffb3cb;
+        color: #fca5a5;
       }
 
       .username-check .suggestion-link {
-        color: var(--accent-2);
+        color: #E63946;
         text-decoration: underline;
         cursor: pointer;
       }
@@ -239,8 +244,8 @@
         padding: 0.4rem 0.85rem;
         border-radius: 999px;
         font-size: 0.82rem;
-        background: rgba(18, 27, 64, 0.85);
-        border: 1px solid rgba(164, 182, 255, 0.25);
+        background: rgba(24, 24, 27, 0.85);
+        border: 1px solid rgba(63, 63, 70, 0.6);
         margin-bottom: 1rem;
       }
 
@@ -269,7 +274,7 @@
 
       .quiz-progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        background: linear-gradient(90deg, #E63946, #ef4444);
         border-radius: 2px;
         transition: width 0.4s ease;
       }
@@ -346,7 +351,7 @@
         min-height: 52px;
         padding: 0.75rem 1rem;
         border-radius: 12px;
-        border: 1px solid rgba(149, 171, 255, 0.25);
+        border: 1px solid rgba(63, 63, 70, 0.6);
         background: var(--input-bg);
         color: var(--text);
         font-size: 0.95rem;
@@ -356,15 +361,15 @@
       }
 
       .quiz-option:hover {
-        border-color: rgba(124, 140, 255, 0.5);
-        background: rgba(124, 140, 255, 0.08);
+        border-color: rgba(230, 57, 70, 0.5);
+        background: rgba(230, 57, 70, 0.08);
         transform: translateY(-1px);
       }
 
       .quiz-option.selected {
         border-color: var(--accent);
-        background: rgba(124, 140, 255, 0.15);
-        box-shadow: 0 0 0 2px rgba(124, 140, 255, 0.25);
+        background: rgba(230, 57, 70, 0.15);
+        box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.25);
       }
 
       /* Multi-select (checkbox style) */
@@ -382,7 +387,7 @@
         width: 20px;
         height: 20px;
         border-radius: 6px;
-        border: 2px solid rgba(149, 171, 255, 0.4);
+        border: 2px solid rgba(63, 63, 70, 0.6);
         background: transparent;
         transition: all 0.2s;
       }
@@ -398,7 +403,7 @@
         left: 0.95rem;
         top: 50%;
         transform: translateY(-50%);
-        color: #020512;
+        color: #fff;
         font-size: 0.85rem;
         font-weight: 700;
       }
@@ -429,7 +434,7 @@
         width: 100%;
         min-height: 60px;
         border-radius: 10px;
-        border: 1px solid rgba(149, 171, 255, 0.2);
+        border: 1px solid rgba(63, 63, 70, 0.6);
         background: var(--input-bg);
         color: var(--text);
         font-size: 0.88rem;
@@ -469,8 +474,8 @@
       .quiz-continue {
         border: 0;
         border-radius: 12px;
-        background: linear-gradient(110deg, var(--accent), var(--accent-2));
-        color: #020512;
+        background: #E63946;
+        color: #fff;
         font-size: 0.95rem;
         font-weight: 700;
         padding: 0.75rem 1.5rem;
@@ -530,7 +535,7 @@
       .success-title {
         font-size: clamp(1.5rem, 3vw, 2rem);
         font-weight: 800;
-        background: linear-gradient(110deg, var(--accent), var(--accent-2), var(--success));
+        background: linear-gradient(110deg, #E63946, #ef4444, #4ade80);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -540,7 +545,7 @@
       .success-url {
         font-family: monospace;
         font-size: clamp(1rem, 2.5vw, 1.3rem);
-        color: var(--accent-2);
+        color: #E63946;
         margin: 0.8rem 0;
         word-break: break-all;
       }
@@ -551,8 +556,8 @@
         gap: 0.4rem;
         padding: 0.6rem 1.2rem;
         border-radius: 10px;
-        border: 1px solid rgba(149, 171, 255, 0.3);
-        background: rgba(18, 27, 64, 0.6);
+        border: 1px solid rgba(63, 63, 70, 0.6);
+        background: rgba(24, 24, 27, 0.6);
         color: var(--text);
         font-size: 0.9rem;
         cursor: pointer;
@@ -560,8 +565,8 @@
       }
 
       .copy-btn:hover {
-        border-color: var(--accent);
-        background: rgba(124, 140, 255, 0.1);
+        border-color: #E63946;
+        background: rgba(230, 57, 70, 0.1);
       }
 
       .copy-btn.copied {
@@ -610,7 +615,7 @@
         width: 100%;
         min-height: 120px;
         border-radius: 12px;
-        border: 1px solid rgba(149, 171, 255, 0.3);
+        border: 1px solid rgba(63, 63, 70, 0.6);
         background: var(--input-bg);
         color: var(--text);
         font-size: 1rem;
@@ -622,8 +627,8 @@
       }
 
       .final-textarea:focus {
-        border-color: rgba(112, 200, 255, 0.85);
-        box-shadow: 0 0 0 3px rgba(72, 176, 255, 0.2);
+        border-color: rgba(230, 57, 70, 0.85);
+        box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.2);
       }
 
       .final-textarea::placeholder {
@@ -686,7 +691,7 @@
         <h1 class="text-3xl font-black text-white sm:text-4xl">Welcome to ClawDaddy</h1>
         <p class="mt-4 text-lg text-zinc-300">Thanks for subscribing! Let's set up your personal AI assistant.</p>
         <p class="mt-2 text-sm text-zinc-400">You'll take a quick personality quiz, connect your AI provider, and we'll spin up a dedicated assistant just for you.</p>
-        <button id="start-setup-btn" class="mt-8 inline-flex min-h-[46px] items-center justify-center rounded-xl bg-lobster px-8 py-3 font-bold text-white transition hover:bg-red-500">Start Setup</button>
+        <button id="start-setup-btn" class="mt-8 inline-flex min-h-[46px] items-center justify-center rounded-xl bg-lobster px-8 py-3 font-bold text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-red-500">Start Setup</button>
       </section>
 
       <div id="wizard-content" style="display: none">
@@ -1420,7 +1425,7 @@
           } catch (error) {
             quizQuestionArea.innerHTML = `
               <div class="waiting-state">
-                <p style="color: #ffb3cb;">Error submitting quiz. Please try again.</p>
+                <p style="color: #fca5a5;">Error submitting quiz. Please try again.</p>
                 <button class="button" onclick="location.reload()">Retry</button>
               </div>
             `;
