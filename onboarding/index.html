@@ -290,11 +290,16 @@
       .quiz-question-area {
         position: relative;
         overflow: hidden;
-        min-height: 280px;
+        min-height: 420px;
       }
 
       /* Quiz question transitions */
       .quiz-slide {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
         transition: transform 0.3s ease, opacity 0.3s ease;
       }
 
@@ -302,10 +307,6 @@
         transform: translateX(-30px);
         opacity: 0;
         pointer-events: none;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
       }
 
       .quiz-slide.slide-in-right {
@@ -317,10 +318,6 @@
         transform: translateX(30px);
         opacity: 0;
         pointer-events: none;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
       }
 
       /* Quiz prompt */
@@ -1115,6 +1112,16 @@
           quizCounter.textContent = `Question ${currentQuestionNum} of ${questionCount}`;
         }
 
+        function measureSlideHeight() {
+          requestAnimationFrame(() => {
+            const slide = quizQuestionArea.querySelector('.quiz-slide');
+            if (slide) {
+              const height = slide.offsetHeight;
+              quizQuestionArea.style.minHeight = Math.max(420, height) + 'px';
+            }
+          });
+        }
+
         function renderQuestion() {
           const q = QUIZ_QUESTIONS[state.quizIndex];
           updateProgress();
@@ -1131,6 +1138,7 @@
               </div>
             `;
             attachSectionBreakListeners();
+            measureSlideHeight();
             return;
           }
 
@@ -1146,6 +1154,7 @@
               </div>
             `;
             attachFinalScreenListeners();
+            measureSlideHeight();
             return;
           }
 
@@ -1183,6 +1192,7 @@
           `;
 
           attachSingleSelectListeners(q);
+          measureSlideHeight();
         }
 
         function renderMultiSelect(q) {
@@ -1212,6 +1222,7 @@
           `;
 
           attachMultiSelectListeners(q);
+          measureSlideHeight();
         }
 
         function renderShortText(q) {
@@ -1230,6 +1241,7 @@
           `;
 
           attachShortTextListeners(q);
+          measureSlideHeight();
         }
 
         function attachSingleSelectListeners(q) {
