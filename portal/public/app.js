@@ -2,6 +2,16 @@
   let profile = null;
   let configuredProviders = [];
 
+  // --- Utilities ---
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   const CURATED_MODELS = [
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', provider: 'anthropic' },
     { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', provider: 'anthropic' },
@@ -76,7 +86,35 @@
 
     document.getElementById('header-url').textContent = profile.username + '.clawdaddy.sh';
     document.getElementById('welcome-title').textContent = 'Welcome, ' + profile.botName + '!';
-    document.getElementById('personality-card').textContent = profile.personality || 'No personality configured yet.';
+
+    // Personality card — render structured data when available
+    var personalityCard = document.getElementById('personality-card');
+    var pers = profile.personality;
+    if (pers && pers.configured) {
+      var html = '';
+      if (pers.summary) {
+        html += '<p class="personality-summary">' + escapeHtml(pers.summary) + '</p>';
+      }
+      if (pers.tone) {
+        html += '<p class="personality-tone">Tone: <strong>' + escapeHtml(pers.tone) + '</strong></p>';
+      }
+      var traits = [];
+      if (pers.casualness !== null && pers.casualness !== undefined) {
+        traits.push('Casualness: ' + pers.casualness.toFixed(2));
+      }
+      if (pers.humor !== null && pers.humor !== undefined) {
+        traits.push('Humor: ' + pers.humor.toFixed(2));
+      }
+      if (pers.proactivity !== null && pers.proactivity !== undefined) {
+        traits.push('Proactivity: ' + pers.proactivity.toFixed(2));
+      }
+      if (traits.length > 0) {
+        html += '<p class="personality-traits">' + escapeHtml(traits.join(' · ')) + '</p>';
+      }
+      personalityCard.innerHTML = html || '<p>Personality configured.</p>';
+    } else {
+      personalityCard.textContent = 'Personality not configured yet.';
+    }
 
     // "Set a password" banner
     var banner = document.getElementById('set-password-banner');
