@@ -49,7 +49,7 @@ const AGENT_MAP = {
 };
 
 // Call Anthropic Messages API directly
-function callAnthropic(apiKey, model, messages, maxTokens, timeoutMs) {
+function callAnthropic(apiKey, model, messages, maxTokens) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model,
@@ -82,7 +82,6 @@ function callAnthropic(apiKey, model, messages, maxTokens, timeoutMs) {
     });
 
     req.on('error', reject);
-    req.setTimeout(timeoutMs || 120000, () => { req.destroy(); reject(new Error('Anthropic API request timed out')); });
     req.write(body);
     req.end();
   });
@@ -284,8 +283,7 @@ Generate all six files now. Make them deeply personal, specific, and immediately
     apiKey,
     'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
-    15000,
-    120000
+    15000
   );
 
   // Parse the response — 6 files separated by markers
@@ -687,8 +685,7 @@ Generate both files now. Make them specific to ${agent.displayName}'s domain.`;
     apiKey,
     'claude-opus-4-6-20250514',
     [{ role: 'user', content: prompt }],
-    3000,
-    60000
+    3000
   );
 
   const soulMatch = responseText.match(/---SOUL\.MD---([\s\S]*?)---AGENTS\.MD---/);
