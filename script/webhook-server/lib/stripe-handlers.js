@@ -146,8 +146,8 @@ export async function handle_checkout_completed(session) {
       }
 
       const details = {
-        ip: result.ip,
-        vnc_password: result.vnc_password,
+        username: result.username || username,
+        portalToken: result.portal_token,
         region: params.preferred_region || 'us-east',
       };
 

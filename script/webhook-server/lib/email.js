@@ -39,9 +39,9 @@ export async function provisioning_started(email) {
     "Hi there,\n\nThanks for subscribing to ClawDaddy!\n\nWe're spinning up your personal AI assistant right now. This usually takes a few minutes.\n\nYou'll receive another email with your connection details as soon as everything is ready.\n\n-- ClawDaddy");
 }
 
-export async function provisioning_complete(email, { ip, vnc_password, region }) {
+export async function provisioning_complete(email, { username, portalToken, region }) {
   await send(email, "Your ClawDaddy assistant is ready!",
-    `Hi there,\n\nYour ClawDaddy assistant is live and ready to use!\n\nConnection Details:\n\n  Server IP:     ${ip}\n  VNC Password:  ${vnc_password}\n  Region:        ${region}\n\nQuick Start:\n\n1. Open a VNC client (we recommend TigerVNC or RealVNC)\n2. Connect to ${ip}:5901\n3. Enter your VNC password when prompted\n4. Your AI assistant is running and ready to go\n\nIf you have any questions, reply to this email or reach out on Discord.\n\n-- ClawDaddy`);
+    `Hi there,\n\nYour ClawDaddy assistant is live and ready to use!\n\nYour Portal:\n\n  https://${username}.clawdaddy.sh/portal/\n\nPassword: ${portalToken}\n\nRegion: ${region}\n\nBookmark this link and keep your password secure. You can access your assistant anytime from any browser.\n\nIf you have any questions, reply to this email or reach out on Discord.\n\n-- ClawDaddy`);
 }
 
 export async function provisioning_started_managed(email) {
@@ -55,9 +55,9 @@ export async function onboarding_welcome(email, checkout_session_id) {
     `Hi there,\n\nThanks for subscribing to ClawDaddy!\n\nClick the link below to set up your personal AI assistant. You'll choose a name, take a quick personality quiz, and we'll configure everything for you.\n\nSet up your assistant:\n${onboarding_url}\n\nThis link doesn't expire — you can come back to it anytime.\n\nIf you have any questions, reply to this email.\n\n-- ClawDaddy`);
 }
 
-export async function provisioning_complete_managed(email, { ip, vnc_password, region }) {
+export async function provisioning_complete_managed(email, { username, portalToken, region }) {
   await send(email, "Your ClawDaddy assistant is ready!",
-    `Hi there,\n\nYour ClawDaddy Fully Managed assistant is live and ready to use!\n\nYour API usage is included — no API key needed. Everything is pre-configured and ready to go.\n\nConnection Details:\n\n  Server IP:     ${ip}\n  VNC Password:  ${vnc_password}\n  Region:        ${region}\n\nQuick Start:\n\n1. Open a VNC client (we recommend TigerVNC or RealVNC)\n2. Connect to ${ip}:5901\n3. Enter your VNC password when prompted\n4. Your AI assistant is running and ready to go\n\nIf you have any questions, reply to this email or reach out on Discord.\n\n-- ClawDaddy`);
+    `Hi there,\n\nYour ClawDaddy Fully Managed assistant is live and ready to use!\n\nYour API usage is included — no API key needed. Everything is pre-configured and ready to go.\n\nYour Portal:\n\n  https://${username}.clawdaddy.sh/portal/\n\nPassword: ${portalToken}\n\nRegion: ${region}\n\nBookmark this link and keep your password secure. You can access your assistant anytime from any browser.\n\nIf you have any questions, reply to this email or reach out on Discord.\n\n-- ClawDaddy`);
 }
 
 export async function provisioning_failed(email) {
@@ -70,7 +70,7 @@ export async function subscription_canceled(email, destroy_date) {
     year: "numeric", month: "long", day: "numeric"
   });
   await send(email, "Your ClawDaddy subscription was canceled",
-    `Hi there,\n\nWe're sorry to see you go. Your ClawDaddy subscription has been canceled.\n\nImportant: Data Export Window\n\nYour instance and all its data will remain available until ${formatted} (7 days from now). After that date, your instance will be permanently deleted.\n\nIf you need to export any data, please connect via VNC and save anything you need before that date.\n\nTo resubscribe at any time, visit https://clawdaddy.sh\n\n-- ClawDaddy`);
+    `Hi there,\n\nWe're sorry to see you go. Your ClawDaddy subscription has been canceled.\n\nImportant: Data Export Window\n\nYour instance and all its data will remain available until ${formatted} (7 days from now). After that date, your instance will be permanently deleted.\n\nIf you need to export any data, please log in to your portal and save anything you need before that date.\n\nTo resubscribe at any time, visit https://clawdaddy.sh\n\n-- ClawDaddy`);
 }
 
 export async function payment_failed_retry(email) {
