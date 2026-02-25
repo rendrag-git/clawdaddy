@@ -322,14 +322,15 @@ generate_user_data() {
     local telegram_chat="$5"
     local signal_phone="$6"
     local vnc_password="$7"
-    local docker_bundle_url="$8"
-    local tier="${9:-byok}"
-    local customer_id_val="${10:-}"
-    local ssh_pub_key="${11:-}"
-    local ecr_image="${12:-}"
-    local dns_token="${13:-}"
-    local dns_username="${14:-}"
-    local control_plane_url="${15:-}"
+    local portal_token="$8"
+    local docker_bundle_url="$9"
+    local tier="${10:-byok}"
+    local customer_id_val="${11:-}"
+    local ssh_pub_key="${12:-}"
+    local ecr_image="${13:-}"
+    local dns_token="${14:-}"
+    local dns_username="${15:-}"
+    local control_plane_url="${16:-}"
 
     # ---- Header: bash re-exec guard, logging ----
     cat <<'USERDATA_HEADER'
@@ -719,8 +720,8 @@ chmod o+x /home/ubuntu
 cd /home/ubuntu/clawdaddy/portal && npm install --production
 echo "Portal dependencies installed"
 
-# Generate portal token
-PORTAL_TOKEN=\$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
+# Portal token passed from host scope
+PORTAL_TOKEN="${portal_token}"
 
 # Read gateway token from Docker container
 GW_TOKEN=\$(docker exec openclaw cat /home/clawd/.openclaw/.gw-token 2>/dev/null || echo "")
@@ -924,6 +925,8 @@ main() {
     customer_id="$(generate_customer_id)"
     local vnc_password
     vnc_password="$(generate_vnc_password)"
+    local portal_token
+    portal_token="$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)"
     local dns_token
     dns_token="$(openssl rand -hex 32)"
     local instance_name="openclaw-${ARG_USERNAME:-${customer_id}}"
@@ -980,6 +983,7 @@ main() {
         "${ARG_TELEGRAM_CHAT}" \
         "${ARG_SIGNAL_PHONE}" \
         "${vnc_password}" \
+        "${portal_token}" \
         "${DOCKER_BUNDLE_URL}" \
         "${ARG_TIER}" \
         "${customer_id}" \
@@ -1150,6 +1154,7 @@ DNSEOF
         echo "CUSTOMER_ID=${customer_id}"
         echo "SERVER_IP=${public_ip}"
         echo "VNC_PASSWORD=${vnc_password}"
+        echo "PORTAL_TOKEN=${portal_token}"
         echo "TIER=${ARG_TIER}"
         if [[ -n "${ARG_USERNAME}" ]]; then
             echo "USERNAME=${ARG_USERNAME}"
