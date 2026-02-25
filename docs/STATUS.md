@@ -3,7 +3,7 @@
 > **All agents: read this file at session start. This is the single source of truth.**
 
 ## Current Phase
-Pre-launch. **Phase 1 merged to master. All original ship-blockers resolved. E2E test is the next gate.**
+Pre-launch. **All 11 ship-blockers resolved. E2E test is the only gate before launch.**
 
 ## What's Shipped (As of Today)
 - ✅ Stripe checkout → quiz v1.1 → Opus profile gen → Lightsail provision → DNS → Caddy HTTPS → ZeptoMail email
@@ -76,7 +76,7 @@ Pre-launch. **Phase 1 merged to master. All original ship-blockers resolved. E2E
 7. ~~**Profile gen progress indicator**~~ — ✅ FIXED (Stream C — SSE progress)
 8. ~~**Quiz state persistence**~~ — ✅ FIXED (`131d4ff` — localStorage with 24h TTL)
 9. ~~**`skipBootstrap` in provision config template**~~ — ✅ FIXED (`6fb89a8` — removed from provision.sh)
-10. **🔴 Email template still sends VNC instructions** — `provisioning_complete()` in email.js has old VNC template. Two separate email code paths exist. Ready email should include portal URL with portalToken.
+10. ~~**Email template still sends VNC instructions**~~ — ✅ FIXED (`53d4c73` — portal URL + portalToken, branch `fix/b10-email-portal`)
 11. ~~**Portal ↔ Profile disconnect**~~ — ✅ FIXED (`7b1b037` — portal reads SOUL.md instead of config.json)
 
 ### 🟡 UX improvements (post-launch OK)
